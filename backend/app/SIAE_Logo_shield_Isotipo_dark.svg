@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg viewBox="0 0 512 512" width="512" height="512" xmlns="http://www.w3.org/2000/svg">
+  <rect width="100%" height="100%" fill="transparent" />
+  
+    <!-- Compass ticks / outer scientific radar dial -->
+    <g stroke="#A5C5E3" stroke-width="2.5" opacity="0.45">
+      <circle cx="256" cy="256" r="236" fill="none" stroke-dasharray="4 8" />
+      <circle cx="256" cy="256" r="216" fill="none" />
+      <!-- Radar Cardinal indicators -->
+      <line x1="256" y1="2" x2="256" y2="15" stroke-width="4" />
+      <line x1="256" y1="497" x2="256" y2="510" stroke-width="4" />
+      <line x1="2" y1="256" x2="15" y2="256" stroke-width="4" />
+      <line x1="497" y1="256" x2="510" y2="256" stroke-width="4" />
+    </g>
+
+    <g transform="translate(256, 256)">
+      <!-- Radar Sweep lines -->
+      <line x1="-216" y1="0" x2="216" y2="0" stroke="#2C74B3" stroke-opacity="0.15" stroke-width="2" />
+      <line x1="0" y1="-216" x2="0" y2="216" stroke="#2C74B3" stroke-opacity="0.15" stroke-width="2" />
+    </g>
+
+    <!-- Base Shield Inner Gradient Shadow Circle (Solid flat representation) -->
+    <circle cx="256" cy="256" r="196" fill="rgba(255,255,255,0.03)" stroke="#FFFFFF" stroke-width="6" />
+
+    <!-- Scientific Compass Star (Subtle Background) -->
+    <path d="M256 70 L266 246 L442 256 L266 266 L256 442 L246 266 L70 256 L246 266 Z" fill="#2C74B3" fill-opacity="0.08" stroke="#2C74B3" stroke-opacity="0.2" stroke-width="1.5" />
+
+    <!-- RESEARCH VESSEL (Buque Oceanográfico) -->
+    <!-- Elegantly centered and integrated -->
+    <g transform="translate(112, 175)">
+      <!-- Radar Dome / Scientific Satellites -->
+      <circle cx="68" cy="18" r="6" fill="#2C74B3" />
+      <line x1="68" y1="18" x2="68" y2="28" stroke="#2C74B3" stroke-width="2" />
+      
+      <!-- A-Frame Winch on Stern (Right side usually for scientific launches, here stylized on deck) -->
+      <path d="M245 42 L235 70 L255 70 Z" fill="none" stroke="#A5C5E3" stroke-width="2.5" />
+      
+      <!-- Superstructure (Cabins and Lab space) -->
+      <path d="M42 70 L48 35 L125 35 L135 28 L150 28 L155 42 L185 42 L193 62 L225 62 L225 70 Z" fill="#FFFFFF" />
+      <!-- Windows / Portholes (Scientific operations crew) -->
+      <rect x="60" y="44" width="12" height="8" rx="2" fill="#0A2647" />
+      <rect x="80" y="44" width="12" height="8" rx="2" fill="#0A2647" />
+      <circle cx="114" cy="48" r="4" fill="#0A2647" />
+      <circle cx="140" cy="48" r="4" fill="#0A2647" />
+      <circle cx="170" cy="50" r="3.5" fill="#0A2647" />
+
+      <!-- Mast and Sensor Equipment -->
+      <line x1="130" y1="10" x2="130" y2="35" stroke="#FFFFFF" stroke-width="4.5" stroke-linecap="round" />
+      <line x1="115" y1="18" x2="145" y2="18" stroke="#FFFFFF" stroke-width="2.5" />
+      
+      <!-- Modern Hull (Sleek marine profile) -->
+      <path d="M10 70 L275 70 L250 110 L45 110 Z" fill="#A5C5E3" />
+      <path d="M10 70 L145 70 L125 110 L45 110 Z" fill="#FFFFFF" opacity="0.15" /> <!-- Hull shading -->
+      <path d="M275 70 L285 70 L258 110 L250 110 Z" fill="#2C74B3" /> <!-- Colored Bow Accent -->
+    </g>
+
+    <!-- DYNAMIC MARINE WAVES (Océano y Ciencia) -->
+    <!-- Structured wave pattern indicating flow and survey precision -->
+    <g>
+      <!-- Deep Blue Base Wave -->
+      <path d="M70 310 Q163 290 256 310 T442 310 L442 380 Q349 395 256 380 T70 380 Z" fill="#A5C5E3" opacity="0.3" />
+      
+      <!-- Primary Sharp Structural Wave (Representing sonar mapping/oceanography) -->
+      <path d="M60 330 C130 295 190 345 256 330 C322 315 382 365 452 330 L442 410 C372 435 312 395 256 410 C200 425 140 375 70 410 Z" fill="#FFFFFF" />
+      
+      <!-- Bright Cyan/Blue Survey Surface Wave (Representing currents/movement) -->
+      <path d="M62 355 Q159 320 256 355 T450 355 L435 435 Q338 410 256 435 T76 435 Z" fill="#2C74B3" />
+    </g>
+
+    <!-- Radar Circle Rings overlaying bottom mildly -->
+    <path d="M136 380 A 130 130 0 0 0 376 380" fill="none" stroke="#0A2647" stroke-width="2" stroke-dasharray="8 6" opacity="0.15" />
+    
+</svg>

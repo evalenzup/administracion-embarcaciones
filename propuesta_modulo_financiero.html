@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SIAE — Propuesta: Módulo de Información Financiera de Cruceros</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+    :root {
+      --primary: #0A2647;
+      --primary-light: #1B4F72;
+      --accent: #2E86C1;
+      --accent2: #17A589;
+      --accent3: #D35400;
+      --light-bg: #F0F4F8;
+      --border: #DDE3EA;
+      --text: #1a202c;
+      --text-muted: #64748b;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      color: var(--text);
+      background: #fff;
+      font-size: 11pt;
+      line-height: 1.6;
+    }
+
+    /* ── COVER PAGE ── */
+    .cover {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background: linear-gradient(160deg, var(--primary) 0%, var(--primary-light) 50%, var(--accent) 100%);
+      padding: 60px 40px;
+      text-align: center;
+      page-break-after: always;
+    }
+
+    .cover-logo {
+      width: 80px;
+      height: 80px;
+      background: rgba(255,255,255,0.15);
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 40px;
+      margin-bottom: 32px;
+      border: 2px solid rgba(255,255,255,0.3);
+    }
+
+    .cover-tag {
+      background: rgba(255,255,255,0.15);
+      border: 1px solid rgba(255,255,255,0.3);
+      color: #fff;
+      padding: 5px 16px;
+      border-radius: 100px;
+      font-size: 9pt;
+      font-weight: 500;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 24px;
+    }
+
+    .cover h1 {
+      font-size: 30pt;
+      font-weight: 700;
+      color: #fff;
+      line-height: 1.2;
+      margin-bottom: 16px;
+      max-width: 700px;
+    }
+
+    .cover h1 span {
+      color: #64d8cb;
+    }
+
+    .cover-sub {
+      font-size: 13pt;
+      color: rgba(255,255,255,0.8);
+      max-width: 560px;
+      line-height: 1.6;
+      margin-bottom: 48px;
+    }
+
+    .cover-meta {
+      display: flex;
+      gap: 32px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .cover-meta-item {
+      text-align: center;
+    }
+
+    .cover-meta-item .label {
+      font-size: 8pt;
+      color: rgba(255,255,255,0.6);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+    }
+
+    .cover-meta-item .value {
+      font-size: 11pt;
+      color: #fff;
+      font-weight: 600;
+      margin-top: 2px;
+    }
+
+    .cover-divider {
+      width: 60px;
+      height: 3px;
+      background: rgba(255,255,255,0.3);
+      border-radius: 2px;
+      margin: 40px auto;
+    }
+
+    /* ── CONTENT ── */
+    .page {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 48px 40px;
+    }
+
+    @media print {
+      .page { padding: 32px; }
+      .cover { min-height: 100vh; }
+    }
+
+    /* Section */
+    .section {
+      margin-bottom: 44px;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid var(--border);
+    }
+
+    .section-number {
+      width: 32px;
+      height: 32px;
+      background: var(--primary);
+      color: #fff;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13pt;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .section-title {
+      font-size: 16pt;
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    /* Context block */
+    .context-block {
+      background: var(--light-bg);
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin-bottom: 20px;
+      border-left: 4px solid var(--accent);
+    }
+
+    .context-block p {
+      color: var(--text-muted);
+      font-size: 10.5pt;
+      line-height: 1.7;
+    }
+
+    /* Access points */
+    .access-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .access-card {
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .access-card-icon {
+      font-size: 26px;
+      margin-bottom: 10px;
+    }
+
+    .access-card h3 {
+      font-size: 11pt;
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 8px;
+    }
+
+    .access-card p {
+      font-size: 9.5pt;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 100px;
+      font-size: 8pt;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .badge-blue { background: #EBF5FB; color: var(--accent); }
+    .badge-green { background: #E8F8F5; color: var(--accent2); }
+    .badge-orange { background: #FEF0E7; color: var(--accent3); }
+    .badge-dark { background: #EBF0F5; color: var(--primary); }
+
+    /* Billing methods */
+    .method-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .method-card {
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .method-card.boah {
+      background: linear-gradient(135deg, #0A2647 0%, #1B4F72 100%);
+      color: #fff;
+    }
+
+    .method-card.menores {
+      background: linear-gradient(135deg, #0B5345 0%, #17A589 100%);
+      color: #fff;
+    }
+
+    .method-card h3 {
+      font-size: 12pt;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .method-card .subtitle {
+      font-size: 9pt;
+      opacity: 0.75;
+      margin-bottom: 16px;
+    }
+
+    .formula {
+      background: rgba(255,255,255,0.15);
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 9pt;
+      font-family: monospace;
+      margin-bottom: 12px;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+
+    .method-card ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    .method-card ul li {
+      font-size: 9pt;
+      opacity: 0.9;
+      margin-bottom: 4px;
+      padding-left: 16px;
+      position: relative;
+    }
+
+    .method-card ul li::before {
+      content: '→';
+      position: absolute;
+      left: 0;
+      opacity: 0.7;
+    }
+
+    /* Data model table */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 9.5pt;
+      margin-bottom: 20px;
+    }
+
+    .data-table thead tr {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .data-table thead th {
+      padding: 10px 14px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 9pt;
+    }
+
+    .data-table thead th:first-child { border-radius: 8px 0 0 0; }
+    .data-table thead th:last-child { border-radius: 0 8px 0 0; }
+
+    .data-table tbody tr:nth-child(even) {
+      background: var(--light-bg);
+    }
+
+    .data-table tbody tr:hover {
+      background: #EBF5FB;
+    }
+
+    .data-table td {
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .data-table td:first-child {
+      font-family: monospace;
+      font-size: 9pt;
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .data-table td:nth-child(2) {
+      color: var(--text-muted);
+    }
+
+    /* Status flow */
+    .status-flow {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+
+    .status-step {
+      flex: 1;
+      text-align: center;
+      padding: 16px 12px;
+      border-radius: 10px;
+      min-width: 140px;
+    }
+
+    .status-step.s1 { background: #FEF0E7; border: 2px solid #E67E22; }
+    .status-step.s2 { background: #EBF5FB; border: 2px solid var(--accent); }
+    .status-step.s3 { background: #E8F8F5; border: 2px solid var(--accent2); }
+
+    .status-arrow {
+      font-size: 20px;
+      color: var(--border);
+      padding: 0 8px;
+    }
+
+    .status-icon {
+      font-size: 22px;
+      margin-bottom: 6px;
+    }
+
+    .status-name {
+      font-weight: 700;
+      font-size: 10pt;
+    }
+
+    .status-step.s1 .status-name { color: #E67E22; }
+    .status-step.s2 .status-name { color: var(--accent); }
+    .status-step.s3 .status-name { color: var(--accent2); }
+
+    .status-desc {
+      font-size: 8.5pt;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* Questions */
+    .question-card {
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+      margin-bottom: 14px;
+      position: relative;
+    }
+
+    .question-card::before {
+      content: attr(data-num);
+      position: absolute;
+      top: -12px;
+      left: 16px;
+      background: var(--primary);
+      color: #fff;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10pt;
+      font-weight: 700;
+    }
+
+    .question-card h4 {
+      font-size: 10.5pt;
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 8px;
+      padding-top: 4px;
+    }
+
+    .question-card p {
+      font-size: 9.5pt;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      line-height: 1.6;
+    }
+
+    .options-list {
+      list-style: none;
+      padding: 0;
+    }
+
+    .options-list li {
+      font-size: 9.5pt;
+      padding: 5px 0 5px 22px;
+      position: relative;
+      color: var(--text);
+    }
+
+    .options-list li::before {
+      content: '☐';
+      position: absolute;
+      left: 0;
+      color: var(--border);
+    }
+
+    .answer-line {
+      border: none;
+      border-bottom: 1.5px dashed var(--border);
+      width: 100%;
+      margin-top: 10px;
+      height: 28px;
+      display: block;
+    }
+
+    /* Next steps */
+    .steps-list {
+      list-style: none;
+      counter-reset: steps;
+    }
+
+    .steps-list li {
+      counter-increment: steps;
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      margin-bottom: 14px;
+      padding: 14px 16px;
+      background: var(--light-bg);
+      border-radius: 10px;
+    }
+
+    .steps-list li::before {
+      content: counter(steps);
+      min-width: 28px;
+      height: 28px;
+      background: var(--primary);
+      color: #fff;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10pt;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .steps-list li span {
+      padding-top: 3px;
+      font-size: 10pt;
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    /* Footer */
+    .doc-footer {
+      margin-top: 60px;
+      padding-top: 20px;
+      border-top: 2px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .doc-footer .footer-left {
+      font-size: 9pt;
+      color: var(--text-muted);
+    }
+
+    .doc-footer .footer-right {
+      font-size: 9pt;
+      color: var(--text-muted);
+      text-align: right;
+    }
+
+    /* Print */
+    @media print {
+      body { font-size: 10pt; }
+      .section { page-break-inside: avoid; }
+      .method-grid, .access-grid { page-break-inside: avoid; }
+    }
+
+    /* Note box */
+    .note-box {
+      background: #FFFBEB;
+      border: 1.5px solid #F59E0B;
+      border-radius: 10px;
+      padding: 14px 18px;
+      margin-bottom: 20px;
+    }
+
+    .note-box strong {
+      color: #D97706;
+      font-size: 9pt;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .note-box p {
+      font-size: 9.5pt;
+      color: #92400E;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════
+     PORTADA
+══════════════════════════════════════════════ -->
+<div class="cover">
+  <div class="cover-logo">🧾</div>
+  <div class="cover-tag">SIAE · Propuesta Técnica</div>
+  <h1>Módulo de <span>Información Financiera</span> de Cruceros</h1>
+  <p class="cover-sub">
+    Propuesta de diseño para la gestión de cobros por crucero, integración con la plataforma SIAE
+    y preguntas de alineación para el equipo DEO.
+  </p>
+  <div class="cover-divider"></div>
+  <div class="cover-meta">
+    <div class="cover-meta-item">
+      <div class="label">Preparado para</div>
+      <div class="value">Equipo DEO — CICESE</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="label">Sistema</div>
+      <div class="value">SIAE v0.1</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="label">Fecha</div>
+      <div class="value">Junio 2026</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="label">Estado</div>
+      <div class="value">Para Revisión</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     CONTENIDO
+══════════════════════════════════════════════ -->
+<div class="page">
+
+  <!-- 1. Contexto -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-number">1</div>
+      <div class="section-title">Contexto y Objetivo</div>
+    </div>
+    <div class="context-block">
+      <p>
+        El DEO realiza cruceros de investigación en distintas embarcaciones, cada uno asociado a un proyecto solicitante.
+        Al finalizar cada crucero se genera un cobro que puede instrumentarse como <strong>recibo interno</strong>
+        (para proyectos institucionales) o <strong>factura</strong> (para instituciones o empresas externas).
+        El cobro pasa por tres etapas: pendiente de cobro, cobrado al proyecto, y transferido a la cuenta del DEO.
+      </p>
+    </div>
+    <p style="font-size:10.5pt; color: var(--text-muted);">
+      Este módulo busca digitalizar ese proceso dentro del mismo sistema SIAE, eliminando el uso de hojas de cálculo
+      externas y permitiendo tener trazabilidad completa de los cobros por crucero, embarcación y período.
+    </p>
+  </div>
+
+  <!-- 2. Dónde integrarlo -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-number">2</div>
+      <div class="section-title">Puntos de Acceso Propuestos</div>
+    </div>
+    <div class="access-grid">
+      <div class="access-card">
+        <div class="badge badge-blue">Punto 1</div>
+        <div class="access-card-icon">🗂️</div>
+        <h3>Dentro del Crucero</h3>
+        <p>
+          Una pestaña <strong>"💰 Cobro"</strong> aparece en el modal de cada crucero cuando su estado
+          es <em>Completado</em>. Desde ahí se genera, edita y consulta el cobro asociado a ese crucero específico.
+          Incluye botón para generar el documento (recibo/factura) en PDF.
+        </p>
+      </div>
+      <div class="access-card">
+        <div class="badge badge-green">Punto 2</div>
+        <div class="access-card-icon">📊</div>
+        <h3>Página Global de Facturación</h3>
+        <p>
+          Una nueva sección <strong>"/billing"</strong> en el menú de Operaciones con vista de todos
+          los cobros, filtros por estado, embarcación, período y tipo de documento. Tarjetas de resumen
+          de montos por cobrar, cobrados y transferidos en el período.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Métodos de cobro -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-number">3</div>
+      <div class="section-title">Métodos de Cálculo de Cobro</div>
+    </div>
+    <div class="method-grid">
+      <div class="method-card boah">
+        <h3>🚢 Embarcaciones Mayores</h3>
+        <p class="subtitle">Ejemplo: B/O Alpha Helix (BOAH)</p>
+        <div class="formula">Total = Días navegados × Tarifa/día</div>
+        <ul>
+          <li>Se registran los días navegados del crucero</li>
+          <li>Se aplica la tarifa diaria configurada para la embarcación</li>
+          <li>Posibilidad de agregar días de preparación/desmovilización</li>
+          <li>Se puede añadir descuento o recargo manual</li>
+        </ul>
+      </div>
+      <div class="method-card menores">
+        <h3>⛵ Embarcaciones Menores</h3>
+        <p class="subtitle">Cruceros de un día</p>
+        <div class="formula">Total = Costo combustible + (Millas × Tarifa/milla)</div>
+        <ul>
+          <li>El sistema toma el consumo de combustible del módulo de cargas</li>
+          <li>Las millas se obtienen del track GPX o se capturan manualmente</li>
+          <li>Tarifa por milla náutica configurable por embarcación</li>
+          <li>Se puede añadir descuento o recargo manual</li>
+        </ul>
+      </div>
+    </div>
+    <div class="note-box">
+      <strong>⚠️ Nota de Diseño</strong>
+      <p>El método de cobro se propone como un atributo <em>configurable por embarcación</em> en el catálogo de Embarcaciones,
+      de modo que al generar un cobro se pre-seleccione automáticamente el método correcto y solo se capturen los datos específicos necesarios.</p>
+    </div>
+  </div>
+
+  <!-- 4. Modelo de datos -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-number">4</div>
+      <div class="section-title">Modelo de Datos Propuesto</div>
+    </div>
+    <p style="font-size:10pt; color:var(--text-muted); margin-bottom:14px;">
+      Un registro <strong>CruiseBilling</strong> por crucero, con la siguiente estructura de campos:
+    </p>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Campo</th>
+          <th>Tipo</th>
+          <th>Descripción</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>cruise_id</td><td>FK (CruisePlan)</td><td>Crucero asociado — relación 1 a 1</td></tr>
+        <tr><td>billing_method</td><td>Enum</td><td><code>days</code> (mayor) / <code>fuel_miles</code> (menor)</td></tr>
+        <tr><td>billing_entity</td><td>String</td><td>Nombre del proyecto o institución a facturar</td></tr>
+        <tr><td>billing_contact</td><td>String</td><td>Responsable del proyecto / datos de contacto</td></tr>
+        <tr><td>document_type</td><td>Enum</td><td><code>recibo</code> / <code>factura</code></td></tr>
+        <tr><td>days_navigated</td><td>Float</td><td>Días navegados (método "días")</td></tr>
+        <tr><td>rate_per_day</td><td>Float</td><td>Tarifa por día en MXN (método "días")</td></tr>
+        <tr><td>fuel_liters</td><td>Float</td><td>Litros consumidos (método "combustible+millas")</td></tr>
+        <tr><td>fuel_cost</td><td>Float</td><td>Costo del combustible (puede venir del módulo Combustible)</td></tr>
+        <tr><td>miles_navigated</td><td>Float</td><td>Millas náuticas recorridas</td></tr>
+        <tr><td>rate_per_mile</td><td>Float</td><td>Tarifa por milla náutica en MXN</td></tr>
+        <tr><td>subtotal</td><td>Float</td><td>Monto antes de impuestos</td></tr>
+        <tr><td>discount_amount</td><td>Float</td><td>Descuento aplicado (opcional)</td></tr>
+        <tr><td>tax_pct</td><td>Float</td><td>Porcentaje de IVA u otro impuesto</td></tr>
+        <tr><td>total</td><td>Float</td><td>Total final a cobrar en MXN</td></tr>
+        <tr><td>status</td><td>Enum</td><td><code>por_cobrar</code> / <code>cobrado</code> / <code>transferido</code></td></tr>
+        <tr><td>payment_reference</td><td>String</td><td>Folio de pago, número de transferencia, etc.</td></tr>
+        <tr><td>payment_date</td><td>Date</td><td>Fecha en que se recibió el pago</td></tr>
+        <tr><td>transfer_date</td><td>Date</td><td>Fecha en que se transfirió al DEO</td></tr>
+        <tr><td>notes</td><td>Text</td><td>Observaciones adicionales</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 5. Flujo de estados -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-number">5</div>
+      <div class="section-title">Flujo de Estados del Cobro</div>
+    </div>
+    <div class="status-flow">
+      <div class="status-step s1">
+        <div class="status-icon">🔴</div>
+        <div class="status-name">Por Cobrar</div>
+        <div class="status-desc">Cobro generado, pendiente de pago por parte del proyecto</div>
+      </div>
+      <div class="status-arrow">→</div>
+      <div class="status-step s2">
+        <div class="status-icon">🔵</div>
+        <div class="status-name">Cobrado</div>
+        <div class="status-desc">El proyecto realizó el pago. Se registra fecha y referencia</div>
+      </div>
+      <div class="status-arrow">→</div>
+      <div class="status-step s3">
+        <div class="status-icon">🟢</div>
+        <div class="status-name">Transferido</div>
+        <div class="status-desc">El monto fue transferido a la cuenta oficial del DEO</div>
+      </div>
+    </div>
+    <p style="font-size:9.5pt; color:var(--text-muted);">
+      Los cambios de estado quedan registrados con fecha, hora y usuario responsable en la bitácora de auditoría del sistema.
+    </p>
+  </div>
+
+  <!-- 6. Preguntas clave -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-number">6</div>
+      <div class="section-title">Preguntas para el Equipo — Definición de Requerimientos</div>
+    </div>
+    <p style="font-size:10pt; color:var(--text-muted); margin-bottom:20px;">
+      Para implementar el módulo de la manera más alineada al proceso real del DEO, necesitamos
+      confirmar los siguientes puntos. Por favor marcar la opción correspondiente o completar con la respuesta.
+    </p>
+
+    <div class="question-card" data-num="1">
+      <h4>¿Las tarifas (por día / por milla) son fijas o variables?</h4>
+      <p>Esto define si necesitamos un "catálogo de tarifas" por embarcación o si se capturan manualmente en cada cobro.</p>
+      <ul class="options-list">
+        <li>Las tarifas son fijas por embarcación y se actualizan 1-2 veces al año (→ catálogo de tarifas en el sistema)</li>
+        <li>Las tarifas varían por proyecto o institución solicitante</li>
+        <li>Las tarifas varían según el tipo de usuario (CICESE interno vs. externo)</li>
+        <li>Se capturan manualmente en cada cobro (sin catálogo)</li>
+      </ul>
+    </div>
+
+    <div class="question-card" data-num="2">
+      <h4>¿El método de cobro está predefinido por embarcación?</h4>
+      <p>¿El BOAH siempre cobra por días y las embarcaciones menores siempre por combustible+millas? ¿O puede variar por crucero?</p>
+      <ul class="options-list">
+        <li>Sí, cada embarcación tiene su método fijo (se configura en el catálogo de Embarcaciones)</li>
+        <li>El método puede variar por crucero, independientemente de la embarcación</li>
+        <li>Hay embarcaciones con método híbrido (días base + combustible adicional)</li>
+      </ul>
+    </div>
+
+    <div class="question-card" data-num="3">
+      <h4>¿El consumo de combustible debe vincularse automáticamente?</h4>
+      <p>Para embarcaciones menores, ¿el sistema debe importar automáticamente los litros y costos del módulo de "Registro de Combustible", o se captura por separado en el cobro?</p>
+      <ul class="options-list">
+        <li>Sí, debe vincular automáticamente las cargas de combustible registradas en el crucero</li>
+        <li>Se captura manualmente en el formulario del cobro (más simple y flexible)</li>
+        <li>Ambas opciones: auto-jalar pero permitir editar el dato</li>
+      </ul>
+    </div>
+
+    <div class="question-card" data-num="4">
+      <h4>¿El documento (recibo/factura) se genera desde el sistema?</h4>
+      <p>¿Necesitamos que SIAE genere el PDF del recibo o factura con el formato oficial del DEO, o solo se lleva el registro y la administración genera el documento por separado?</p>
+      <ul class="options-list">
+        <li>Sí, el sistema debe generar el PDF del recibo/factura con membrete del DEO/CICESE</li>
+        <li>Solo llevar el registro en el sistema; el documento se genera en Word/Excel por la administración</li>
+        <li>Generar el PDF como borrador para que la administración lo revise y firme</li>
+      </ul>
+      <p style="margin-top:10px;">Si se genera en el sistema, ¿pueden proporcionar el formato/membrete oficial? <span class="answer-line"></span></p>
+    </div>
+
+    <div class="question-card" data-num="5">
+      <h4>¿Qué información debe aparecer en el recibo/factura?</h4>
+      <p>Marcar los elementos que deben incluirse en el documento:</p>
+      <ul class="options-list">
+        <li>Logo y membrete del DEO / CICESE</li>
+        <li>Folio/número de recibo consecutivo</li>
+        <li>Datos del proyecto (nombre, responsable, número de proyecto)</li>
+        <li>Desglose del cálculo (días × tarifa, o litros + millas)</li>
+        <li>Periodo del crucero (fechas de salida y regreso)</li>
+        <li>Embarcación utilizada</li>
+        <li>IVA desglosado (en caso de factura)</li>
+        <li>Datos bancarios del DEO para depósito</li>
+        <li>Firma electrónica o espacio para firma</li>
+      </ul>
+    </div>
+
+    <div class="question-card" data-num="6">
+      <h4>¿Quiénes pueden gestionar los cobros?</h4>
+      <p>¿Qué roles del sistema deben poder crear cobros, cambiar su estado y ver los reportes financieros?</p>
+      <ul class="options-list">
+        <li>Solo Administradores</li>
+        <li>Administradores y Capitanes</li>
+        <li>Todos los usuarios pueden ver, pero solo Admin puede modificar estados</li>
+        <li>Se necesita un nuevo rol "Administrador Financiero"</li>
+      </ul>
+    </div>
+
+    <div class="question-card" data-num="7">
+      <h4>¿Necesitas reportes o exportaciones adicionales?</h4>
+      <p>Además de la vista de cobros en pantalla, ¿qué reportes son necesarios?</p>
+      <ul class="options-list">
+        <li>Reporte mensual/anual de ingresos por embarcación (Excel)</li>
+        <li>Reporte de cobros pendientes (lista de deudores)</li>
+        <li>Reporte de cobros por proyecto o institución</li>
+        <li>Dashboard financiero en el inicio del sistema</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 7. Próximos pasos -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-number">7</div>
+      <div class="section-title">Próximos Pasos Sugeridos</div>
+    </div>
+    <ol class="steps-list">
+      <li><span><strong>Revisar esta propuesta</strong> con el equipo DEO y responder las preguntas de la sección 6. Con estas respuestas el sistema se implementará exactamente según el proceso real.</span></li>
+      <li><span><strong>Definir las tarifas vigentes</strong> por embarcación (BOAH y embarcaciones menores) para cargarlas como catálogo inicial en el sistema.</span></li>
+      <li><span><strong>Compartir el formato oficial</strong> del recibo/factura que actualmente usa la administración, para replicarlo en el PDF generado por SIAE.</span></li>
+      <li><span><strong>Implementación por fases</strong>: Fase 1 — registro y estados de cobros. Fase 2 — generación de PDF. Fase 3 — reportes y exportación a Excel.</span></li>
+    </ol>
+  </div>
+
+  <!-- Footer -->
+  <div class="doc-footer">
+    <div class="footer-left">
+      <strong>SIAE — Sistema de Administración de Embarcaciones</strong><br/>
+      Departamento de Embarcaciones Oceanográficas · CICESE
+    </div>
+    <div class="footer-right">
+      Documento generado por SIAE<br/>
+      Versión 1.0 · Junio 2026
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

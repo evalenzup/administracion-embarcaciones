@@ -1,0 +1,100 @@
+/**
+ * SIAE — Estilos globales de la aplicación.
+ */
+
+/* ── Reset y base ──────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #F0F4F8;
+  color: #1a1a2e;
+}
+
+/* ── Scrollbar personalizada ───────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(27, 79, 114, 0.2);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(27, 79, 114, 0.4);
+}
+
+/* ── Animaciones globales ──────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.animate-slide-in {
+  animation: slideInLeft 0.3s ease-out;
+}
+
+/* ── Utilidades ────────────────────────────────────────────── */
+.page-container {
+  padding: 24px;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.page-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #0A2647;
+  margin-bottom: 24px;
+}
+
+/* ── Logo styles ───────────────────────────────────────────── */
+.siae-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 64px;
+  padding: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.siae-logo h2 {
+  color: #ffffff;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.siae-logo.collapsed h2 {
+  font-size: 14px;
+  letter-spacing: 0;
+}
