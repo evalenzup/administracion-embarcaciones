@@ -137,3 +137,12 @@
 | `frontend/src/components/common/CanAccess.jsx` | Componente y hook de permisos UI |
 | `frontend/src/styles/theme.js` | Tema Ant Design |
 | `frontend/src/api/client.js` | Cliente Axios centralizado |
+
+---
+
+## Gestión Financiera del DEO
+
+Como parte de la administración de las embarcaciones en el DEO, se cuenta con un área de finanzas encargada de gestionar órdenes de compra, adquisiciones, contrataciones de personal y viáticos. Esta gestión se maneja a través de dos cuentas contables:
+*   **Cuenta 624602**: Recursos autogenerados del Departamento de Embarcaciones Oceanográficas.
+*   **Cuenta 624108**: Recursos fiscales del Departamento de Embarcaciones Oceanográficas.
+
