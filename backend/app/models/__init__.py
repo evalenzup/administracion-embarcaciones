@@ -20,6 +20,11 @@ from app.models.equipment import Equipment, EquipmentRoutine, EquipmentRoutinePa
 from app.models.vessel_crew import VesselCrew
 from app.models.port import Port
 from app.models.fuel_log import FuelLog
+from app.models.financial_category import FinancialCategory
+from app.models.finance_setting import FinanceSetting
+from app.models.petty_cash_reimbursement import PettyCashReimbursement, ReimbursementStatus
+from app.models.petty_cash_invoice import PettyCashInvoice, InvoiceStatus
+from app.models.petty_cash_count import PettyCashCount
 
 __all__ = [
     "Permission", "Role", "role_permissions", "User", "UserRole",
@@ -42,4 +47,12 @@ __all__ = [
     "EquipmentRoutinePart",
     "VesselCrew",
     "FuelLog",
+    "FinancialCategory",
+    "FinanceSetting",
+    "PettyCashReimbursement",
+    "ReimbursementStatus",
+    "PettyCashInvoice",
+    "InvoiceStatus",
+    "PettyCashCount",
 ]
+

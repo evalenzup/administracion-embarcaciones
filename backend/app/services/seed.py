@@ -91,6 +91,11 @@ PERMISSIONS = [
     ("billing", "create", "Registrar cobro de crucero"),
     ("billing", "edit",   "Editar cobros y subir recibos"),
     ("billing", "delete", "Eliminar cobros"),
+    # Fondo Fijo (Caja Chica)
+    ("petty_cash", "view",   "Ver fondo fijo"),
+    ("petty_cash", "create", "Crear en fondo fijo"),
+    ("petty_cash", "edit",   "Editar en fondo fijo"),
+    ("petty_cash", "delete", "Eliminar en fondo fijo"),
 ]
 
 # ── Definición de roles con sus permisos ──
@@ -325,6 +330,49 @@ def seed_database(db: Session) -> None:
         db.add(rate)
     db.flush()
     print(f"  -> Creadas {len(rates_to_create)} tarifas para 2025.")
+
+    # ── 6. Crear categorías financieras por defecto si no existen ──
+    from app.models.financial_category import FinancialCategory
+    existing_financial_cats = {c.name for c in db.query(FinancialCategory).all()}
+    
+    default_financial_categories = [
+        # Materiales
+        ("Combustible y Lubricantes", "materiales", "⛽", "#E74C3C"),
+        ("Mats. para Mantto. de Máquinas", "materiales", "⚙️", "#F1C40F"),
+        ("Mats. para Embarcaciones Menores", "materiales", "🛶", "#3498DB"),
+        ("Mats. para Mantto. en Dique Seco", "materiales", "🏗️", "#95A5A6"),
+        ("Equipo de Seguridad y Navegación", "materiales", "🛟", "#E67E22"),
+        ("Mats. para Laboratorio y Electrónico", "materiales", "🧪", "#9B59B6"),
+        # Servicios
+        ("Mantto. a Máquinas", "servicios", "🔧", "#E74C3C"),
+        ("Mantto. a Cubiertas", "servicios", "🧹", "#F1C40F"),
+        ("Mantto. en Dique Seco", "servicios", "🚢", "#3498DB"),
+        ("Mantto. a Embarcaciones Menores", "servicios", "🛥️", "#95A5A6"),
+        ("Mantto. a Vehículos Terrestres", "servicios", "🚗", "#E67E22"),
+        ("Limpieza / Lavandería", "servicios", "🧼", "#9B59B6"),
+        ("Comunicaciones", "servicios", "📞", "#1ABC9C"),
+        ("Fletes y Acarreos", "servicios", "🚚", "#2ECC71"),
+        ("Comisiones y Servicios Financieros", "servicios", "💳", "#34495E"),
+        # Otros
+        ("Compras Generales (Papelería, Oficina)", "otros", "📝", "#BDC3C7"),
+        ("Materiales de Limpieza", "otros", "🧽", "#16A085"),
+        ("Otros Gastos", "otros", "📦", "#7F8C8D"),
+    ]
+    for name, group, icon, color in default_financial_categories:
+        if name not in existing_financial_cats:
+            cat = FinancialCategory(name=name, group=group, icon=icon, color=color, is_active=True)
+            db.add(cat)
+            print(f"  -> Creada categoría financiera: {name}")
+    db.flush()
+
+    # ── 7. Crear configuración de saldo inicial por defecto si no existe ──
+    from app.models.finance_setting import FinanceSetting
+    pc_setting = db.query(FinanceSetting).filter(FinanceSetting.key == "petty_cash_assigned").first()
+    if not pc_setting:
+        pc_setting = FinanceSetting(key="petty_cash_assigned", value="80000.00")
+        db.add(pc_setting)
+        print("  -> Creado ajuste de caja chica inicial de $80,000.00 MXN")
+    db.flush()
 
     db.commit()
     print(f"✅ Sincronización de seed completada.")

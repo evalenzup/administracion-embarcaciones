@@ -27,6 +27,7 @@ import {
   ThunderboltOutlined,
   DollarOutlined,
   HistoryOutlined,
+  WalletOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -94,6 +95,18 @@ const menuConfig = [
         icon: <DollarOutlined />,
         label: 'Facturación y Cobros',
         permission: { module: 'billing', action: 'view' },
+      },
+    ]
+  },
+  {
+    type: 'group',
+    label: 'Finanzas',
+    children: [
+      {
+        key: '/finance/petty-cash',
+        icon: <WalletOutlined />,
+        label: 'Fondo Fijo',
+        permission: { module: 'petty_cash', action: 'view' },
       },
     ]
   },
@@ -221,6 +234,7 @@ const breadcrumbMap = {
   '/admin/audit': 'Actividad del Sistema',
   '/fuel-logs': 'Combustible',
   '/billing': 'Facturación y Cobros',
+  '/finance/petty-cash': 'Fondo Fijo (Caja Chica)',
   '/help': 'Ayuda y Manuales',
 };
 

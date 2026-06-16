@@ -30,6 +30,7 @@ import PublicSchedulePage from './pages/PublicSchedule/PublicSchedulePage';
 import VesselRequestsPage from './pages/VesselRequests/VesselRequestsPage';
 import FuelLogsPage from './pages/FuelLogs/FuelLogsPage';
 import BillingPage from './pages/Billing/BillingPage';
+import PettyCashPage from './pages/Finance/PettyCashPage';
 
 /**
  * Ruta protegida: redirige a login si no está autenticado.
@@ -108,6 +109,7 @@ function AppRoutes() {
         <Route path="/equipment" element={<EquipmentPage />} />
         <Route path="/fuel-logs" element={<FuelLogsPage />} />
         <Route path="/billing" element={<BillingPage />} />
+        <Route path="/finance/petty-cash" element={<PettyCashPage />} />
         <Route path="/help" element={<HelpPage />} />
         <Route path="/admin/users" element={<UsersPage />} />
         <Route path="/admin/roles" element={<RolesPage />} />
