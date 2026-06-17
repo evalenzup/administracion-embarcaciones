@@ -300,6 +300,154 @@ function PettyCashTrendChart({ history, totalAssigned }) {
   );
 }
 
+// ── COMPONENTE GRÁFICO: Gastos Mensuales por Categoría (Barras Apiladas SVG) ──────
+function PettyCashMonthlyCategoryChart({ data }) {
+  if (!data || data.length === 0) {
+    return (
+      <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fafafa', borderRadius: 8 }}>
+        <span style={{ fontStyle: 'italic', color: '#888' }}>Sin datos históricos suficientes para mostrar la distribución mensual.</span>
+      </div>
+    );
+  }
+
+  const chartHeight = 220;
+  const chartWidth = 450;
+  const paddingLeft = 55;
+  const paddingRight = 15;
+  const paddingTop = 20;
+  const paddingBottom = 35;
+
+  const graphWidth = chartWidth - paddingLeft - paddingRight;
+  const graphHeight = chartHeight - paddingTop - paddingBottom;
+  const y_bottom = chartHeight - paddingBottom;
+
+  // Encontrar el valor máximo de gasto mensual total para escalar el gráfico
+  const maxVal = Math.max(...data.map(d => d.total), 1000);
+
+  const step = graphWidth / data.length;
+  const barWidth = 26;
+
+  // Obtener categorías únicas con su color para la leyenda
+  const uniqueCategories = [];
+  data.forEach(d => {
+    d.categories.forEach(c => {
+      if (!uniqueCategories.some(u => u.name === c.name)) {
+        uniqueCategories.push({ name: c.name, color: c.color });
+      }
+    });
+  });
+
+  const formatYValue = (val) => `$${Math.round(val).toLocaleString('es-MX')}`;
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', height: '100%' }}>
+      <div style={{ flex: 1 }}>
+        <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} width="100%" height="100%" style={{ display: 'block', minHeight: 220 }}>
+          <style>{`
+            .grid-line {
+              stroke: #f1f5f9;
+              stroke-width: 1;
+            }
+            .axis-line {
+              stroke: #cbd5e1;
+              stroke-width: 1.5;
+            }
+            .chart-text {
+              font-size: 10px;
+              fill: #64748b;
+              font-family: system-ui, -apple-system, sans-serif;
+              font-weight: 500;
+            }
+            .stacked-bar-segment {
+              transition: opacity 0.2s;
+              cursor: pointer;
+            }
+            .stacked-bar-segment:hover {
+              opacity: 0.85;
+            }
+          `}</style>
+
+          {/* Eje Y y Líneas de cuadrícula */}
+          {[0, 0.25, 0.5, 0.75, 1].map((ratio, idx) => {
+            const y = paddingTop + graphHeight * (1 - ratio);
+            const val = maxVal * ratio;
+            return (
+              <g key={idx}>
+                <line x1={paddingLeft} y1={y} x2={chartWidth - paddingRight} y2={y} className="grid-line" strokeDasharray={ratio === 0 ? "0" : "4 4"} />
+                <text x={paddingLeft - 10} y={y + 3} textAnchor="end" className="chart-text">
+                  {formatYValue(val)}
+                </text>
+              </g>
+            );
+          })}
+
+          {/* Eje X */}
+          <line x1={paddingLeft} y1={y_bottom} x2={chartWidth - paddingRight} y2={y_bottom} className="axis-line" />
+
+          {/* Barras Apiladas */}
+          {data.map((monthData, index) => {
+            const xCenter = paddingLeft + (index + 0.5) * step;
+            const x = xCenter - barWidth / 2;
+            let currentYOffset = 0;
+
+            return (
+              <g key={monthData.month}>
+                {monthData.categories.map((cat, catIdx) => {
+                  const segHeight = (cat.amount / maxVal) * graphHeight;
+                  const y = y_bottom - currentYOffset - segHeight;
+                  currentYOffset += segHeight;
+
+                  return (
+                    <g key={cat.name}>
+                      <Tooltip title={`${cat.name}: $${cat.amount.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN`}>
+                        <rect
+                          x={x}
+                          y={y}
+                          width={barWidth}
+                          height={segHeight}
+                          fill={cat.color}
+                          className="stacked-bar-segment"
+                          stroke="#fff"
+                          strokeWidth="0.5"
+                          rx={catIdx === monthData.categories.length - 1 ? "2" : "0"}
+                        />
+                      </Tooltip>
+                    </g>
+                  );
+                })}
+
+                {/* Etiqueta del Mes */}
+                <text x={xCenter} y={y_bottom + 16} textAnchor="middle" className="chart-text" style={{ fontSize: 9 }}>
+                  {dayjs(monthData.month + '-01').format('MMM YY')}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+
+      {/* Leyenda Lateral HTML */}
+      <div style={{ width: 140, paddingLeft: 12, borderLeft: '1px solid #f0f0f0', maxHeight: 180, overflowY: 'auto', flexShrink: 0 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+          Categorías
+        </div>
+        {uniqueCategories.length === 0 ? (
+          <div style={{ fontSize: 11, color: '#999', fontStyle: 'italic' }}>Sin datos</div>
+        ) : (
+          uniqueCategories.map(cat => (
+            <div key={cat.name} style={{ display: 'flex', alignItems: 'center', marginBottom: 6, fontSize: 11 }}>
+              <span style={{ display: 'inline-block', width: 8, height: 8, backgroundColor: cat.color, borderRadius: 2, marginRight: 6, flexShrink: 0 }} />
+              <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', color: '#475569' }} title={cat.name}>
+                {cat.name}
+              </span>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function PettyCashPage() {
   const { user, hasPermission } = useAuth();
 
@@ -1342,15 +1490,24 @@ export default function PettyCashPage() {
                   </Col>
                 </Row>
 
-                {/* GRÁFICO HISTÓRICO TEMPORAL DE BALANCE Y GASTOS */}
+                {/* GRÁFICOS HISTÓRICOS Y DE TENDENCIA */}
                 <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
-                  <Col span={24}>
+                  <Col xs={24} lg={12}>
                     <Card 
-                      title={<span style={{ fontWeight: 700 }}><HistoryOutlined style={{ color: '#1890ff', marginRight: 8 }} />Tendencia de Saldo y Gasto Acumulado (Últimos 30 días)</span>}
+                      title={<span style={{ fontWeight: 700 }}><HistoryOutlined style={{ color: '#1890ff', marginRight: 8 }} />Tendencia de Saldo y Gasto (Últimos 30 días)</span>}
                       bordered={false} 
-                      style={{ borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}
+                      style={{ borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.05)', height: '100%' }}
                     >
                       <PettyCashTrendChart history={summary.daily_history || []} totalAssigned={summary.total_assigned} />
+                    </Card>
+                  </Col>
+                  <Col xs={24} lg={12}>
+                    <Card 
+                      title={<span style={{ fontWeight: 700 }}><PieChartOutlined style={{ color: '#52c41a', marginRight: 8 }} />Gastos por Categoría de Cada Mes (Últimos 6 meses)</span>}
+                      bordered={false} 
+                      style={{ borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.05)', height: '100%' }}
+                    >
+                      <PettyCashMonthlyCategoryChart data={summary.monthly_category_expenses || []} />
                     </Card>
                   </Col>
                 </Row>

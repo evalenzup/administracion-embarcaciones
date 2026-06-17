@@ -1392,6 +1392,53 @@ async def get_petty_cash_summary(
             "daily_spent": round(day_invoices, 2)
         })
 
+    # Generar historial de gastos mensuales por categoría para los últimos 6 meses
+    months = []
+    current_date = today
+    for _ in range(6):
+        months.insert(0, current_date.strftime("%Y-%m"))
+        # Retroceder al mes anterior
+        first_of_month = current_date.replace(day=1)
+        prev_month_last_day = first_of_month - timedelta(days=1)
+        current_date = prev_month_last_day
+
+    # Consultar facturas de los últimos 6 meses
+    six_months_ago = today - timedelta(days=180)
+    invoices_sem = db.query(
+        PettyCashInvoice.created_at,
+        PettyCashInvoice.total,
+        FinancialCategory.name.label("cat_name"),
+        FinancialCategory.color.label("cat_color")
+    ).join(
+        FinancialCategory, PettyCashInvoice.category_id == FinancialCategory.id
+    ).filter(
+        PettyCashInvoice.created_at >= six_months_ago
+    ).all()
+
+    # Agrupar por mes y categoría
+    monthly_cat_map = {m: {} for m in months}
+    category_colors = {}
+    for inv in invoices_sem:
+        if not inv.created_at:
+            continue
+        m_str = inv.created_at.strftime("%Y-%m")
+        if m_str in monthly_cat_map:
+            cat_name = inv.cat_name
+            cat_color = inv.cat_color or "#7f8c8d"
+            category_colors[cat_name] = cat_color
+            monthly_cat_map[m_str][cat_name] = monthly_cat_map[m_str].get(cat_name, 0.0) + inv.total
+
+    monthly_category_expenses = []
+    for m in months:
+        cats_spent = [{"name": name, "amount": round(amount, 2), "color": category_colors.get(name, "#7f8c8d")}
+                      for name, amount in monthly_cat_map[m].items()]
+        total_m = sum(c["amount"] for c in cats_spent)
+        monthly_category_expenses.append({
+            "month": m,
+            "categories": cats_spent,
+            "total": round(total_m, 2)
+        })
+
     return {
         "total_assigned": total_assigned,
         "pending_reimbursement": float(pending_reimbursement),
@@ -1404,5 +1451,6 @@ async def get_petty_cash_summary(
         "recent_counts": recent_counts_resp,
         "invoices_pending_count": count_pending,
         "invoices_pending_amount": float(amount_pending),
-        "daily_history": daily_history
+        "daily_history": daily_history,
+        "monthly_category_expenses": monthly_category_expenses
     }
