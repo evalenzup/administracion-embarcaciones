@@ -17,7 +17,8 @@ import {
   UploadOutlined, PlusOutlined, DeleteOutlined, EditOutlined, EyeOutlined,
   FilePdfOutlined, FileTextOutlined, HistoryOutlined, InfoCircleOutlined,
   BankOutlined, WarningOutlined, SyncOutlined, PieChartOutlined, BarsOutlined,
-  CloseCircleOutlined, FileAddOutlined, ToolOutlined, CheckOutlined
+  CloseCircleOutlined, FileAddOutlined, ToolOutlined, CheckOutlined,
+  DownloadOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import apiClient from '../../api/client';
@@ -401,6 +402,28 @@ export default function PettyCashPage() {
     link.click();
     document.body.removeChild(link);
     message.success("Reporte CSV descargado con éxito.");
+  };
+
+  // Descargar el PDF actual en previsualización
+  const handleDownloadPdf = async () => {
+    if (!pdfPreviewUrl) return;
+    try {
+      message.loading({ content: "Descargando archivo PDF...", key: "pdfDownload" });
+      const response = await fetch(pdfPreviewUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const filename = pdfPreviewUrl.split('/').pop() || 'factura.pdf';
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      message.success({ content: "PDF descargado con éxito.", key: "pdfDownload", duration: 2 });
+    } catch (err) {
+      message.error({ content: "Error al descargar el archivo PDF.", key: "pdfDownload", duration: 3 });
+    }
   };
 
   // Descargar ZIP con todas las facturas y comprobantes del paquete de reposición
@@ -2050,7 +2073,14 @@ export default function PettyCashPage() {
           }}>
             Cerrar
           </Button>,
-          <Button key="download" type="primary" href={pdfPreviewUrl} target="_blank">
+          <Button 
+            key="download" 
+            icon={<DownloadOutlined />} 
+            onClick={handleDownloadPdf}
+          >
+            Descargar PDF
+          </Button>,
+          <Button key="open-tab" type="primary" href={pdfPreviewUrl} target="_blank">
             Abrir en pestaña nueva
           </Button>
         ]}
