@@ -863,6 +863,64 @@ async def get_reimbursement(
     return reimbursement
 
 
+@router.get("/reimbursements/{id}/zip")
+async def download_reimbursement_zip(
+    id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("petty_cash", "view")),
+):
+    """Generar y descargar un archivo ZIP conteniendo todos los XMLs y PDFs de las facturas del paquete de reposición."""
+    import io
+    import zipfile
+    from fastapi.responses import StreamingResponse
+
+    reimbursement = db.query(PettyCashReimbursement).filter(PettyCashReimbursement.id == id).first()
+    if not reimbursement:
+        raise HTTPException(status_code=404, detail="Reposición no encontrada")
+
+    # Crear un buffer en memoria para almacenar el archivo ZIP
+    zip_buffer = io.BytesIO()
+    
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        added_files = set()
+        for invoice in reimbursement.invoices:
+            # Archivo XML
+            if invoice.xml_filename:
+                relative_path = invoice.xml_filename.lstrip("/")
+                if os.path.exists(relative_path):
+                    filename = os.path.basename(relative_path)
+                    if filename not in added_files:
+                        zip_file.write(relative_path, arcname=f"xml/{filename}")
+                        added_files.add(filename)
+            
+            # Archivo PDF
+            if invoice.pdf_filename:
+                relative_path = invoice.pdf_filename.lstrip("/")
+                if os.path.exists(relative_path):
+                    filename = os.path.basename(relative_path)
+                    if filename not in added_files:
+                        zip_file.write(relative_path, arcname=f"pdf/{filename}")
+                        added_files.add(filename)
+                        
+        # También incluir el escaneado de la reposición si existe
+        if reimbursement.scan_filename:
+            relative_path = reimbursement.scan_filename.lstrip("/")
+            if os.path.exists(relative_path):
+                filename = os.path.basename(relative_path)
+                zip_file.write(relative_path, arcname=filename)
+
+    zip_buffer.seek(0)
+    
+    # Formatear nombre del archivo
+    filename = f"reposicion_cajachica_{reimbursement.id}_{reimbursement.created_at.strftime('%Y%m%d')}.zip"
+    
+    return StreamingResponse(
+        zip_buffer,
+        media_type="application/x-zip-compressed",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
 @router.put("/reimbursements/{id}/status", response_model=ReimbursementResponse)
 async def update_reimbursement_status(
     id: int,

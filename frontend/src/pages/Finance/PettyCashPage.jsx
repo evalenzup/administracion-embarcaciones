@@ -89,6 +89,10 @@ export default function PettyCashPage() {
   const [selectedInvoiceForEdit, setSelectedInvoiceForEdit] = useState(null);
   const [editForm] = Form.useForm();
 
+  // Modal Previsualizar PDF
+  const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState('');
+
   // Modal Vincular XML
   const [linkModalOpen, setLinkModalOpen] = useState(false);
   const [selectedInvoiceForLink, setSelectedInvoiceForLink] = useState(null);
@@ -336,6 +340,78 @@ export default function PettyCashPage() {
       message.error(err.response?.data?.detail || "Error al actualizar el gasto.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Exportar el listado actual de facturas y gastos a formato CSV (Excel compatible)
+  const handleExportCSV = () => {
+    if (!invoices.length) {
+      message.warning("No hay facturas ni gastos cargados para exportar.");
+      return;
+    }
+
+    const headers = [
+      "Fecha Gasto",
+      "Tipo",
+      "UUID / Folio Fiscal",
+      "Folio",
+      "Serie",
+      "Proveedor (RFC)",
+      "Proveedor (Nombre)",
+      "Subtotal",
+      "IVA",
+      "Total",
+      "Categoria",
+      "Descripcion",
+      "Estado"
+    ];
+
+    const rows = invoices.map(rec => [
+      rec.fecha_emision ? dayjs(rec.fecha_emision).format('YYYY-MM-DD') : 'S/F',
+      rec.is_manual ? 'Manual' : 'XML',
+      rec.uuid || 'N/A',
+      rec.folio || 'N/A',
+      rec.serie || 'N/A',
+      rec.emisor_rfc || 'N/A',
+      `"${(rec.emisor_nombre || '').replace(/"/g, '""')}"`,
+      rec.subtotal,
+      rec.iva,
+      rec.total,
+      rec.category?.name || 'Sin Clasificar',
+      `"${(rec.description || '').replace(/"/g, '""')}"`,
+      rec.status
+    ]);
+
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `siae_reporte_cajachica_${dayjs().format('YYYYMMDD_HHmmss')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    message.success("Reporte CSV descargado con éxito.");
+  };
+
+  // Descargar ZIP con todas las facturas y comprobantes del paquete de reposición
+  const handleDownloadZip = async (reimbId, folio) => {
+    try {
+      message.loading({ content: "Generando archivo ZIP de comprobantes...", key: "zipDownload" });
+      const response = await apiClient.get(`/petty-cash/reimbursements/${reimbId}/zip`, {
+        responseType: 'blob'
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `comprobantes_reposicion_${folio || reimbId}.zip`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      message.success({ content: "ZIP descargado con éxito.", key: "zipDownload", duration: 2 });
+    } catch (err) {
+      message.error({ content: "Error al generar el archivo ZIP.", key: "zipDownload", duration: 3 });
     }
   };
 
@@ -644,6 +720,13 @@ export default function PettyCashPage() {
               >
                 Registrar Gasto Sin Factura
               </Button>
+              <Button 
+                icon={<UploadOutlined style={{ transform: 'rotate(180deg)' }} />} 
+                onClick={handleExportCSV}
+                style={{ borderRadius: 6, fontWeight: 600, height: 40 }}
+              >
+                Exportar CSV
+              </Button>
             </Space>
           )}
           {activeTab === 'reimbursements' && (
@@ -685,6 +768,16 @@ export default function PettyCashPage() {
             label: <span><WalletOutlined /> Dashboard General</span>,
             children: (
               <div>
+                {summary.available_balance < (summary.total_assigned * 0.15) && (
+                  <Alert
+                    message="Advertencia de Saldo Bajo en Caja Chica"
+                    description={`El saldo disponible actual ($${summary.available_balance.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN) es menor al 15% del monto total asignado ($${summary.total_assigned.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN). Te sugerimos generar una nueva solicitud de reposición.`}
+                    type="warning"
+                    showIcon
+                    closable
+                    style={{ marginBottom: 20, borderRadius: 8 }}
+                  />
+                )}
                 {/* TARJETAS DE KPIS */}
                 <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
                   <Col xs={24} sm={12} md={6}>
@@ -959,7 +1052,19 @@ export default function PettyCashPage() {
                         <div>
                           <Text strong>{rec.folio || 'S/F'}</Text>
                           {rec.serie && <div style={{ fontSize: 11, color: '#888' }}>Serie: {rec.serie}</div>}
-                          {rec.is_manual && <Tag color="warning" style={{ fontSize: 10, marginTop: 4 }}>Sin XML</Tag>}
+                          {rec.is_manual && (() => {
+                            const daysOld = dayjs().diff(dayjs(rec.created_at), 'day');
+                            if (daysOld >= 7 && rec.status === 'pendiente') {
+                              return (
+                                <Tooltip title={`Gasto manual registrado hace ${daysOld} días sin vincular factura XML.`}>
+                                  <Tag color="red" style={{ fontSize: 10, marginTop: 4, fontWeight: 600 }}>
+                                    <WarningOutlined /> ¡Pendiente {daysOld}d!
+                                  </Tag>
+                                </Tooltip>
+                              );
+                            }
+                            return <Tag color="warning" style={{ fontSize: 10, marginTop: 4 }}>Sin XML</Tag>;
+                          })()}
                         </div>
                       ),
                       width: 120
@@ -1036,12 +1141,19 @@ export default function PettyCashPage() {
                             )
                           )}
                           {rec.pdf_filename ? (
-                            <Tooltip title="Ver PDF">
+                            <Tooltip title="Previsualizar PDF">
                               <Button 
                                 type="text" 
                                 icon={<FilePdfOutlined style={{ color: '#ff4d4f' }} />} 
-                                href={rec.pdf_filename}
-                                target="_blank"
+                                onClick={() => {
+                                  const base = apiClient.defaults.baseURL || '';
+                                  const host = base.replace(/\/api\/v1\/?$/, '');
+                                  const url = rec.pdf_filename.startsWith('http') 
+                                    ? rec.pdf_filename 
+                                    : `${host}${rec.pdf_filename}`;
+                                  setPdfPreviewUrl(url);
+                                  setPdfPreviewOpen(true);
+                                }}
                               />
                             </Tooltip>
                           ) : (
@@ -1195,6 +1307,13 @@ export default function PettyCashPage() {
                       key: 'actions',
                       render: (_, rec) => (
                         <Space>
+                          <Tooltip title="Descargar paquete de comprobantes (ZIP)">
+                            <Button 
+                              type="text" 
+                              icon={<InboxOutlined style={{ color: '#722ed1' }} />} 
+                              onClick={() => handleDownloadZip(rec.id, rec.folio)} 
+                            />
+                          </Tooltip>
                           {rec.status === 'en_proceso' && (
                             <Button 
                               type="primary" 
@@ -1807,6 +1926,47 @@ export default function PettyCashPage() {
               </Space>
             </Form.Item>
           </Form>
+        )}
+      </Modal>
+
+      {/* MODAL: PREVISUALIZAR PDF INTEGRADO */}
+      <Modal
+        title={<strong>Previsualización de Documento</strong>}
+        open={pdfPreviewOpen}
+        onCancel={() => {
+          setPdfPreviewOpen(false);
+          setPdfPreviewUrl('');
+        }}
+        footer={[
+          <Button key="close" onClick={() => {
+            setPdfPreviewOpen(false);
+            setPdfPreviewUrl('');
+          }}>
+            Cerrar
+          </Button>,
+          <Button key="download" type="primary" href={pdfPreviewUrl} target="_blank">
+            Abrir en pestaña nueva
+          </Button>
+        ]}
+        width={850}
+        style={{ top: 40 }}
+        destroyOnClose
+      >
+        {pdfPreviewUrl ? (
+          <div style={{ height: '65vh', background: '#f0f2f5', borderRadius: 8, overflow: 'hidden' }}>
+            <iframe 
+              src={`${pdfPreviewUrl}#toolbar=0`} 
+              width="100%" 
+              height="100%" 
+              style={{ border: 'none' }}
+              title="PDF Preview"
+            />
+          </div>
+        ) : (
+          <div style={{ textAlign: 'center', padding: 40 }}>
+            <LoadingOutlined style={{ fontSize: 24, marginBottom: 8 }} />
+            <div>Cargando documento...</div>
+          </div>
         )}
       </Modal>
 
