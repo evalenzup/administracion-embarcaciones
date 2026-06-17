@@ -1289,23 +1289,14 @@ export default function PettyCashPage() {
                       render: (_, rec) => (
                         <Space>
                           {rec.xml_filename ? (
-                            <>
-                              <Tooltip title="Descargar XML">
-                                <Button 
-                                  type="text" 
-                                  icon={<FileTextOutlined style={{ color: '#1890ff' }} />} 
-                                  href={rec.xml_filename}
-                                  target="_blank"
-                                />
-                              </Tooltip>
-                              <Tooltip title="Re-verificar Estado SAT">
-                                <Button
-                                  type="text"
-                                  icon={<SyncOutlined />}
-                                  onClick={() => handleVerifySat(rec.id)}
-                                />
-                              </Tooltip>
-                            </>
+                            <Tooltip title="Descargar XML">
+                              <Button 
+                                type="text" 
+                                icon={<FileTextOutlined style={{ color: '#1890ff' }} />} 
+                                href={rec.xml_filename}
+                                target="_blank"
+                              />
+                            </Tooltip>
                           ) : (
                             rec.is_manual && (
                               <Tooltip title="Vincular factura XML">
@@ -1376,9 +1367,18 @@ export default function PettyCashPage() {
                               <Button type="text" disabled icon={<EditOutlined />} />
                             </Tooltip>
                           )}
+                          {rec.uuid && (
+                            <Tooltip title="Re-verificar Estado SAT">
+                              <Button
+                                type="text"
+                                icon={<SyncOutlined />}
+                                onClick={() => handleVerifySat(rec.id)}
+                              />
+                            </Tooltip>
+                          )}
                         </Space>
                       ),
-                      width: 100
+                      width: 130
                     }
                   ]}
                 />
