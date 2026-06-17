@@ -1318,7 +1318,7 @@ async def get_petty_cash_summary(
             by_group[grp] = 0.0
 
     recent_invoices = db.query(PettyCashInvoice).order_by(
-        PettyCashInvoice.created_at.desc()
+        func.coalesce(PettyCashInvoice.fecha_emision, PettyCashInvoice.created_at).desc()
     ).limit(5).all()
 
     recent_invoices_resp = [
@@ -1329,6 +1329,7 @@ async def get_petty_cash_summary(
             "total": inv.total,
             "status": inv.status,
             "created_at": inv.created_at,
+            "fecha_emision": inv.fecha_emision,
             "is_manual": inv.is_manual,
             "category_name": inv.category.name if inv.category else "Sin categoría"
         }
@@ -1358,13 +1359,19 @@ async def get_petty_cash_summary(
     today = datetime.now().date()
     start_date = today - timedelta(days=29)
 
-    invoices = db.query(PettyCashInvoice.created_at, PettyCashInvoice.total).order_by(PettyCashInvoice.created_at).all()
+    invoices = db.query(
+        PettyCashInvoice.fecha_emision,
+        PettyCashInvoice.created_at,
+        PettyCashInvoice.total
+    ).order_by(
+        func.coalesce(PettyCashInvoice.fecha_emision, PettyCashInvoice.created_at)
+    ).all()
     reimbursements = db.query(PettyCashReimbursement.paid_date, PettyCashReimbursement.total_amount).filter(
         PettyCashReimbursement.status == ReimbursementStatus.PAGADO,
         PettyCashReimbursement.paid_date.isnot(None)
     ).order_by(PettyCashReimbursement.paid_date).all()
 
-    invoice_data = [(inv.created_at.date(), inv.total) for inv in invoices if inv.created_at]
+    invoice_data = [((inv.fecha_emision or inv.created_at).date(), inv.total) for inv in invoices if inv.fecha_emision or inv.created_at]
     reimb_data = [(r.paid_date.date(), r.total_amount) for r in reimbursements if r.paid_date]
 
     # Calcular sumas acumuladas anteriores a start_date
@@ -1405,6 +1412,7 @@ async def get_petty_cash_summary(
     # Consultar facturas de los últimos 6 meses
     six_months_ago = today - timedelta(days=180)
     invoices_sem = db.query(
+        PettyCashInvoice.fecha_emision,
         PettyCashInvoice.created_at,
         PettyCashInvoice.total,
         FinancialCategory.name.label("cat_name"),
@@ -1412,16 +1420,17 @@ async def get_petty_cash_summary(
     ).join(
         FinancialCategory, PettyCashInvoice.category_id == FinancialCategory.id
     ).filter(
-        PettyCashInvoice.created_at >= six_months_ago
+        func.coalesce(PettyCashInvoice.fecha_emision, PettyCashInvoice.created_at) >= six_months_ago
     ).all()
 
     # Agrupar por mes y categoría
     monthly_cat_map = {m: {} for m in months}
     category_colors = {}
     for inv in invoices_sem:
-        if not inv.created_at:
+        dt = inv.fecha_emision or inv.created_at
+        if not dt:
             continue
-        m_str = inv.created_at.strftime("%Y-%m")
+        m_str = dt.strftime("%Y-%m")
         if m_str in monthly_cat_map:
             cat_name = inv.cat_name
             cat_color = inv.cat_color or "#7f8c8d"

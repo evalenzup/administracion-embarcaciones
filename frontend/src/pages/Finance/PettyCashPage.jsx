@@ -1446,7 +1446,7 @@ export default function PettyCashPage() {
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#888', marginTop: 2 }}>
                                   <span>{inv.category_name}</span>
-                                  <span>{dayjs(inv.created_at).format('DD/MM/YYYY HH:mm')}</span>
+                                  <span>{dayjs(inv.fecha_emision || inv.created_at).format('DD/MM/YYYY')}</span>
                                 </div>
                               </div>
                             )
