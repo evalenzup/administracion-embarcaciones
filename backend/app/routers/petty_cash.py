@@ -282,6 +282,19 @@ async def validate_xml(
         
     content = await file.read()
     result = parse_and_validate_cfdi(content)
+    
+    # Validar duplicados de UUID en la base de datos de forma temprana
+    uuid_str = result.get("uuid")
+    if uuid_str:
+        existing = db.query(PettyCashInvoice).filter(PettyCashInvoice.uuid == uuid_str).first()
+        if existing:
+            result["is_valid"] = False
+            error_msg = f"La factura con UUID {uuid_str} ya está registrada en el sistema."
+            if "errors" not in result:
+                result["errors"] = []
+            if error_msg not in result["errors"]:
+                result["errors"].append(error_msg)
+                
     return result
 
 
@@ -582,11 +595,77 @@ async def update_invoice(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("petty_cash", "edit")),
 ):
-    """Actualizar clasificación (categoría, descripción) de una factura."""
+    """Actualizar datos de una factura o gasto manual."""
     invoice = db.query(PettyCashInvoice).filter(PettyCashInvoice.id == id).first()
     if not invoice:
         raise HTTPException(status_code=404, detail="Factura no encontrada")
 
+    # 1. Validar que la factura esté PENDIENTE
+    if invoice.status != InvoiceStatus.PENDIENTE:
+        raise HTTPException(
+            status_code=400,
+            detail="Solo se pueden editar facturas/gastos en estado 'pendiente' (que no formen parte de una reposición)."
+        )
+
+    # 2. Manejar edición según si es manual o formal con XML
+    if invoice.is_manual:
+        # Es gasto manual: permitir editar campos de texto y montos
+        if data.fecha_emision is not None:
+            invoice.fecha_emision = data.fecha_emision
+
+        if data.emisor_rfc is not None:
+            rfc = data.emisor_rfc.upper().strip()
+            if not (12 <= len(rfc) <= 13):
+                raise HTTPException(status_code=400, detail="El RFC del emisor debe tener 12 o 13 caracteres.")
+            invoice.emisor_rfc = rfc
+
+        if data.emisor_nombre is not None:
+            invoice.emisor_nombre = data.emisor_nombre.strip()
+
+        if data.total is not None:
+            if data.total <= 0 or data.total > 5000.00:
+                raise HTTPException(status_code=400, detail="El monto total de un gasto de caja chica debe estar entre 0.01 y 5000.00 MXN.")
+            invoice.total = data.total
+            
+            # Ajustar subtotal e iva según se proporcionen o no
+            if data.subtotal is not None:
+                invoice.subtotal = data.subtotal
+            else:
+                invoice.subtotal = data.total
+                
+            if data.iva is not None:
+                invoice.iva = data.iva
+            else:
+                invoice.iva = 0.0
+        else:
+            # Si no cambia el total pero sí subtotal/iva
+            if data.subtotal is not None:
+                invoice.subtotal = data.subtotal
+            if data.iva is not None:
+                invoice.iva = data.iva
+    else:
+        # Es factura formal con XML: prohibir cambiar datos fiscales
+        has_fiscal_changes = False
+        if data.fecha_emision is not None and data.fecha_emision != invoice.fecha_emision:
+            has_fiscal_changes = True
+        if data.emisor_rfc is not None and data.emisor_rfc.upper().strip() != invoice.emisor_rfc:
+            has_fiscal_changes = True
+        if data.emisor_nombre is not None and data.emisor_nombre.strip() != invoice.emisor_nombre:
+            has_fiscal_changes = True
+        if data.total is not None and data.total != invoice.total:
+            has_fiscal_changes = True
+        if data.subtotal is not None and data.subtotal != invoice.subtotal:
+            has_fiscal_changes = True
+        if data.iva is not None and data.iva != invoice.iva:
+            has_fiscal_changes = True
+            
+        if has_fiscal_changes:
+            raise HTTPException(
+                status_code=400,
+                detail="No está permitido editar los datos fiscales de una factura formal XML. Solo se puede cambiar la categoría o la descripción."
+            )
+
+    # 3. Campos comunes permitidos para todos
     if data.category_id is not None:
         category = db.query(FinancialCategory).filter(FinancialCategory.id == data.category_id).first()
         if not category:
@@ -603,7 +682,7 @@ async def update_invoice(
         db=db, user_id=current_user.id, username=current_user.username,
         action="update", module="petty_cash", entity_type="PettyCashInvoice",
         entity_id=invoice.id,
-        description=f"Actualizó clasificación de gasto ID {invoice.id}",
+        description=f"Actualizó gasto ID {invoice.id} ({'manual' if invoice.is_manual else 'XML'})",
         ip_address=request.client.host if request.client else None,
     )
     return invoice

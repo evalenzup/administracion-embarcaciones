@@ -84,6 +84,11 @@ export default function PettyCashPage() {
   const [manualModalOpen, setManualModalOpen] = useState(false);
   const [manualForm] = Form.useForm();
 
+  // Modal Editar Gasto/Factura
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [selectedInvoiceForEdit, setSelectedInvoiceForEdit] = useState(null);
+  const [editForm] = Form.useForm();
+
   // Modal Vincular XML
   const [linkModalOpen, setLinkModalOpen] = useState(false);
   const [selectedInvoiceForLink, setSelectedInvoiceForLink] = useState(null);
@@ -285,6 +290,50 @@ export default function PettyCashPage() {
       fetchSummary();
     } catch (err) {
       message.error(err.response?.data?.detail || "Error al registrar el gasto manual.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Abrir modal de edición con datos precargados
+  const handleEditInvoiceOpen = (invoice) => {
+    setSelectedInvoiceForEdit(invoice);
+    editForm.setFieldsValue({
+      fecha_emision: invoice.fecha_emision ? dayjs(invoice.fecha_emision) : null,
+      emisor_nombre: invoice.emisor_nombre,
+      emisor_rfc: invoice.emisor_rfc,
+      total: invoice.total,
+      category_id: invoice.category_id,
+      description: invoice.description
+    });
+    setEditModalOpen(true);
+  };
+
+  // Guardar cambios del gasto/factura editado
+  const handleUpdateInvoice = async (values) => {
+    setLoading(true);
+    try {
+      const payload = {
+        category_id: values.category_id,
+        description: values.description,
+      };
+
+      if (selectedInvoiceForEdit.is_manual) {
+        payload.fecha_emision = values.fecha_emision.toISOString();
+        payload.emisor_nombre = values.emisor_nombre;
+        payload.emisor_rfc = values.emisor_rfc;
+        payload.total = values.total;
+      }
+
+      await apiClient.put(`/petty-cash/invoices/${selectedInvoiceForEdit.id}`, payload);
+      message.success("Gasto/Factura actualizado correctamente.");
+      setEditModalOpen(false);
+      setSelectedInvoiceForEdit(null);
+      editForm.resetFields();
+      fetchInvoices();
+      fetchSummary();
+    } catch (err) {
+      message.error(err.response?.data?.detail || "Error al actualizar el gasto.");
     } finally {
       setLoading(false);
     }
@@ -1008,23 +1057,32 @@ export default function PettyCashPage() {
                       render: (_, rec) => (
                         <Space>
                           {rec.status === 'pendiente' ? (
-                            <Popconfirm
-                              title="¿Eliminar este gasto?"
-                              description="Esta acción eliminará el gasto del registro."
-                              onConfirm={() => handleDeleteInvoice(rec.id)}
-                              okText="Sí, eliminar"
-                              cancelText="No"
-                            >
-                              <Button type="text" danger icon={<DeleteOutlined />} />
-                            </Popconfirm>
+                            <>
+                              <Tooltip title="Editar gasto/factura">
+                                <Button 
+                                  type="text" 
+                                  icon={<EditOutlined style={{ color: '#1890ff' }} />} 
+                                  onClick={() => handleEditInvoiceOpen(rec)} 
+                                />
+                              </Tooltip>
+                              <Popconfirm
+                                title="¿Eliminar este gasto?"
+                                description="Esta acción eliminará el gasto del registro."
+                                onConfirm={() => handleDeleteInvoice(rec.id)}
+                                okText="Sí, eliminar"
+                                cancelText="No"
+                              >
+                                <Button type="text" danger icon={<DeleteOutlined />} />
+                              </Popconfirm>
+                            </>
                           ) : (
-                            <Tooltip title="Gasto asociado a una reposición activa (no eliminable)">
-                              <Button type="text" disabled icon={<DeleteOutlined />} />
+                            <Tooltip title="Gasto asociado a una reposición activa (no modificable/eliminable)">
+                              <Button type="text" disabled icon={<EditOutlined />} />
                             </Tooltip>
                           )}
                         </Space>
                       ),
-                      width: 80
+                      width: 100
                     }
                   ]}
                 />
@@ -1444,34 +1502,84 @@ export default function PettyCashPage() {
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item label="Archivo XML (CFDI 4.0)" required>
-                <Upload
-                  accept=".xml"
-                  beforeUpload={handleXmlUpload}
-                  fileList={xmlFileList}
-                  onRemove={() => {
-                    setXmlFileList([]);
-                    setXmlValidation(null);
-                  }}
-                  maxCount={1}
-                >
-                  <Button icon={<UploadOutlined />} style={{ width: '100%' }}>Seleccionar XML</Button>
-                </Upload>
+                {xmlFileList.length === 0 ? (
+                  <Upload
+                    accept=".xml"
+                    beforeUpload={handleXmlUpload}
+                    fileList={xmlFileList}
+                    showUploadList={false}
+                  >
+                    <Button icon={<UploadOutlined />} style={{ width: '100%' }}>Seleccionar XML</Button>
+                  </Upload>
+                ) : (
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <div style={{
+                      flex: 1, 
+                      padding: '8px 12px', 
+                      background: '#e6f7ff', 
+                      border: '1px dashed #91d5ff',
+                      borderRadius: 6,
+                      fontSize: 13,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      <FileTextOutlined style={{ marginRight: 8, color: '#1890ff' }} />
+                      {xmlFileList[0].name}
+                    </div>
+                    <Button 
+                      danger 
+                      type="primary"
+                      icon={<DeleteOutlined />} 
+                      onClick={() => {
+                        setXmlFileList([]);
+                        setXmlValidation(null);
+                      }}
+                      style={{ height: 38, width: 40 }}
+                    />
+                  </div>
+                )}
               </Form.Item>
             </Col>
             <Col span={12}>
               <Form.Item label="Archivo PDF (Factura digital)">
-                <Upload
-                  accept=".pdf"
-                  beforeUpload={(file) => {
-                    setPdfFileList([file]);
-                    return false;
-                  }}
-                  fileList={pdfFileList}
-                  onRemove={() => setPdfFileList([])}
-                  maxCount={1}
-                >
-                  <Button icon={<UploadOutlined />} style={{ width: '100%' }}>Seleccionar PDF</Button>
-                </Upload>
+                {pdfFileList.length === 0 ? (
+                  <Upload
+                    accept=".pdf"
+                    beforeUpload={(file) => {
+                      setPdfFileList([file]);
+                      return false;
+                    }}
+                    fileList={pdfFileList}
+                    showUploadList={false}
+                  >
+                    <Button icon={<UploadOutlined />} style={{ width: '100%' }}>Seleccionar PDF</Button>
+                  </Upload>
+                ) : (
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <div style={{
+                      flex: 1, 
+                      padding: '8px 12px', 
+                      background: '#fff0f6', 
+                      border: '1px dashed #ffadd2',
+                      borderRadius: 6,
+                      fontSize: 13,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      <FilePdfOutlined style={{ marginRight: 8, color: '#eb2f96' }} />
+                      {pdfFileList[0].name}
+                    </div>
+                    <Button 
+                      danger 
+                      type="primary"
+                      icon={<DeleteOutlined />} 
+                      onClick={() => setPdfFileList([])}
+                      style={{ height: 38, width: 40 }}
+                    />
+                  </div>
+                )}
               </Form.Item>
             </Col>
           </Row>
@@ -1562,6 +1670,144 @@ export default function PettyCashPage() {
             </Space>
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* MODAL: EDITAR GASTO / FACTURA */}
+      <Modal
+        title={
+          <strong>
+            {selectedInvoiceForEdit?.is_manual 
+              ? "Editar Gasto Manual (Sin XML)" 
+              : "Editar Gasto/Factura (XML)"}
+          </strong>
+        }
+        open={editModalOpen}
+        onCancel={() => {
+          setEditModalOpen(false);
+          setSelectedInvoiceForEdit(null);
+          editForm.resetFields();
+        }}
+        footer={null}
+        width={600}
+        destroyOnClose
+      >
+        {selectedInvoiceForEdit && (
+          <Form
+            form={editForm}
+            layout="vertical"
+            onFinish={handleUpdateInvoice}
+          >
+            {!selectedInvoiceForEdit.is_manual && (
+              <Alert 
+                message="Factura Formal SAT"
+                description="Los datos fiscales (Fecha, Proveedor, RFC y Total) se leyeron del XML oficial y no son editables. Solo puedes reclasificar la categoría o modificar la descripción."
+                type="info"
+                showIcon
+                style={{ marginBottom: 16 }}
+              />
+            )}
+
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item 
+                  label="Fecha de Gasto" 
+                  name="fecha_emision" 
+                  rules={[{ required: true, message: 'Ingresa la fecha.' }]}
+                >
+                  <DatePicker 
+                    style={{ width: '100%' }} 
+                    disabled={!selectedInvoiceForEdit.is_manual} 
+                  />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item 
+                  label="Monto Total (Max $5,000)" 
+                  name="total" 
+                  rules={[{ required: true, message: 'Ingresa el monto total.' }]}
+                >
+                  <InputNumber 
+                    min={0.01} 
+                    max={5000.00} 
+                    precision={2} 
+                    style={{ width: '100%' }} 
+                    disabled={!selectedInvoiceForEdit.is_manual}
+                  />
+                </Form.Item>
+              </Col>
+            </Row>
+
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item 
+                  label="RFC del Proveedor" 
+                  name="emisor_rfc" 
+                  rules={[{ required: true, message: 'Ingresa el RFC del proveedor.' }]}
+                >
+                  <Input 
+                    placeholder="RFC de 12 o 13 caracteres" 
+                    maxLength={13} 
+                    disabled={!selectedInvoiceForEdit.is_manual} 
+                  />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item 
+                  label="Nombre del Proveedor" 
+                  name="emisor_nombre" 
+                  rules={[{ required: true, message: 'Ingresa el nombre del proveedor.' }]}
+                >
+                  <Input 
+                    placeholder="Razón Social o Nombre" 
+                    disabled={!selectedInvoiceForEdit.is_manual} 
+                  />
+                </Form.Item>
+              </Col>
+            </Row>
+
+            <Form.Item 
+              label="Clasificación de Categoría" 
+              name="category_id"
+              rules={[{ required: true, message: 'Selecciona una categoría de gasto.' }]}
+            >
+              <Select placeholder="Selecciona la categoría correspondiente">
+                {categories.filter(c => c.is_active || c.id === selectedInvoiceForEdit.category_id).map(cat => (
+                  <Select.Option key={cat.id} value={cat.id}>
+                    {cat.icon} {cat.name} ({cat.group})
+                  </Select.Option>
+                ))}
+              </Select>
+            </Form.Item>
+
+            <Form.Item 
+              label="Descripción del Gasto" 
+              name="description"
+              rules={[{ required: true, message: 'Ingresa una descripción del propósito del gasto.' }]}
+            >
+              <TextArea rows={3} placeholder="Propósito del gasto" />
+            </Form.Item>
+
+            <Form.Item style={{ margin: 0, textAlign: 'right' }}>
+              <Space>
+                <Button onClick={() => {
+                  setEditModalOpen(false);
+                  setSelectedInvoiceForEdit(null);
+                  editForm.resetFields();
+                }}>
+                  Cancelar
+                </Button>
+                <Button 
+                  type="primary" 
+                  htmlType="submit" 
+                  loading={loading}
+                  style={{ borderRadius: 6 }}
+                >
+                  Guardar Cambios
+                </Button>
+              </Space>
+            </Form.Item>
+          </Form>
+        )}
       </Modal>
 
       {/* MODAL: REGISTRAR GASTO MANUAL SIN XML */}
@@ -1682,34 +1928,84 @@ export default function PettyCashPage() {
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item label="Archivo XML (SAT)" required>
-                <Upload
-                  accept=".xml"
-                  beforeUpload={handleLinkXmlUpload}
-                  fileList={linkXmlFileList}
-                  onRemove={() => {
-                    setLinkXmlFileList([]);
-                    setLinkValidation(null);
-                  }}
-                  maxCount={1}
-                >
-                  <Button icon={<UploadOutlined />} style={{ width: '100%' }}>Seleccionar XML</Button>
-                </Upload>
+                {linkXmlFileList.length === 0 ? (
+                  <Upload
+                    accept=".xml"
+                    beforeUpload={handleLinkXmlUpload}
+                    fileList={linkXmlFileList}
+                    showUploadList={false}
+                  >
+                    <Button icon={<UploadOutlined />} style={{ width: '100%' }}>Seleccionar XML</Button>
+                  </Upload>
+                ) : (
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <div style={{
+                      flex: 1, 
+                      padding: '8px 12px', 
+                      background: '#e6f7ff', 
+                      border: '1px dashed #91d5ff',
+                      borderRadius: 6,
+                      fontSize: 13,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      <FileTextOutlined style={{ marginRight: 8, color: '#1890ff' }} />
+                      {linkXmlFileList[0].name}
+                    </div>
+                    <Button 
+                      danger 
+                      type="primary"
+                      icon={<DeleteOutlined />} 
+                      onClick={() => {
+                        setLinkXmlFileList([]);
+                        setLinkValidation(null);
+                      }}
+                      style={{ height: 38, width: 40 }}
+                    />
+                  </div>
+                )}
               </Form.Item>
             </Col>
             <Col span={12}>
               <Form.Item label="Archivo PDF (Opcional)">
-                <Upload
-                  accept=".pdf"
-                  beforeUpload={(file) => {
-                    setLinkPdfFileList([file]);
-                    return false;
-                  }}
-                  fileList={linkPdfFileList}
-                  onRemove={() => setLinkPdfFileList([])}
-                  maxCount={1}
-                >
-                  <Button icon={<UploadOutlined />} style={{ width: '100%' }}>Seleccionar PDF</Button>
-                </Upload>
+                {linkPdfFileList.length === 0 ? (
+                  <Upload
+                    accept=".pdf"
+                    beforeUpload={(file) => {
+                      setLinkPdfFileList([file]);
+                      return false;
+                    }}
+                    fileList={linkPdfFileList}
+                    showUploadList={false}
+                  >
+                    <Button icon={<UploadOutlined />} style={{ width: '100%' }}>Seleccionar PDF</Button>
+                  </Upload>
+                ) : (
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <div style={{
+                      flex: 1, 
+                      padding: '8px 12px', 
+                      background: '#fff0f6', 
+                      border: '1px dashed #ffadd2',
+                      borderRadius: 6,
+                      fontSize: 13,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      <FilePdfOutlined style={{ marginRight: 8, color: '#eb2f96' }} />
+                      {linkPdfFileList[0].name}
+                    </div>
+                    <Button 
+                      danger 
+                      type="primary"
+                      icon={<DeleteOutlined />} 
+                      onClick={() => setLinkPdfFileList([])}
+                      style={{ height: 38, width: 40 }}
+                    />
+                  </div>
+                )}
               </Form.Item>
             </Col>
           </Row>

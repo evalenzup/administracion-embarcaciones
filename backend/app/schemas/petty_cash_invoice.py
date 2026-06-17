@@ -57,9 +57,17 @@ class PettyCashInvoiceManualCreate(BaseModel):
 
 
 class PettyCashInvoiceUpdate(BaseModel):
-    """Actualizar la clasificación de una factura."""
+    """Actualizar la clasificación de una factura o los datos de un gasto manual."""
     category_id: int | None = None
     description: str | None = None
+    
+    # Campos adicionales opcionales para la edición de gastos manuales
+    fecha_emision: datetime | None = None
+    emisor_rfc: str | None = None
+    emisor_nombre: str | None = None
+    total: float | None = None
+    subtotal: float | None = None
+    iva: float | None = None
 
 
 class XMLValidationResult(PettyCashInvoiceBase):
