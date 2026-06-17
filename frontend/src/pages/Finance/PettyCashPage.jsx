@@ -61,7 +61,16 @@ export default function PettyCashPage() {
   const [categories, setCategories] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [invoicesTotal, setInvoicesTotal] = useState(0);
-  const [invoicesParams, setInvoicesParams] = useState({ skip: 0, limit: 15 });
+  const [invoicesParams, setInvoicesParams] = useState({
+    skip: 0,
+    limit: 15,
+    search: undefined,
+    category_id: undefined,
+    status: undefined,
+    is_manual: undefined,
+    start_date: undefined,
+    end_date: undefined
+  });
   
   const [reimbursements, setReimbursements] = useState([]);
   const [reimbursementsTotal, setReimbursementsTotal] = useState(0);
@@ -1021,6 +1030,103 @@ export default function PettyCashPage() {
             label: <span><FileTextOutlined /> Facturas y Gastos</span>,
             children: (
               <Card bordered={false} style={{ borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+                {/* PANEL DE FILTROS */}
+                <div style={{ marginBottom: 20, padding: '16px', background: '#fafafa', borderRadius: 8, border: '1px solid #f0f0f0' }}>
+                  <Row gutter={[16, 16]} align="middle">
+                    <Col xs={24} sm={12} md={6} lg={5}>
+                      <div style={{ fontWeight: 600, fontSize: 12, color: '#555', marginBottom: 6 }}>Buscar Gasto / Proveedor</div>
+                      <Input
+                        placeholder="Folio, UUID, Proveedor o Desc."
+                        value={invoicesParams.search}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setInvoicesParams(prev => ({ ...prev, search: val || undefined, skip: 0 }));
+                        }}
+                        allowClear
+                        style={{ width: '100%' }}
+                      />
+                    </Col>
+                    <Col xs={24} sm={12} md={6} lg={4}>
+                      <div style={{ fontWeight: 600, fontSize: 12, color: '#555', marginBottom: 6 }}>Categoría</div>
+                      <Select
+                        placeholder="Todas"
+                        value={invoicesParams.category_id}
+                        onChange={(val) => setInvoicesParams(prev => ({ ...prev, category_id: val, skip: 0 }))}
+                        allowClear
+                        style={{ width: '100%' }}
+                      >
+                        {categories.map(cat => (
+                          <Select.Option key={cat.id} value={cat.id}>
+                            {cat.icon} {cat.name}
+                          </Select.Option>
+                        ))}
+                      </Select>
+                    </Col>
+                    <Col xs={24} sm={12} md={6} lg={4}>
+                      <div style={{ fontWeight: 600, fontSize: 12, color: '#555', marginBottom: 6 }}>Estado</div>
+                      <Select
+                        placeholder="Todos"
+                        value={invoicesParams.status}
+                        onChange={(val) => setInvoicesParams(prev => ({ ...prev, status: val, skip: 0 }))}
+                        allowClear
+                        style={{ width: '100%' }}
+                      >
+                        <Select.Option value="pendiente">Pendiente</Select.Option>
+                        <Select.Option value="en_reposicion">En Reposición</Select.Option>
+                        <Select.Option value="repuesta">Repuesta</Select.Option>
+                      </Select>
+                    </Col>
+                    <Col xs={24} sm={12} md={6} lg={4}>
+                      <div style={{ fontWeight: 600, fontSize: 12, color: '#555', marginBottom: 6 }}>Comprobante</div>
+                      <Select
+                        placeholder="Todos"
+                        value={invoicesParams.is_manual}
+                        onChange={(val) => setInvoicesParams(prev => ({ ...prev, is_manual: val, skip: 0 }))}
+                        allowClear
+                        style={{ width: '100%' }}
+                      >
+                        <Select.Option value={false}>Factura XML</Select.Option>
+                        <Select.Option value={true}>Manual (Sin XML)</Select.Option>
+                      </Select>
+                    </Col>
+                    <Col xs={24} sm={24} md={12} lg={5}>
+                      <div style={{ fontWeight: 600, fontSize: 12, color: '#555', marginBottom: 6 }}>Rango de Fechas</div>
+                      <DatePicker.RangePicker
+                        value={invoicesParams.start_date ? [dayjs(invoicesParams.start_date), dayjs(invoicesParams.end_date)] : null}
+                        onChange={(dates) => {
+                          setInvoicesParams(prev => ({
+                            ...prev,
+                            start_date: dates ? dates[0].format('YYYY-MM-DD') : undefined,
+                            end_date: dates ? dates[1].format('YYYY-MM-DD') : undefined,
+                            skip: 0
+                          }));
+                        }}
+                        style={{ width: '100%' }}
+                      />
+                    </Col>
+                    <Col xs={24} sm={24} md={12} lg={2} style={{ textAlign: 'right' }}>
+                      <div style={{ fontWeight: 600, fontSize: 12, color: '#555', marginBottom: 6 }}>&nbsp;</div>
+                      <Button
+                        onClick={() => {
+                          setInvoicesParams({
+                            skip: 0,
+                            limit: 15,
+                            search: undefined,
+                            category_id: undefined,
+                            status: undefined,
+                            is_manual: undefined,
+                            start_date: undefined,
+                            end_date: undefined
+                          });
+                        }}
+                        style={{ width: '100%' }}
+                      >
+                        Limpiar
+                      </Button>
+                    </Col>
+                  </Row>
+                </div>
+
                 <Table
                   dataSource={invoices}
                   rowKey="id"
