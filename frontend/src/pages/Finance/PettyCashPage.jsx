@@ -10,7 +10,7 @@ import { Navigate } from 'react-router-dom';
 import {
   Card, Typography, Tabs, Table, Button, Form, Modal, Upload, Tag, Row, Col,
   Space, Statistic, Select, Input, InputNumber, Alert, Timeline, Tooltip,
-  Divider, Progress, Badge, Popconfirm, DatePicker, message
+  Divider, Progress, Badge, Popconfirm, DatePicker, message, Popover, ColorPicker
 } from 'antd';
 import {
   DollarOutlined, WalletOutlined, LoadingOutlined, CheckCircleOutlined,
@@ -34,6 +34,15 @@ const CICESE_FISCAL = {
   cp: "22860",
   total_max: 5000.00
 };
+
+const PRESET_EMOJIS = [
+  '🚗', '⛽', '✈️', '🚢', '⛵', '🚲', '🚕', '🚚',
+  '🛠️', '🔧', '⚙️', '🔨', '🔩', '🔌', '🚧', '📐',
+  '📝', '📎', '📁', '🖨️', '✉️', '📦', '🖊️', '📓',
+  '💻', '📱', '🖥️', '💾', '📶', '📞', '💡', '🔋',
+  '🚰', '🧹', '🧴', '🚿', '🔑', '🔒', '🚪', '🛎️',
+  '☕', '🥤', '🥪', '🍽️', '🏨', '🧳', '💰', '🎨'
+];
 
 export default function PettyCashPage() {
   const { user, hasPermission } = useAuth();
@@ -136,6 +145,7 @@ export default function PettyCashPage() {
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [categoryForm] = Form.useForm();
   const [editingCategory, setEditingCategory] = useState(null);
+  const [selectedEmoji, setSelectedEmoji] = useState("📦");
 
   // Cargar datos
   const fetchSummary = async () => {
@@ -732,6 +742,26 @@ export default function PettyCashPage() {
     servicios: 'purple',
     otros: 'cyan'
   };
+
+  const emojiPickerContent = (onSelect) => (
+    <div style={{ width: 280, padding: 4 }}>
+      <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+        Selecciona un ícono para la categoría:
+      </Typography.Text>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 8 }}>
+        {PRESET_EMOJIS.map((emoji) => (
+          <Button
+            key={emoji}
+            type="text"
+            style={{ fontSize: 20, padding: 0, height: 32, width: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            onClick={() => onSelect(emoji)}
+          >
+            {emoji}
+          </Button>
+        ))}
+      </div>
+    </div>
+  );
 
   return (
     <div style={{ padding: '24px', minHeight: 'calc(100vh - 64px)', background: '#f5f7fa' }}>
@@ -1696,6 +1726,7 @@ export default function PettyCashPage() {
                     onClick={() => {
                       setEditingCategory(null);
                       categoryForm.resetFields();
+                      setSelectedEmoji("📦");
                       setCategoryModalOpen(true);
                     }}
                     style={{ borderRadius: 6 }}
@@ -1751,6 +1782,7 @@ export default function PettyCashPage() {
                             onClick={() => {
                               setEditingCategory(rec);
                               categoryForm.setFieldsValue(rec);
+                              setSelectedEmoji(rec.icon || "📦");
                               setCategoryModalOpen(true);
                             }} 
                           />
@@ -2638,13 +2670,53 @@ export default function PettyCashPage() {
 
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item label="Ícono (Emoji)" name="icon" initialValue="📦">
-                <Input placeholder="Ej: 🔧, ⛽, 💻" />
+              <Form.Item 
+                label="Ícono (Emoji)" 
+                name="icon" 
+                rules={[{ required: true, message: 'Selecciona o escribe un ícono.' }]}
+                initialValue="📦"
+              >
+                <Input 
+                  placeholder="Ej: 🔧, ⛽, 💻" 
+                  onChange={(e) => setSelectedEmoji(e.target.value)}
+                  addonBefore={
+                    <Popover
+                      content={emojiPickerContent((emoji) => {
+                        setSelectedEmoji(emoji);
+                        categoryForm.setFieldsValue({ icon: emoji });
+                      })}
+                      trigger="click"
+                      placement="bottomLeft"
+                    >
+                      <span style={{ cursor: 'pointer', fontSize: 18, padding: '0 8px' }}>
+                        {selectedEmoji}
+                      </span>
+                    </Popover>
+                  }
+                />
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item label="Color CSS" name="color" initialValue="#7f8c8d">
-                <Input placeholder="Ej: #1890ff, #52c41a" />
+              <Form.Item 
+                label="Color de la Categoría" 
+                name="color" 
+                initialValue="#7f8c8d"
+                getValueFromEvent={(color) => color ? (typeof color === 'string' ? color : color.toHexString()) : '#7f8c8d'}
+              >
+                <ColorPicker 
+                  showText 
+                  presets={[
+                    {
+                      label: 'Colores Premium',
+                      colors: [
+                        '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', 
+                        '#ec4899', '#14b8a6', '#6366f1', '#f97316', '#06b6d4',
+                        '#475569', '#f43f5e'
+                      ]
+                    }
+                  ]}
+                  style={{ width: '100%' }}
+                />
               </Form.Item>
             </Col>
           </Row>
