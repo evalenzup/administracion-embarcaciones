@@ -1179,19 +1179,6 @@ export default function PettyCashPage() {
                   </Col>
                 </Row>
 
-                {/* GRÁFICO HISTÓRICO TEMPORAL DE BALANCE Y GASTOS */}
-                <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-                  <Col span={24}>
-                    <Card 
-                      title={<span style={{ fontWeight: 700 }}><HistoryOutlined style={{ color: '#1890ff', marginRight: 8 }} />Tendencia de Saldo y Gasto Acumulado (Últimos 30 días)</span>}
-                      bordered={false} 
-                      style={{ borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}
-                    >
-                      <PettyCashTrendChart history={summary.daily_history || []} totalAssigned={summary.total_assigned} />
-                    </Card>
-                  </Col>
-                </Row>
-
                 {/* GRÁFICOS PERSONALIZADOS Y ACTIVIDAD RECIENTE */}
                 <Row gutter={[24, 24]}>
                   {/* GRÁFICO SVG INTEGRADO */}
@@ -1351,6 +1338,19 @@ export default function PettyCashPage() {
                           ))}
                         </div>
                       )}
+                    </Card>
+                  </Col>
+                </Row>
+
+                {/* GRÁFICO HISTÓRICO TEMPORAL DE BALANCE Y GASTOS */}
+                <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
+                  <Col span={24}>
+                    <Card 
+                      title={<span style={{ fontWeight: 700 }}><HistoryOutlined style={{ color: '#1890ff', marginRight: 8 }} />Tendencia de Saldo y Gasto Acumulado (Últimos 30 días)</span>}
+                      bordered={false} 
+                      style={{ borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}
+                    >
+                      <PettyCashTrendChart history={summary.daily_history || []} totalAssigned={summary.total_assigned} />
                     </Card>
                   </Col>
                 </Row>
