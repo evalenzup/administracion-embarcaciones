@@ -887,7 +887,7 @@ async def create_reimbursement(
 ):
     """
     Crear una solicitud de reposición agrupando facturas con estado 'pendiente'.
-    Valida: max 20 facturas y max 2 facturas de un mismo proveedor.
+    Valida: max 20 facturas.
     """
     if len(data.invoice_ids) > 20:
         raise HTTPException(
@@ -905,17 +905,6 @@ async def create_reimbursement(
             status_code=400,
             detail="Algunas de las facturas seleccionadas no existen o ya se encuentran asociadas a otra reposición."
         )
-
-    # Validar regla: máx 2 facturas de un mismo proveedor (RFC Emisor)
-    rfc_counts = {}
-    for inv in invoices:
-        rfc = inv.emisor_rfc
-        rfc_counts[rfc] = rfc_counts.get(rfc, 0) + 1
-        if rfc_counts[rfc] > 2:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Regla de reposición violada: Se seleccionaron más de 2 facturas del mismo proveedor RFC '{rfc}' ({inv.emisor_nombre})"
-            )
 
     total_amount = sum(inv.total for inv in invoices)
 

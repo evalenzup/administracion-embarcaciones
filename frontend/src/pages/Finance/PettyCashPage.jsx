@@ -578,20 +578,7 @@ export default function PettyCashPage() {
     if (!selectedInvoiceIds.length) return { valid: false, reason: "Selecciona al menos un gasto." };
     if (selectedInvoiceIds.length > 20) return { valid: false, reason: "No se pueden incluir más de 20 gastos por reposición." };
     
-    // Validar máx 2 facturas de un mismo RFC
     const selectedInvoices = pendingInvoices.filter(i => selectedInvoiceIds.includes(i.id));
-    const rfcCounts = {};
-    for (const inv of selectedInvoices) {
-      const rfc = inv.emisor_rfc;
-      rfc_counts[rfc] = (rfc_counts[rfc] || 0) + 1;
-      if (rfc_counts[rfc] > 2) {
-        return { 
-          valid: false, 
-          reason: `El proveedor '${inv.emisor_nombre}' (${rfc}) tiene ${rfc_counts[rfc]} facturas seleccionadas. Límite: Máx 2 por proveedor.` 
-        };
-      }
-    }
-
     const total = selectedInvoices.reduce((sum, i) => sum + i.total, 0);
     return { valid: true, total };
   };
@@ -2445,7 +2432,7 @@ export default function PettyCashPage() {
       >
         <Paragraph>
           Consolida facturas con estado <strong>Pendiente</strong> para enviar a reembolso.
-          Se deben respetar los límites de **máximo 20 facturas** y **máximo 2 de un mismo emisor** en total.
+          Se debe respetar el límite de **máximo 20 facturas** en total.
         </Paragraph>
 
         {pendingInvoices.length === 0 ? (
