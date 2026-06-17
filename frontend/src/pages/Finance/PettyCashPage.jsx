@@ -235,7 +235,12 @@ export default function PettyCashPage() {
           description: `Compra amparada por factura ${res.data.folio || ''} del emisor ${res.data.emisor_nombre}`
         });
       } else {
-        message.warning("La factura no cumple con todas las reglas fiscales locales.");
+        const isDuplicate = res.data.errors?.some(err => err.includes("ya está registrada") || err.includes("ya registrada"));
+        if (isDuplicate) {
+          message.warning("Esta factura ya se encuentra registrada en el sistema.");
+        } else {
+          message.warning("La factura no cumple con todas las reglas fiscales locales.");
+        }
       }
     } catch (err) {
       const errorMsg = err.response?.data?.detail || "Error al procesar el archivo XML.";
@@ -473,7 +478,12 @@ export default function PettyCashPage() {
       if (res.data.is_valid) {
         message.success("XML válido y montos coinciden.");
       } else {
-        message.warning("La factura XML no coincide o contiene errores fiscales.");
+        const isDuplicate = res.data.errors?.some(err => err.includes("ya está registrada") || err.includes("ya registrada"));
+        if (isDuplicate) {
+          message.warning("Esta factura ya se encuentra registrada en el sistema.");
+        } else {
+          message.warning("La factura XML no coincide o contiene errores fiscales.");
+        }
       }
     } catch (err) {
       const errorMsg = err.response?.data?.detail || "Error al validar el archivo XML.";
@@ -1898,7 +1908,11 @@ export default function PettyCashPage() {
                 />
               ) : (
                 <Alert 
-                  message="Factura No Cumple con las Reglas" 
+                  message={
+                    xmlValidation.errors?.some(err => err.includes("ya está registrada") || err.includes("ya registrada"))
+                      ? "Factura ya registrada (Duplicada)"
+                      : "Factura No Cumple con las Reglas"
+                  }
                   description={
                     <ul style={{ margin: 0, paddingLeft: 16 }}>
                       {xmlValidation.errors.map((err, idx) => <li key={idx}>{err}</li>)}
@@ -2370,7 +2384,11 @@ export default function PettyCashPage() {
                 />
               ) : (
                 <Alert 
-                  message="No Coincide o Errores de Validación" 
+                  message={
+                    linkValidation.errors?.some(err => err.includes("ya está registrada") || err.includes("ya registrada"))
+                      ? "Factura ya registrada (Duplicada)"
+                      : "No Coincide o Errores de Validación"
+                  }
                   description={
                     <ul style={{ margin: 0, paddingLeft: 16 }}>
                       {linkValidation.errors.map((err, idx) => <li key={idx}>{err}</li>)}
