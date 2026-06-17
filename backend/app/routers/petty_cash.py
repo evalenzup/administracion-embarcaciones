@@ -887,12 +887,12 @@ async def create_reimbursement(
 ):
     """
     Crear una solicitud de reposición agrupando facturas con estado 'pendiente'.
-    Valida: max 20 facturas.
+    Valida: max 15 facturas.
     """
-    if len(data.invoice_ids) > 20:
+    if len(data.invoice_ids) > 15:
         raise HTTPException(
             status_code=400,
-            detail=f"No se pueden incluir más de 20 facturas por reposición (seleccionadas: {len(data.invoice_ids)})"
+            detail=f"No se pueden incluir más de 15 facturas por reposición (seleccionadas: {len(data.invoice_ids)})"
         )
 
     # Cargar facturas

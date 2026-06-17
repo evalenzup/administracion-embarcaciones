@@ -576,7 +576,7 @@ export default function PettyCashPage() {
   // Validaciones del paquete de reposición
   const getReimbursementValidation = () => {
     if (!selectedInvoiceIds.length) return { valid: false, reason: "Selecciona al menos un gasto." };
-    if (selectedInvoiceIds.length > 20) return { valid: false, reason: "No se pueden incluir más de 20 gastos por reposición." };
+    if (selectedInvoiceIds.length > 15) return { valid: false, reason: "No se pueden incluir más de 15 gastos por reposición." };
     
     const selectedInvoices = pendingInvoices.filter(i => selectedInvoiceIds.includes(i.id));
     const total = selectedInvoices.reduce((sum, i) => sum + i.total, 0);
@@ -2432,7 +2432,7 @@ export default function PettyCashPage() {
       >
         <Paragraph>
           Consolida facturas con estado <strong>Pendiente</strong> para enviar a reembolso.
-          Se debe respetar el límite de **máximo 20 facturas** en total.
+          Se debe respetar el límite de **máximo 15 facturas** en total.
         </Paragraph>
 
         {pendingInvoices.length === 0 ? (
@@ -2473,10 +2473,10 @@ export default function PettyCashPage() {
                   <Row gutter={16}>
                     <Col span={12}>
                       <Card size="small" style={{ background: '#fafafa' }}>
-                        <div>Gastos Seleccionados: <strong>{selectedInvoiceIds.length} / 20</strong></div>
+                        <div>Gastos Seleccionados: <strong>{selectedInvoiceIds.length} / 15</strong></div>
                         <Progress 
-                          percent={Math.min((selectedInvoiceIds.length / 20) * 100, 100)} 
-                          status={selectedInvoiceIds.length > 20 ? "exception" : "normal"}
+                          percent={Math.min((selectedInvoiceIds.length / 15) * 100, 100)} 
+                          status={selectedInvoiceIds.length > 15 ? "exception" : "normal"}
                           showInfo={false}
                           style={{ margin: '8px 0' }}
                         />
