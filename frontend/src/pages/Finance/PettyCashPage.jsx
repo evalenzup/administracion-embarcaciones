@@ -44,6 +44,262 @@ const PRESET_EMOJIS = [
   '☕', '🥤', '🥪', '🍽️', '🏨', '🧳', '💰', '🎨'
 ];
 
+// ── COMPONENTE GRÁFICO: Tendencia de Caja Chica (Líneas SVG) ──────
+function PettyCashTrendChart({ history, totalAssigned }) {
+  const [hoveredPoint, setHoveredPoint] = useState(null);
+
+  if (!history || history.length === 0) {
+    return (
+      <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fafafa', borderRadius: 8 }}>
+        <span style={{ fontStyle: 'italic', color: '#888' }}>Sin datos históricos suficientes para mostrar la tendencia.</span>
+      </div>
+    );
+  }
+
+  const chartHeight = 220;
+  const chartWidth = 800;
+  const paddingLeft = 70;
+  const paddingRight = 20;
+  const paddingTop = 20;
+  const paddingBottom = 35;
+
+  const graphHeight = chartHeight - paddingTop - paddingBottom;
+  const graphWidth = chartWidth - paddingLeft - paddingRight;
+  const y_bottom = chartHeight - paddingBottom;
+
+  // Calcular coordenadas X para los puntos
+  const getX = (index) => paddingLeft + (index / (history.length - 1)) * graphWidth;
+
+  // Calcular coordenadas Y
+  const getYBal = (val) => chartHeight - paddingBottom - (val / totalAssigned) * graphHeight;
+  const getYSpent = (val) => chartHeight - paddingBottom - (val / totalAssigned) * graphHeight;
+
+  // Construir paths stepped para Saldo Disponible
+  let stepPath = '';
+  let areaPath = '';
+
+  if (history.length > 0) {
+    const x0 = getX(0);
+    const y0 = getYBal(history[0].available_balance);
+    stepPath = `M ${x0} ${y0}`;
+    areaPath = `M ${x0} ${y_bottom} L ${x0} ${y0}`;
+
+    for (let i = 1; i < history.length; i++) {
+      const x_curr = getX(i);
+      const y_prev = getYBal(history[i - 1].available_balance);
+      const y_curr = getYBal(history[i].available_balance);
+
+      stepPath += ` L ${x_curr} ${y_prev} L ${x_curr} ${y_curr}`;
+      areaPath += ` L ${x_curr} ${y_prev} L ${x_curr} ${y_curr}`;
+    }
+    areaPath += ` L ${getX(history.length - 1)} ${y_bottom} Z`;
+  }
+
+  // Construir path continuo para Gasto Acumulado
+  let spentLinePath = '';
+  if (history.length > 0) {
+    spentLinePath = `M ${getX(0)} ${getYSpent(history[0].spent_accumulated)}`;
+    for (let i = 1; i < history.length; i++) {
+      spentLinePath += ` L ${getX(i)} ${getYSpent(history[i].spent_accumulated)}`;
+    }
+  }
+
+  const formatYValue = (val) => `$${Math.round(val).toLocaleString('es-MX')}`;
+
+  return (
+    <div style={{ position: 'relative', width: '100%' }}>
+      <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} width="100%" height="100%" style={{ display: 'block', minHeight: 220 }}>
+        <defs>
+          <linearGradient id="balAreaGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#22c55e" stopOpacity="0.15" />
+            <stop offset="100%" stopColor="#22c55e" stopOpacity="0.0" />
+          </linearGradient>
+        </defs>
+
+        <style>{`
+          .grid-line {
+            stroke: #f1f5f9;
+            stroke-width: 1;
+          }
+          .axis-line {
+            stroke: #cbd5e1;
+            stroke-width: 1.5;
+          }
+          .chart-text {
+            font-size: 10px;
+            fill: #64748b;
+            font-family: system-ui, -apple-system, sans-serif;
+            font-weight: 500;
+          }
+          .interactive-bar {
+            fill: transparent;
+            cursor: pointer;
+          }
+          .interactive-bar:hover {
+            fill: rgba(0, 0, 0, 0.02);
+          }
+        `}</style>
+
+        {/* Eje Y y Líneas de cuadrícula */}
+        {[0, 0.25, 0.5, 0.75, 1].map((ratio, idx) => {
+          const y = paddingTop + graphHeight * (1 - ratio);
+          const val = totalAssigned * ratio;
+          return (
+            <g key={idx}>
+              <line x1={paddingLeft} y1={y} x2={chartWidth - paddingRight} y2={y} className="grid-line" strokeDasharray={ratio === 0 ? "0" : "4 4"} />
+              <text x={paddingLeft - 10} y={y + 3} textAnchor="end" className="chart-text">
+                {formatYValue(val)}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Eje X */}
+        <line x1={paddingLeft} y1={y_bottom} x2={chartWidth - paddingRight} y2={y_bottom} className="axis-line" />
+
+        {/* Relleno de Área del Saldo Disponible */}
+        {areaPath && (
+          <path d={areaPath} fill="url(#balAreaGrad)" />
+        )}
+
+        {/* Línea del Saldo Disponible (Stepped) */}
+        {stepPath && (
+          <path d={stepPath} fill="none" stroke="#2e7d32" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        )}
+
+        {/* Línea del Gasto Acumulado */}
+        {spentLinePath && (
+          <path d={spentLinePath} fill="none" stroke="#d84315" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        )}
+
+        {/* Guía Vertical al pasar mouse */}
+        {hoveredPoint && (
+          <line
+            x1={hoveredPoint.x}
+            y1={paddingTop}
+            x2={hoveredPoint.x}
+            y2={y_bottom}
+            stroke="#1890ff"
+            strokeWidth="1.2"
+            strokeDasharray="3 3"
+          />
+        )}
+
+        {/* Puntos Indicadores al pasar mouse */}
+        {hoveredPoint && (
+          <>
+            <circle
+              cx={hoveredPoint.x}
+              cy={getYBal(hoveredPoint.item.available_balance)}
+              r="4.5"
+              fill="#2e7d32"
+              stroke="#fff"
+              strokeWidth="1.5"
+            />
+            <circle
+              cx={hoveredPoint.x}
+              cy={getYSpent(hoveredPoint.item.spent_accumulated)}
+              r="4.5"
+              fill="#d84315"
+              stroke="#fff"
+              strokeWidth="1.5"
+            />
+          </>
+        )}
+
+        {/* Etiquetas del Eje X */}
+        {history.map((item, index) => {
+          if (index % 5 === 0 || index === history.length - 1) {
+            const x = getX(index);
+            return (
+              <g key={item.date}>
+                <line x1={x} y1={y_bottom} x2={x} y2={y_bottom + 4} stroke="#cbd5e1" strokeWidth="1" />
+                <text x={x} y={y_bottom + 16} textAnchor="middle" className="chart-text" style={{ fontSize: 9 }}>
+                  {dayjs(item.date).format('DD MMM')}
+                </text>
+              </g>
+            );
+          }
+          return null;
+        })}
+
+        {/* Barras Interactivas Invisibles para hover fácil por día */}
+        {history.map((item, index) => {
+          const x = getX(index);
+          const barWidth = graphWidth / (history.length - 1);
+          const xStart = x - barWidth / 2;
+          
+          return (
+            <rect
+              key={index}
+              x={xStart}
+              y={paddingTop}
+              width={barWidth}
+              height={graphHeight}
+              className="interactive-bar"
+              onMouseEnter={() => {
+                setHoveredPoint({
+                  index,
+                  item,
+                  x
+                });
+              }}
+              onMouseLeave={() => setHoveredPoint(null)}
+            />
+          );
+        })}
+      </svg>
+
+      {/* Leyenda explicativa */}
+      <div style={{ display: 'flex', justifyContent: 'center', gap: 24, marginTop: 8 }}>
+        <Space size={6}>
+          <span style={{ display: 'inline-block', width: 14, height: 10, backgroundColor: '#2e7d32', borderRadius: 3 }} />
+          <span style={{ fontSize: 11, fontWeight: 500, color: '#475569' }}>Saldo Disponible (Escalonado)</span>
+        </Space>
+        <Space size={6}>
+          <span style={{ display: 'inline-block', width: 14, height: 2, backgroundColor: '#d84315', borderRadius: 1 }} />
+          <span style={{ fontSize: 11, fontWeight: 500, color: '#475569' }}>Gasto Acumulado del Ciclo</span>
+        </Space>
+      </div>
+
+      {/* Tooltip flotante interactivo */}
+      {hoveredPoint && (
+        <div style={{
+          position: 'absolute',
+          left: Math.min(hoveredPoint.x + 12, chartWidth - 230),
+          top: 35,
+          background: 'rgba(255, 255, 255, 0.98)',
+          border: '1px solid #e2e8f0',
+          borderRadius: 8,
+          padding: '8px 12px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+          zIndex: 10,
+          pointerEvents: 'none',
+          width: 210
+        }}>
+          <div style={{ fontWeight: 600, color: '#1e293b', marginBottom: 4, fontSize: 11 }}>
+            {dayjs(hoveredPoint.item.date).format('DD [de] MMMM, YYYY')}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 2 }}>
+            <span style={{ color: '#2e7d32' }}>● Disp. Caja:</span>
+            <strong style={{ color: '#2e7d32' }}>${hoveredPoint.item.available_balance.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</strong>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 2 }}>
+            <span style={{ color: '#d84315' }}>● Gasto Acum:</span>
+            <strong style={{ color: '#d84315' }}>${hoveredPoint.item.spent_accumulated.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</strong>
+          </div>
+          {hoveredPoint.item.daily_spent > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, borderTop: '1px solid #f1f5f9', marginTop: 4, paddingTop: 4 }}>
+              <span style={{ color: '#1890ff' }}>Gastado hoy:</span>
+              <strong style={{ color: '#1890ff' }}>${hoveredPoint.item.daily_spent.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</strong>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function PettyCashPage() {
   const { user, hasPermission } = useAuth();
 
@@ -919,6 +1175,19 @@ export default function PettyCashPage() {
                         valueStyle={{ color: '#531dab', fontWeight: 700 }}
                       />
                       <div style={{ marginTop: 8, fontSize: 12, color: '#999' }}>Histórico consolidado devuelto</div>
+                    </Card>
+                  </Col>
+                </Row>
+
+                {/* GRÁFICO HISTÓRICO TEMPORAL DE BALANCE Y GASTOS */}
+                <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+                  <Col span={24}>
+                    <Card 
+                      title={<span style={{ fontWeight: 700 }}><HistoryOutlined style={{ color: '#1890ff', marginRight: 8 }} />Tendencia de Saldo y Gasto Acumulado (Últimos 30 días)</span>}
+                      bordered={false} 
+                      style={{ borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}
+                    >
+                      <PettyCashTrendChart history={summary.daily_history || []} totalAssigned={summary.total_assigned} />
                     </Card>
                   </Col>
                 </Row>

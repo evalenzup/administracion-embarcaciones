@@ -1353,6 +1353,45 @@ async def get_petty_cash_summary(
     count_pending = db.query(PettyCashInvoice).filter(PettyCashInvoice.status == InvoiceStatus.PENDIENTE).count()
     amount_pending = db.query(func.sum(PettyCashInvoice.total)).filter(PettyCashInvoice.status == InvoiceStatus.PENDIENTE).scalar() or 0.0
 
+    # Generar historial diario de los últimos 30 días para la gráfica
+    from datetime import timedelta
+    today = datetime.now().date()
+    start_date = today - timedelta(days=29)
+
+    invoices = db.query(PettyCashInvoice.created_at, PettyCashInvoice.total).order_by(PettyCashInvoice.created_at).all()
+    reimbursements = db.query(PettyCashReimbursement.paid_date, PettyCashReimbursement.total_amount).filter(
+        PettyCashReimbursement.status == ReimbursementStatus.PAGADO,
+        PettyCashReimbursement.paid_date.isnot(None)
+    ).order_by(PettyCashReimbursement.paid_date).all()
+
+    invoice_data = [(inv.created_at.date(), inv.total) for inv in invoices if inv.created_at]
+    reimb_data = [(r.paid_date.date(), r.total_amount) for r in reimbursements if r.paid_date]
+
+    # Calcular sumas acumuladas anteriores a start_date
+    running_invoices = sum(amount for dt, amount in invoice_data if dt < start_date)
+    running_reimbursements = sum(amount for dt, amount in reimb_data if dt < start_date)
+
+    daily_history = []
+    for i in range(30):
+        current_day = start_date + timedelta(days=i)
+        
+        # Transacciones específicas del día
+        day_invoices = sum(amount for dt, amount in invoice_data if dt == current_day)
+        day_reimbursements = sum(amount for dt, amount in reimb_data if dt == current_day)
+        
+        running_invoices += day_invoices
+        running_reimbursements += day_reimbursements
+        
+        avail_bal = total_assigned - running_invoices + running_reimbursements
+        spent_accum = running_invoices - running_reimbursements
+        
+        daily_history.append({
+            "date": current_day.isoformat(),
+            "available_balance": round(max(0.0, avail_bal), 2),
+            "spent_accumulated": round(max(0.0, spent_accum), 2),
+            "daily_spent": round(day_invoices, 2)
+        })
+
     return {
         "total_assigned": total_assigned,
         "pending_reimbursement": float(pending_reimbursement),
@@ -1364,5 +1403,6 @@ async def get_petty_cash_summary(
         "recent_invoices": recent_invoices_resp,
         "recent_counts": recent_counts_resp,
         "invoices_pending_count": count_pending,
-        "invoices_pending_amount": float(amount_pending)
+        "invoices_pending_amount": float(amount_pending),
+        "daily_history": daily_history
     }
