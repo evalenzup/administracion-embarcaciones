@@ -545,6 +545,21 @@ export default function PettyCashPage() {
     }
   };
 
+  // Consultar estado en el SAT
+  const handleVerifySat = async (id) => {
+    setLoading(true);
+    try {
+      const res = await apiClient.post(`/petty-cash/invoices/${id}/verify-sat`);
+      message.success(`Verificación completa. Estado en el SAT: ${res.data.sat_status}`);
+      fetchInvoices();
+      fetchSummary();
+    } catch (err) {
+      message.error(err.response?.data?.detail || "Error al conectar con el servicio de validación del SAT.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Cargar facturas pendientes para reposición
   const openNewReimbursementModal = async () => {
     try {
@@ -1238,19 +1253,59 @@ export default function PettyCashPage() {
                       width: 120
                     },
                     {
+                      title: 'Estado SAT',
+                      key: 'sat_status',
+                      render: (_, rec) => {
+                        if (rec.is_manual || !rec.uuid) {
+                          return <span style={{ color: '#aaa', fontSize: 11 }}>N/A (Manual)</span>;
+                        }
+                        
+                        const status = rec.sat_status || 'Sin Verificar';
+                        
+                        let color = 'default';
+                        if (status === 'Vigente') color = 'success';
+                        else if (status === 'Cancelado') color = 'error';
+                        else if (status === 'No Encontrado') color = 'warning';
+                        else if (status === 'Error de Conexión') color = 'orange';
+                        else if (status === 'Expresión no válida') color = 'orange';
+                        
+                        const dateText = rec.sat_verified_at 
+                          ? `Verificado: ${dayjs(rec.sat_verified_at).format('DD/MM/YYYY HH:mm')}`
+                          : 'No verificado recientemente';
+                          
+                        return (
+                          <Tooltip title={dateText}>
+                            <Tag color={color} style={{ fontWeight: 600 }}>
+                              {status}
+                            </Tag>
+                          </Tooltip>
+                        );
+                      },
+                      width: 130
+                    },
+                    {
                       title: 'Archivos',
                       key: 'files',
                       render: (_, rec) => (
                         <Space>
                           {rec.xml_filename ? (
-                            <Tooltip title="Descargar XML">
-                              <Button 
-                                type="text" 
-                                icon={<FileTextOutlined style={{ color: '#1890ff' }} />} 
-                                href={rec.xml_filename}
-                                target="_blank"
-                              />
-                            </Tooltip>
+                            <>
+                              <Tooltip title="Descargar XML">
+                                <Button 
+                                  type="text" 
+                                  icon={<FileTextOutlined style={{ color: '#1890ff' }} />} 
+                                  href={rec.xml_filename}
+                                  target="_blank"
+                                />
+                              </Tooltip>
+                              <Tooltip title="Re-verificar Estado SAT">
+                                <Button
+                                  type="text"
+                                  icon={<SyncOutlined />}
+                                  onClick={() => handleVerifySat(rec.id)}
+                                />
+                              </Tooltip>
+                            </>
                           ) : (
                             rec.is_manual && (
                               <Tooltip title="Vincular factura XML">

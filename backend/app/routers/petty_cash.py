@@ -37,6 +37,7 @@ from app.schemas.petty_cash_count import (
     CashCountCreate, CashCountResponse, CashCountList
 )
 from app.utils.xml_parser import parse_and_validate_cfdi
+from app.utils.sat_validator import query_sat_cfdi_status
 from app.services.audit import log_action
 
 router = APIRouter(prefix="/api/v1/petty-cash", tags=["Finanzas — Fondo Fijo"])
@@ -295,6 +296,30 @@ async def validate_xml(
             if error_msg not in result["errors"]:
                 result["errors"].append(error_msg)
                 
+    # Consultar el estado en el SAT de forma temprana si pasó las validaciones básicas locales
+    if result["is_valid"] and uuid_str:
+        try:
+            sat_res = query_sat_cfdi_status(
+                emisor_rfc=result["emisor_rfc"],
+                receptor_rfc=result["receptor_rfc"],
+                total=result["total"],
+                uuid_str=uuid_str
+            )
+            result["sat_status"] = sat_res["status"]
+            result["sat_verified_at"] = datetime.now()
+            
+            # Si el SAT reporta que no está vigente, invalidar la factura
+            if sat_res["status"] != "Vigente":
+                result["is_valid"] = False
+                if "errors" not in result:
+                    result["errors"] = []
+                result["errors"].append(
+                    f"El comprobante no está vigente en el SAT (Estado actual: {sat_res['status']})"
+                )
+        except Exception:
+            result["sat_status"] = "Error de Conexión"
+            result["sat_verified_at"] = datetime.now()
+            
     return result
 
 
@@ -358,6 +383,27 @@ async def register_invoice(
         with open(pdf_path, "wb") as f:
             shutil.copyfileobj(pdf_file.file, f)
 
+    # Consultar estado SAT
+    sat_status = "Desconocido"
+    sat_verified_at = datetime.now()
+    try:
+        sat_res = query_sat_cfdi_status(
+            emisor_rfc=parsed["emisor_rfc"],
+            receptor_rfc=parsed["receptor_rfc"],
+            total=parsed["total"],
+            uuid_str=uuid_str
+        )
+        sat_status = sat_res["status"]
+        if sat_res["status"] != "Vigente":
+            raise HTTPException(
+                status_code=400,
+                detail=f"La factura no está vigente en el SAT (Estado: {sat_res['status']})"
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        sat_status = "Error de Conexión"
+
     # Crear modelo
     invoice = PettyCashInvoice(
         uuid=uuid_str,
@@ -379,6 +425,8 @@ async def register_invoice(
         uso_cfdi=parsed["uso_cfdi"],
         fecha_emision=parsed["fecha_emision"],
         fecha_timbrado=parsed["fecha_timbrado"],
+        sat_status=sat_status,
+        sat_verified_at=sat_verified_at,
         xml_filename=f"/uploads/petty_cash/xml/{xml_filename}",
         pdf_filename=f"/uploads/petty_cash/pdf/{pdf_filename}" if pdf_filename else None,
         is_manual=False,
@@ -535,6 +583,27 @@ async def link_xml_to_invoice(
         with open(pdf_path, "wb") as f:
             shutil.copyfileobj(pdf_file.file, f)
 
+    # Consultar estado SAT
+    sat_status = "Desconocido"
+    sat_verified_at = datetime.now()
+    try:
+        sat_res = query_sat_cfdi_status(
+            emisor_rfc=parsed["emisor_rfc"],
+            receptor_rfc=parsed["receptor_rfc"],
+            total=parsed["total"],
+            uuid_str=uuid_str
+        )
+        sat_status = sat_res["status"]
+        if sat_res["status"] != "Vigente":
+            raise HTTPException(
+                status_code=400,
+                detail=f"La factura no está vigente en el SAT (Estado: {sat_res['status']})"
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        sat_status = "Error de Conexión"
+
     # Actualizar los datos del gasto con los valores fiscales reales de la factura
     invoice.uuid = uuid_str
     invoice.folio = parsed["folio"]
@@ -555,6 +624,8 @@ async def link_xml_to_invoice(
     invoice.uso_cfdi = parsed["uso_cfdi"]
     invoice.fecha_emision = parsed["fecha_emision"]
     invoice.fecha_timbrado = parsed["fecha_timbrado"]
+    invoice.sat_status = sat_status
+    invoice.sat_verified_at = sat_verified_at
     invoice.xml_filename = f"/uploads/petty_cash/xml/{xml_filename}"
     if pdf_filename:
         invoice.pdf_filename = f"/uploads/petty_cash/pdf/{pdf_filename}"
@@ -585,6 +656,53 @@ async def get_invoice(
     if not invoice:
         raise HTTPException(status_code=404, detail="Factura no encontrada")
     return invoice
+
+
+@router.post("/invoices/{id}/verify-sat", response_model=PettyCashInvoiceResponse)
+async def verify_sat_invoice(
+    id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("petty_cash", "edit")),
+):
+    """Consultar al WS del SAT el estado actual de la factura y actualizarlo en base de datos."""
+    invoice = db.query(PettyCashInvoice).filter(PettyCashInvoice.id == id).first()
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Factura no encontrada")
+
+    if invoice.is_manual or not invoice.uuid:
+        raise HTTPException(
+            status_code=400,
+            detail="Solo se pueden verificar ante el SAT comprobantes que cuenten con archivo XML y UUID fiscal."
+        )
+
+    try:
+        sat_res = query_sat_cfdi_status(
+            emisor_rfc=invoice.emisor_rfc,
+            receptor_rfc=invoice.receptor_rfc,
+            total=invoice.total,
+            uuid_str=invoice.uuid
+        )
+        invoice.sat_status = sat_res["status"]
+        invoice.sat_verified_at = datetime.now()
+        
+        db.commit()
+        db.refresh(invoice)
+        
+        log_action(
+            db=db, user_id=current_user.id, username=current_user.username,
+            action="update", module="petty_cash", entity_type="PettyCashInvoice",
+            entity_id=invoice.id,
+            description=f"Consultó estado SAT de factura ID {invoice.id} ({invoice.uuid}). Resultado: {invoice.sat_status}",
+            ip_address=request.client.host if request.client else None,
+        )
+        
+        return invoice
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al conectar con el servicio web del SAT: {str(e)}"
+        )
 
 
 @router.put("/invoices/{id}", response_model=PettyCashInvoiceResponse)

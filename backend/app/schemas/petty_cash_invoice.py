@@ -33,6 +33,10 @@ class PettyCashInvoiceBase(BaseModel):
     uso_cfdi: str | None = Field(None, max_length=10)
     fecha_emision: datetime | None = None
     fecha_timbrado: datetime | None = None
+    
+    # Datos de validación del SAT
+    sat_status: str | None = Field(None, max_length=50)
+    sat_verified_at: datetime | None = None
 
 
 class PettyCashInvoiceCreate(PettyCashInvoiceBase):

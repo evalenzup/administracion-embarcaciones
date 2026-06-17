@@ -51,6 +51,10 @@ class PettyCashInvoice(Base):
     fecha_emision = Column(DateTime(timezone=True), nullable=True)
     fecha_timbrado = Column(DateTime(timezone=True), nullable=True)
     
+    # Validación del SAT
+    sat_status = Column(String(50), nullable=True)
+    sat_verified_at = Column(DateTime(timezone=True), nullable=True)
+    
     # Ubicación física de los archivos (opcionales para manuales)
     xml_filename = Column(String(300), nullable=True)
     pdf_filename = Column(String(300), nullable=True)
