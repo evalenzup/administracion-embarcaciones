@@ -389,6 +389,119 @@ function WaypointMapModal({ cruise, open, onClose, onSave, onConfigureSamples, i
     }]);
   };
 
+  const handleKmlUpload = (file) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target.result;
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(text, 'text/xml');
+        
+        const parserError = xmlDoc.querySelector('parsererror');
+        if (parserError) {
+          message.error('El archivo KML no es válido o tiene errores de estructura XML.');
+          return;
+        }
+
+        const placemarks = xmlDoc.getElementsByTagName('Placemark');
+        if (placemarks.length === 0) {
+          message.warning('No se encontraron puntos de ruta (Placemarks) en el archivo KML.');
+          return;
+        }
+
+        const parsedWaypoints = [];
+        let orderIdx = 0;
+
+        for (let i = 0; i < placemarks.length; i++) {
+          const pm = placemarks[i];
+          const nameEl = pm.getElementsByTagName('name')[0];
+          const name = nameEl ? nameEl.textContent.trim() : `Punto KML ${i + 1}`;
+          
+          // 1. Punto
+          const pointEl = pm.getElementsByTagName('Point')[0];
+          if (pointEl) {
+            const coordEl = pointEl.getElementsByTagName('coordinates')[0];
+            if (coordEl) {
+              const coordsStr = coordEl.textContent.trim();
+              const parts = coordsStr.split(',');
+              if (parts.length >= 2) {
+                const lng = parseFloat(parts[0]);
+                const lat = parseFloat(parts[1]);
+                if (!isNaN(lat) && !isNaN(lng)) {
+                  parsedWaypoints.push({
+                    order_index: orderIdx++,
+                    latitude: parseFloat(lat.toFixed(5)),
+                    longitude: parseFloat(lng.toFixed(5)),
+                    name: name,
+                    waypoint_type: orderIdx === 1 ? 'salida' : 'estacion',
+                    speed_knots: null,
+                    activity: '',
+                    duration_hours: null,
+                  });
+                }
+              }
+            }
+          }
+
+          // 2. LineString
+          const lineEl = pm.getElementsByTagName('LineString')[0];
+          if (lineEl) {
+            const coordEl = lineEl.getElementsByTagName('coordinates')[0];
+            if (coordEl) {
+              const coordsStr = coordEl.textContent.trim();
+              const coordPairs = coordsStr.split(/[\s\n\r]+/);
+              coordPairs.forEach((pair) => {
+                if (!pair.trim()) return;
+                const parts = pair.split(',');
+                if (parts.length >= 2) {
+                  const lng = parseFloat(parts[0]);
+                  const lat = parseFloat(parts[1]);
+                  if (!isNaN(lat) && !isNaN(lng)) {
+                    parsedWaypoints.push({
+                      order_index: orderIdx++,
+                      latitude: parseFloat(lat.toFixed(5)),
+                      longitude: parseFloat(lng.toFixed(5)),
+                      name: `${name} - Pt ${orderIdx}`,
+                      waypoint_type: orderIdx === 1 ? 'salida' : 'estacion',
+                      speed_knots: null,
+                      activity: '',
+                      duration_hours: null,
+                    });
+                  }
+                }
+              });
+            }
+          }
+        }
+
+        if (parsedWaypoints.length === 0) {
+          message.warning('No se encontraron coordenadas válidas (Point o LineString) en el KML.');
+          return;
+        }
+
+        Modal.confirm({
+          title: 'Cargar Puntos desde KML',
+          content: `Se encontraron ${parsedWaypoints.length} puntos de ruta en el archivo KML. ¿Deseas reemplazar todos los puntos de la ruta actual con estos puntos?`,
+          okText: 'Reemplazar',
+          cancelText: 'Cancelar',
+          onOk: () => {
+            const cleaned = parsedWaypoints.map((wp, idx) => ({
+              ...wp,
+              order_index: idx,
+              waypoint_type: idx === 0 ? 'salida' : 'estacion'
+            }));
+            setWaypoints(cleaned);
+            message.success(`Se cargó la ruta con ${cleaned.length} puntos desde el KML.`);
+          }
+        });
+      } catch (err) {
+        console.error(err);
+        message.error('Error al procesar el archivo KML.');
+      }
+    };
+    reader.readAsText(file);
+  };
+
   const removeWaypoint = (i) => {
     setWaypoints(prev => prev.filter((_, idx) => idx !== i));
     setExpandedIndex(null);
@@ -758,18 +871,30 @@ function WaypointMapModal({ cruise, open, onClose, onSave, onConfigureSamples, i
           <div style={{ padding: '12px 16px 10px', borderBottom: '1px solid #e8e8e8', flexShrink: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
               <Text strong style={{ fontSize: 15 }}>🗺️ Puntos de Ruta ({waypoints.length})</Text>
-              {inline && (
-                <Button
-                  type="primary"
-                  size="small"
-                  loading={saving}
-                  onClick={handleSave}
-                  icon={<CompassOutlined />}
-                  style={{ background: '#0A2647', borderColor: '#0A2647', fontWeight: 600, flexShrink: 0 }}
+              <Space>
+                <Upload
+                  accept=".kml"
+                  showUploadList={false}
+                  beforeUpload={(file) => {
+                    handleKmlUpload(file);
+                    return false;
+                  }}
                 >
-                  Guardar Ruta
-                </Button>
-              )}
+                  <Button size="small" icon={<UploadOutlined />}>Cargar KML</Button>
+                </Upload>
+                {inline && (
+                  <Button
+                    type="primary"
+                    size="small"
+                    loading={saving}
+                    onClick={handleSave}
+                    icon={<CompassOutlined />}
+                    style={{ background: '#0A2647', borderColor: '#0A2647', fontWeight: 600, flexShrink: 0 }}
+                  >
+                    Guardar Ruta
+                  </Button>
+                )}
+              </Space>
             </div>
             {maxSpeed && <div style={{ fontSize: 11, color: '#d48806', marginTop: 4 }}>⚠️ Velocidad máxima: {maxSpeed} nudos</div>}
             <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>💡 Haz clic en el mapa para agregar puntos.</div>
