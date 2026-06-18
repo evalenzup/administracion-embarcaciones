@@ -18,7 +18,7 @@ import {
   FilePdfOutlined, FileTextOutlined, HistoryOutlined, InfoCircleOutlined,
   BankOutlined, WarningOutlined, SyncOutlined, PieChartOutlined, BarsOutlined,
   CloseCircleOutlined, FileAddOutlined, ToolOutlined, CheckOutlined,
-  DownloadOutlined
+  DownloadOutlined, InboxOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import apiClient from '../../api/client';
