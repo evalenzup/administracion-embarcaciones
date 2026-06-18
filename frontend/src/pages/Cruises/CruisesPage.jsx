@@ -15,7 +15,7 @@ import {
   FilePdfOutlined, FileWordOutlined, CheckOutlined, CloseOutlined,
   DownOutlined, RightOutlined, ExperimentOutlined, InfoCircleOutlined,
   UploadOutlined, LoadingOutlined, DollarOutlined, SyncOutlined, CheckCircleOutlined,
-  EyeOutlined,
+  EyeOutlined, ArrowUpOutlined, ArrowDownOutlined
 } from '@ant-design/icons';
 import {
   MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents, useMap, Tooltip as MapTooltip
@@ -556,6 +556,25 @@ function WaypointMapModal({ cruise, open, onClose, onSave, onConfigureSamples, i
     setExpandedIndex(null);
   };
 
+  const moveWaypoint = (index, direction) => {
+    if (direction === 'up' && index === 0) return;
+    if (direction === 'down' && index === waypoints.length - 1) return;
+    
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    setWaypoints(prev => {
+      const newList = [...prev];
+      const temp = newList[index];
+      newList[index] = newList[targetIndex];
+      newList[targetIndex] = temp;
+      
+      return newList.map((wp, idx) => ({
+        ...wp,
+        order_index: idx,
+        waypoint_type: idx === 0 ? 'salida' : (wp.waypoint_type === 'salida' ? 'estacion' : wp.waypoint_type)
+      }));
+    });
+  };
+
   const updateWaypoint = (i, field, value) => {
     setWaypoints(prev => {
       const nw = [...prev];
@@ -988,11 +1007,31 @@ function WaypointMapModal({ cruise, open, onClose, onSave, onConfigureSamples, i
                 </div>
               }
               extra={
-                <Space size={4}>
-                  <Tooltip title="Ver en el mapa">
-                    <Button type="text" style={{ color: '#1677FF' }} icon={<AimOutlined />} onClick={e => { e.stopPropagation(); focusOnMap(i); }} />
+                <Space size={2}>
+                  <Tooltip title="Subir orden">
+                    <Button 
+                      type="text" 
+                      size="small" 
+                      disabled={i === 0} 
+                      style={{ padding: '0 4px' }}
+                      icon={<ArrowUpOutlined style={{ fontSize: 13 }} />} 
+                      onClick={e => { e.stopPropagation(); moveWaypoint(i, 'up'); }} 
+                    />
                   </Tooltip>
-                  <Button type="text" danger icon={<DeleteOutlined />} onClick={e => { e.stopPropagation(); removeWaypoint(i); }} />
+                  <Tooltip title="Bajar orden">
+                    <Button 
+                      type="text" 
+                      size="small" 
+                      disabled={i === waypoints.length - 1} 
+                      style={{ padding: '0 4px' }}
+                      icon={<ArrowDownOutlined style={{ fontSize: 13 }} />} 
+                      onClick={e => { e.stopPropagation(); moveWaypoint(i, 'down'); }} 
+                    />
+                  </Tooltip>
+                  <Tooltip title="Ver en el mapa">
+                    <Button type="text" size="small" style={{ color: '#1677FF', padding: '0 4px' }} icon={<AimOutlined />} onClick={e => { e.stopPropagation(); focusOnMap(i); }} />
+                  </Tooltip>
+                  <Button type="text" size="small" danger style={{ padding: '0 4px' }} icon={<DeleteOutlined />} onClick={e => { e.stopPropagation(); removeWaypoint(i); }} />
                 </Space>
               }>
 
