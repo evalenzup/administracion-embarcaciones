@@ -464,32 +464,7 @@ function WaypointMapModal({ cruise, open, onClose, onSave, onConfigureSamples, i
             descText = descText.substring(0, 297) + '...';
           }
           
-          // 1. Punto
-          const pointEl = pm.getElementsByTagName('Point')[0];
-          if (pointEl) {
-            const coordEl = pointEl.getElementsByTagName('coordinates')[0];
-            if (coordEl) {
-              const coordsStr = coordEl.textContent.trim();
-              const parts = coordsStr.split(',');
-              if (parts.length >= 2) {
-                const lng = parseFloat(parts[0]);
-                const lat = parseFloat(parts[1]);
-                if (!isNaN(lat) && !isNaN(lng)) {
-                  parsedWaypoints.push({
-                    order_index: orderIdx++,
-                    latitude: parseFloat(lat.toFixed(5)),
-                    longitude: parseFloat(lng.toFixed(5)),
-                    name: name,
-                    description: descText || null,
-                    waypoint_type: orderIdx === 1 ? 'salida' : 'estacion',
-                    speed_knots: null,
-                    activity: '',
-                    duration_hours: null,
-                  });
-                }
-              }
-            }
-          }
+
 
           // 2. LineString
           const lineEl = pm.getElementsByTagName('LineString')[0];
