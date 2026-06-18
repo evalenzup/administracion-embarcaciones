@@ -208,20 +208,23 @@ function PettyCashTrendChart({ history, totalAssigned }) {
         )}
 
         {/* Etiquetas del Eje X */}
-        {history.map((item, index) => {
-          if (index % 5 === 0 || index === history.length - 1) {
-            const x = getX(index);
-            return (
-              <g key={item.date}>
-                <line x1={x} y1={y_bottom} x2={x} y2={y_bottom + 4} stroke="#cbd5e1" strokeWidth="1" />
-                <text x={x} y={y_bottom + 16} textAnchor="middle" className="chart-text" style={{ fontSize: 9 }}>
-                  {dayjs(item.date).format('DD MMM')}
-                </text>
-              </g>
-            );
-          }
-          return null;
-        })}
+        {(() => {
+          const labelStep = Math.max(5, Math.ceil(history.length / 10));
+          return history.map((item, index) => {
+            if (index % labelStep === 0 || index === history.length - 1) {
+              const x = getX(index);
+              return (
+                <g key={item.date}>
+                  <line x1={x} y1={y_bottom} x2={x} y2={y_bottom + 4} stroke="#cbd5e1" strokeWidth="1" />
+                  <text x={x} y={y_bottom + 16} textAnchor="middle" className="chart-text" style={{ fontSize: 9 }}>
+                    {dayjs(item.date).format('DD MMM')}
+                  </text>
+                </g>
+              );
+            }
+            return null;
+          });
+        })()}
 
         {/* Barras Interactivas Invisibles para hover fácil por día */}
         {history.map((item, index) => {

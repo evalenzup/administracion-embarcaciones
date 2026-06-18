@@ -1354,10 +1354,10 @@ async def get_petty_cash_summary(
     count_pending = db.query(PettyCashInvoice).filter(PettyCashInvoice.status == InvoiceStatus.PENDIENTE).count()
     amount_pending = db.query(func.sum(PettyCashInvoice.total)).filter(PettyCashInvoice.status == InvoiceStatus.PENDIENTE).scalar() or 0.0
 
-    # Generar historial diario de los últimos 30 días para la gráfica
+    # Generar historial diario desde enero al mes presente del año en curso
     from datetime import timedelta
     today = datetime.now().date()
-    start_date = today - timedelta(days=29)
+    start_date = datetime(today.year, 1, 1).date()
 
     invoices = db.query(
         PettyCashInvoice.fecha_emision,
@@ -1379,7 +1379,8 @@ async def get_petty_cash_summary(
     running_reimbursements = sum(amount for dt, amount in reimb_data if dt < start_date)
 
     daily_history = []
-    for i in range(30):
+    num_days = (today - start_date).days + 1
+    for i in range(num_days):
         current_day = start_date + timedelta(days=i)
         
         # Transacciones específicas del día
@@ -1399,18 +1400,13 @@ async def get_petty_cash_summary(
             "daily_spent": round(day_invoices, 2)
         })
 
-    # Generar historial de gastos mensuales por categoría para los últimos 6 meses
+    # Generar historial de gastos mensuales por categoría desde enero al mes presente del año en curso
     months = []
-    current_date = today
-    for _ in range(6):
-        months.insert(0, current_date.strftime("%Y-%m"))
-        # Retroceder al mes anterior
-        first_of_month = current_date.replace(day=1)
-        prev_month_last_day = first_of_month - timedelta(days=1)
-        current_date = prev_month_last_day
+    for m in range(1, today.month + 1):
+        months.append(f"{today.year}-{m:02d}")
 
-    # Consultar facturas de los últimos 6 meses
-    six_months_ago = today - timedelta(days=180)
+    # Consultar facturas desde enero del año en curso
+    start_of_year = datetime(today.year, 1, 1)
     invoices_sem = db.query(
         PettyCashInvoice.fecha_emision,
         PettyCashInvoice.created_at,
@@ -1420,7 +1416,7 @@ async def get_petty_cash_summary(
     ).join(
         FinancialCategory, PettyCashInvoice.category_id == FinancialCategory.id
     ).filter(
-        func.coalesce(PettyCashInvoice.fecha_emision, PettyCashInvoice.created_at) >= six_months_ago
+        func.coalesce(PettyCashInvoice.fecha_emision, PettyCashInvoice.created_at) >= start_of_year
     ).all()
 
     # Agrupar por mes y categoría
