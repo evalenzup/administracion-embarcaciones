@@ -390,6 +390,14 @@ function WaypointMapModal({ cruise, open, onClose, onSave, onConfigureSamples, i
   };
 
   const handleKmlUpload = (file) => {
+    const cleanHtmlText = (html) => {
+      if (!html) return '';
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      let text = doc.body.textContent || "";
+      text = text.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+      return text;
+    };
+
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
@@ -416,6 +424,45 @@ function WaypointMapModal({ cruise, open, onClose, onSave, onConfigureSamples, i
           const pm = placemarks[i];
           const nameEl = pm.getElementsByTagName('name')[0];
           const name = nameEl ? nameEl.textContent.trim() : `Punto KML ${i + 1}`;
+
+          // Parsear descripción y limpiar etiquetas HTML
+          let descText = '';
+          const descEl = pm.getElementsByTagName('description')[0];
+          if (descEl) {
+            descText = cleanHtmlText(descEl.textContent);
+          }
+
+          // Parsear ExtendedData si existe
+          const extendedEl = pm.getElementsByTagName('ExtendedData')[0];
+          if (extendedEl) {
+            const extParts = [];
+            const dataNodes = extendedEl.getElementsByTagName('Data');
+            for (let d = 0; d < dataNodes.length; d++) {
+              const node = dataNodes[d];
+              const dataName = node.getAttribute('name');
+              const valEl = node.getElementsByTagName('value')[0];
+              if (dataName && valEl) {
+                extParts.push(`${dataName}: ${valEl.textContent.trim()}`);
+              }
+            }
+            const simpleDataNodes = extendedEl.getElementsByTagName('SimpleData');
+            for (let s = 0; s < simpleDataNodes.length; s++) {
+              const node = simpleDataNodes[s];
+              const dataName = node.getAttribute('name');
+              if (dataName) {
+                extParts.push(`${dataName}: ${node.textContent.trim()}`);
+              }
+            }
+            if (extParts.length > 0) {
+              const extStr = extParts.join(' | ');
+              descText = descText ? `${descText} (${extStr})` : extStr;
+            }
+          }
+
+          // Truncar para cumplir con límite de la base de datos (max 300 caracteres)
+          if (descText.length > 300) {
+            descText = descText.substring(0, 297) + '...';
+          }
           
           // 1. Punto
           const pointEl = pm.getElementsByTagName('Point')[0];
@@ -433,6 +480,7 @@ function WaypointMapModal({ cruise, open, onClose, onSave, onConfigureSamples, i
                     latitude: parseFloat(lat.toFixed(5)),
                     longitude: parseFloat(lng.toFixed(5)),
                     name: name,
+                    description: descText || null,
                     waypoint_type: orderIdx === 1 ? 'salida' : 'estacion',
                     speed_knots: null,
                     activity: '',
@@ -462,6 +510,7 @@ function WaypointMapModal({ cruise, open, onClose, onSave, onConfigureSamples, i
                       latitude: parseFloat(lat.toFixed(5)),
                       longitude: parseFloat(lng.toFixed(5)),
                       name: `${name} - Pt ${orderIdx}`,
+                      description: descText || null,
                       waypoint_type: orderIdx === 1 ? 'salida' : 'estacion',
                       speed_knots: null,
                       activity: '',
@@ -825,6 +874,11 @@ function WaypointMapModal({ cruise, open, onClose, onSave, onConfigureSamples, i
                         <span style={{ fontSize: 11, color: '#666' }}>
                           Lat: {wp.latitude.toFixed(4)} | Lng: {wp.longitude.toFixed(4)}
                         </span>
+                        {wp.description && (
+                          <div style={{ marginTop: 6, fontSize: 11, background: '#eaf4ff', padding: 4, borderRadius: 4 }}>
+                            <strong>Notas / Info:</strong> {wp.description}
+                          </div>
+                        )}
                         {wp.activity && (
                           <div style={{ marginTop: 6, fontSize: 11, background: '#f0f0f0', padding: 4, borderRadius: 4 }}>
                             <strong>Actividad:</strong> {wp.activity}
@@ -975,6 +1029,10 @@ function WaypointMapModal({ cruise, open, onClose, onSave, onConfigureSamples, i
                         <InputNumber size="small" style={{ width: '100%' }} value={wp.speed_knots} onChange={v => updateWaypoint(i, 'speed_knots', v)} max={maxSpeed || undefined} min={0} step={0.5} placeholder={maxSpeed ? `Máx ${maxSpeed}` : ''} />
                       </Col>
                     )}
+                    <Col span={24}>
+                      <Text type="secondary" style={{ fontSize: 11 }}>Descripción / Notas de Ruta</Text>
+                      <TextArea size="small" rows={2} value={wp.description || ''} onChange={e => updateWaypoint(i, 'description', e.target.value)} placeholder="Ej: Puntos de control, info del KML..." maxLength={300} />
+                    </Col>
                     <Col span={24}>
                       <Text type="secondary" style={{ fontSize: 11 }}>Actividad / Tareas</Text>
                       <TextArea size="small" rows={2} value={wp.activity} onChange={e => updateWaypoint(i, 'activity', e.target.value)} placeholder="Ej: Lance de CTD, arrastre..." />
