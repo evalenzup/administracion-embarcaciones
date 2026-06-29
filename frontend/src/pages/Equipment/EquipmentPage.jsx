@@ -173,7 +173,13 @@ function EquipmentRoutinesDrawer({ equipment, open, onClose }) {
     .map(i => ({ value: i.id, label: `${i.name} ${i.part_number ? `(${i.part_number})` : ''} - Stock: ${i.quantity}` }));
 
   const columns = [
-    { title: 'Rutina', dataIndex: 'name', key: 'name', render: (t) => <Text strong>{t}</Text> },
+    { 
+      title: 'Rutina', 
+      dataIndex: 'name', 
+      key: 'name', 
+      render: (t) => <Text strong>{t}</Text>,
+      sorter: (a, b) => (a.name || '').localeCompare(b.name || ''),
+    },
     { title: 'Recursos Requeridos', key: 'parts', width: 250, render: (_, r) => {
       const routineParts = r.parts?.filter(p => p.inventory_item?.category !== 'herramienta') || [];
       const routineTools = r.parts?.filter(p => p.inventory_item?.category === 'herramienta') || [];
@@ -217,12 +223,19 @@ function EquipmentRoutinesDrawer({ equipment, open, onClose }) {
         {r.interval_months ? <div>📅 Cada {r.interval_months} mes</div> : null}
       </div>
     )},
-    { title: 'Último Servicio', key: 'last', width: 150, render: (_, r) => (
-      <div style={{ fontSize: 11, color: '#666' }}>
-        {r.last_performed_hours ? <div>Horómetro: {r.last_performed_hours} hrs</div> : null}
-        {r.last_performed_date ? <div>Fecha: {dayjs(r.last_performed_date).format('DD/MM/YYYY')}</div> : <div>Sin registro</div>}
-      </div>
-    )},
+    { 
+      title: 'Último Servicio', 
+      key: 'last', 
+      width: 150, 
+      render: (_, r) => (
+        <div style={{ fontSize: 11, color: '#666' }}>
+          {r.last_performed_hours ? <div>Horómetro: {r.last_performed_hours} hrs</div> : null}
+          {r.last_performed_date ? <div>Fecha: {dayjs(r.last_performed_date).format('DD/MM/YYYY')}</div> : <div>Sin registro</div>}
+        </div>
+      ),
+      sorter: (a, b) => dayjs(a.last_performed_date || 0).unix() - dayjs(b.last_performed_date || 0).unix(),
+      defaultSortOrder: 'descend',
+    },
     { title: 'Acciones', key: 'actions', width: 100, render: (_, r) => (
       <Space>
         <Button size="small" type="text" icon={<EditOutlined/>} onClick={() => handleEditClick(r)} />
@@ -434,24 +447,29 @@ function EquipmentPage() {
           </div>
         </Space>
       ),
+      sorter: (a, b) => (a.name || '').localeCompare(b.name || ''),
+      defaultSortOrder: 'ascend',
     },
     {
       title: 'Embarcación',
       key: 'vessel',
       render: (_, r) => <Text>{r.vessel?.name}</Text>,
       width: 140,
+      sorter: (a, b) => (a.vessel?.name || '').localeCompare(b.vessel?.name || ''),
     },
     {
       title: 'Categoría',
       dataIndex: 'category',
       width: 150,
       render: (cat) => <Tag color={CATEGORY_MAP[cat]?.color}>{CATEGORY_MAP[cat]?.label}</Tag>,
+      sorter: (a, b) => (a.category || '').localeCompare(b.category || ''),
     },
     {
       title: 'No. Serie',
       dataIndex: 'serial_number',
       width: 130,
       render: (sn) => sn ? <Text copyable>{sn}</Text> : <Text type="secondary">—</Text>,
+      sorter: (a, b) => (a.serial_number || '').localeCompare(b.serial_number || ''),
     },
     {
       title: 'Estado',
@@ -461,6 +479,7 @@ function EquipmentPage() {
         const v = STATUS_MAP[r.status] || STATUS_MAP.operativo;
         return <Badge status={v.badge} text={v.label} />;
       },
+      sorter: (a, b) => (a.status || '').localeCompare(b.status || ''),
     },
     {
       title: 'Horómetro',
@@ -471,6 +490,7 @@ function EquipmentPage() {
           <strong>{r.hour_meter?.toFixed(1) || 0}</strong> hrs
         </div>
       ),
+      sorter: (a, b) => (a.hour_meter || 0) - (b.hour_meter || 0),
     },
     {
       title: 'Acciones', key: 'actions', width: 140,

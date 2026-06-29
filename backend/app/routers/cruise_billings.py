@@ -20,7 +20,8 @@ from app.models.cruise_billing import CruiseBilling, BillingStatus
 from app.models.vessel import Vessel
 from app.schemas.cruise_billing import (
     CruiseBillingCreate, CruiseBillingUpdate,
-    CruiseBillingResponse, CruiseBillingList, CruiseBillingStats
+    CruiseBillingResponse, CruiseBillingList, CruiseBillingStats,
+    CruiseBillingBatchTransfer
 )
 from app.services.audit import log_action
 
@@ -70,6 +71,76 @@ def _calculate_billing_totals(data_dict: dict, vessel_type: str) -> dict:
     data_dict["total"] = total
     
     return data_dict
+
+
+def sync_billing_transfer_to_accounts(db: Session, billing: CruiseBilling) -> None:
+    """Registra o actualiza el abono (credit) de una facturación de crucero en la cuenta de autogenerados (624602) cuando cambia a Transferido."""
+    from app.models.account import Account, AccountTransaction, TransactionType
+
+    # Solo registrar/mantener el abono si el estado es TRANSFERIDO
+    if billing.status != BillingStatus.TRANSFERIDO:
+        # Si el estado cambió de TRANSFERIDO a otra cosa, deberíamos eliminar la transacción si existía
+        db.query(AccountTransaction).filter(
+            AccountTransaction.cruise_billing_id == billing.id
+        ).delete()
+        db.flush()
+        return
+
+    # Obtener o crear Cuenta de Recursos Autogenerados (624602)
+    ra_account = db.query(Account).filter(Account.account_number == "624602").first()
+    if not ra_account:
+        ra_account = Account(
+            name="Recursos autogenerados del Departamento de embarcaciones oceanográficas",
+            description="Cuenta de control para recursos autogenerados (Proyecto D1A313).",
+            account_number="624602",
+            is_active=True
+        )
+        db.add(ra_account)
+        db.flush()
+
+    # Buscar transacción existente para este cobro
+    tx = db.query(AccountTransaction).filter(
+        AccountTransaction.cruise_billing_id == billing.id
+    ).first()
+
+    amount = billing.total
+    if billing.currency == "USD" and billing.exchange_rate:
+        amount = round(billing.total * billing.exchange_rate, 2)
+
+    concept = f"Ingreso Crucero: {billing.cruise.cruise_number if billing.cruise else billing.id}"
+    description = f"Monto transferido por concepto de cobro de crucero '{billing.cruise.name if billing.cruise else ''}'."
+
+    if not tx:
+        # Registrar abono
+        tx = AccountTransaction(
+            account_id=ra_account.id,
+            type=TransactionType.ABONO,
+            amount=amount,
+            concept=concept,
+            description=description,
+            reference=billing.payment_reference or f"BILL-{billing.id}",
+            transaction_date=billing.transfer_date or billing.payment_date or datetime.now(),
+            cruise_billing_id=billing.id
+        )
+        db.add(tx)
+    else:
+        # Actualizar abono
+        tx.amount = amount
+        tx.concept = concept
+        tx.description = description
+        tx.reference = billing.payment_reference or f"BILL-{billing.id}"
+        tx.transaction_date = billing.transfer_date or billing.payment_date or tx.transaction_date
+
+    db.flush()
+
+
+def delete_billing_transaction(db: Session, billing_id: int) -> None:
+    """Elimina la transacción asociada a un cobro cuando se elimina."""
+    from app.models.account import AccountTransaction
+    db.query(AccountTransaction).filter(
+        AccountTransaction.cruise_billing_id == billing_id
+    ).delete()
+    db.flush()
 
 
 # ── GET lista paginada ────────────────────────────────────────
@@ -230,6 +301,12 @@ async def create_cruise_billing(
     db.commit()
     db.refresh(billing)
 
+    try:
+        sync_billing_transfer_to_accounts(db, billing)
+        db.commit()
+    except Exception as ex:
+        print(f"⚠️ Error al sincronizar cobro con cuentas: {ex}")
+
     log_action(
         db=db,
         user_id=current_user.id,
@@ -291,6 +368,12 @@ async def update_cruise_billing(
 
     db.commit()
     db.refresh(billing)
+
+    try:
+        sync_billing_transfer_to_accounts(db, billing)
+        db.commit()
+    except Exception as ex:
+        print(f"⚠️ Error al sincronizar cobro actualizado con cuentas: {ex}")
 
     if changes:
         log_action(
@@ -467,6 +550,50 @@ async def upload_billing_signed_vessel_order(
     return billing
 
 
+@router.post("/batch-transfer")
+async def batch_transfer_cruise_billings(
+    data: CruiseBillingBatchTransfer,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("billing", "edit")),
+):
+    """Registrar transferencia de cobros masiva (cambiar estado a transferido de varios cobros)."""
+    if not data.billing_ids:
+        raise HTTPException(status_code=400, detail="Debe seleccionar al menos un cobro.")
+
+    billings = db.query(CruiseBilling).filter(CruiseBilling.id.in_(data.billing_ids)).all()
+    if len(billings) != len(data.billing_ids):
+        raise HTTPException(status_code=404, detail="Uno o más cobros no fueron encontrados.")
+
+    for billing in billings:
+        billing.status = BillingStatus.TRANSFERIDO
+        billing.payment_reference = data.payment_reference
+        billing.transfer_date = data.transfer_date
+        
+        # Sincronizar abono en la cuenta de Recursos Autogenerados (624602)
+        try:
+            sync_billing_transfer_to_accounts(db, billing)
+        except Exception as ex:
+            db.rollback()
+            raise HTTPException(status_code=500, detail=f"Error al sincronizar cuentas contables para el cobro ID {billing.id}: {str(ex)}")
+
+    db.commit()
+
+    log_action(
+        db=db,
+        user_id=current_user.id,
+        username=current_user.username,
+        action="update",
+        module="billing",
+        entity_type="CruiseBilling",
+        entity_id=None,
+        description=f"Registró transferencia masiva con folio '{data.payment_reference}' para {len(billings)} cobros.",
+        ip_address=request.client.host if request.client else None,
+    )
+
+    return {"message": f"Se registraron {len(billings)} cobros como transferidos correctamente."}
+
+
 # ── DELETE eliminar ────────────────────────────────────────────
 
 @router.delete("/{billing_id}")
@@ -491,6 +618,11 @@ async def delete_cruise_billing(
                 pass
 
     cruise_name = billing.cruise.name if billing.cruise else f"crucero_id={billing.cruise_id}"
+    try:
+        delete_billing_transaction(db, billing_id)
+    except Exception as ex:
+        print(f"⚠️ Error al eliminar transacción vinculada al cobro: {ex}")
+
     db.delete(billing)
     db.commit()
 

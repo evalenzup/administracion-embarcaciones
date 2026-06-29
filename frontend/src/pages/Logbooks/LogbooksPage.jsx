@@ -198,8 +198,16 @@ function EntriesTable({ logbookType, vessels, eventTypes, cruises }) {
           {r.entry_time && <><br /><Text type="secondary" style={{ fontSize: 11 }}>🕐 {r.entry_time}</Text></>}
         </div>
       ),
+      sorter: (a, b) => dayjs(a.entry_date || 0).unix() - dayjs(b.entry_date || 0).unix(),
+      defaultSortOrder: 'descend',
     },
-    { title: 'Embarcación', key: 'vessel', width: 140, render: (_, r) => <Text>{r.vessel?.name}</Text> },
+    { 
+      title: 'Embarcación', 
+      key: 'vessel', 
+      width: 140, 
+      render: (_, r) => <Text>{r.vessel?.name}</Text>,
+      sorter: (a, b) => (a.vessel?.name || '').localeCompare(b.vessel?.name || ''),
+    },
     {
       title: 'Evento',
       key: 'event',
@@ -217,7 +225,8 @@ function EntriesTable({ logbookType, vessels, eventTypes, cruises }) {
           );
         }
         return <Text type="secondary">General</Text>;
-      }
+      },
+      sorter: (a, b) => (a.event_type?.name || '').localeCompare(b.event_type?.name || ''),
     },
     {
       title: 'Contenido',
@@ -238,6 +247,7 @@ function EntriesTable({ logbookType, vessels, eventTypes, cruises }) {
           </div>
         </div>
       ),
+      sorter: (a, b) => (a.title || '').localeCompare(b.title || ''),
     },
   ];
 
@@ -246,6 +256,7 @@ function EntriesTable({ logbookType, vessels, eventTypes, cruises }) {
     render: (_, r) => r.is_signed
       ? <Badge status="success" text={<Text style={{ fontSize: 11 }}>{r.signed_by || 'Firmado'}</Text>} />
       : <Badge status="default" text={<Text type="secondary" style={{ fontSize: 11 }}>Sin firma</Text>} />,
+    sorter: (a, b) => (a.is_signed ? 1 : 0) - (b.is_signed ? 1 : 0),
   };
 
   const actionsColumn = {

@@ -3,7 +3,7 @@ SIAE — Modelo PettyCashCount (Conteo de Efectivo / Arqueo de Caja).
 Registra las auditorías físicas de la caja chica comparando efectivo contra sistema.
 """
 
-from sqlalchemy import Column, Integer, Float, DateTime, Text, ForeignKey
+from sqlalchemy import Column, Integer, Float, DateTime, Text, ForeignKey, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -36,6 +36,7 @@ class PettyCashCount(Base):
     expected_balance = Column(Float, nullable=False)
     difference = Column(Float, nullable=False) # total_counted - expected_balance
     notes = Column(Text, nullable=True)
+    invoices_details = Column(JSON, nullable=True) # Detalles de las facturas/gastos pendientes en el momento del arqueo
     
     # Persona que realiza el arqueo
     counted_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)

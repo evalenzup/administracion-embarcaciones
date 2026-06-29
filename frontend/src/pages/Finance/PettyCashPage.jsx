@@ -472,7 +472,9 @@ export default function PettyCashPage() {
     recent_invoices: [],
     recent_counts: [],
     invoices_pending_count: 0,
-    invoices_pending_amount: 0.0
+    invoices_pending_amount: 0.0,
+    active_reimbursements_count: 0,
+    active_reimbursements_amount: 0.0
   });
 
   const [categories, setCategories] = useState([]);
@@ -1261,7 +1263,7 @@ export default function PettyCashPage() {
                 )}
                 {/* TARJETAS DE KPIS */}
                 <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-                  <Col xs={24} sm={12} md={6}>
+                  <Col xs={24} sm={12} md={8} lg={5}>
                     <Card 
                       bordered={false} 
                       style={{ borderLeft: '4px solid #1890ff', borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}
@@ -1287,7 +1289,7 @@ export default function PettyCashPage() {
                       <div style={{ marginTop: 8, fontSize: 12, color: '#999' }}>Monto editable institucional</div>
                     </Card>
                   </Col>
-                  <Col xs={24} sm={12} md={6}>
+                  <Col xs={24} sm={12} md={8} lg={5}>
                     <Card bordered={false} style={{ borderLeft: '4px solid #52c41a', borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
                       <Statistic
                         title={<span style={{ fontWeight: 600, color: '#888' }}>Disponible en Caja</span>}
@@ -1300,7 +1302,7 @@ export default function PettyCashPage() {
                       <div style={{ marginTop: 8, fontSize: 12, color: '#999' }}>Dinero físico esperado en caja</div>
                     </Card>
                   </Col>
-                  <Col xs={24} sm={12} md={6}>
+                  <Col xs={24} sm={12} md={8} lg={5}>
                     <Card bordered={false} style={{ borderLeft: '4px solid #fa8c16', borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
                       <Statistic
                         title={<span style={{ fontWeight: 600, color: '#888' }}>Gastos en Tránsito</span>}
@@ -1315,7 +1317,22 @@ export default function PettyCashPage() {
                       </div>
                     </Card>
                   </Col>
-                  <Col xs={24} sm={12} md={6}>
+                  <Col xs={24} sm={12} md={8} lg={5}>
+                    <Card bordered={false} style={{ borderLeft: '4px solid #13c2c2', borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+                      <Statistic
+                        title={<span style={{ fontWeight: 600, color: '#888' }}>En Reposición</span>}
+                        value={summary.active_reimbursements_amount || 0}
+                        precision={2}
+                        prefix={<SyncOutlined style={{ color: '#13c2c2' }} />}
+                        suffix="MXN"
+                        valueStyle={{ color: '#08979c', fontWeight: 700 }}
+                      />
+                      <div style={{ marginTop: 8, fontSize: 12, color: '#08979c' }}>
+                        {summary.active_reimbursements_count || 0} paquetes solicitados
+                      </div>
+                    </Card>
+                  </Col>
+                  <Col xs={24} sm={12} md={8} lg={4}>
                     <Card bordered={false} style={{ borderLeft: '4px solid #722ed1', borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
                       <Statistic
                         title={<span style={{ fontWeight: 600, color: '#888' }}>Total Repuesto</span>}
@@ -1643,7 +1660,9 @@ export default function PettyCashPage() {
                       dataIndex: 'fecha_emision',
                       key: 'fecha_emision',
                       render: (val) => val ? dayjs(val).format('DD/MM/YYYY') : 'S/F',
-                      width: 120
+                      width: 120,
+                      sorter: (a, b) => dayjs(a.fecha_emision || 0).unix() - dayjs(b.fecha_emision || 0).unix(),
+                      defaultSortOrder: 'descend',
                     },
                     {
                       title: 'Folio / Serie',
@@ -1667,7 +1686,8 @@ export default function PettyCashPage() {
                           })()}
                         </div>
                       ),
-                      width: 120
+                      width: 120,
+                      sorter: (a, b) => (a.folio || '').localeCompare(b.folio || ''),
                     },
                     {
                       title: 'Proveedor (Emisor)',
@@ -1677,7 +1697,8 @@ export default function PettyCashPage() {
                           <div style={{ fontWeight: 600 }}>{rec.emisor_nombre}</div>
                           <div style={{ fontSize: 11, color: '#888' }}>{rec.emisor_rfc}</div>
                         </div>
-                      )
+                      ),
+                      sorter: (a, b) => (a.emisor_nombre || '').localeCompare(b.emisor_nombre || ''),
                     },
                     {
                       title: 'Categoría',
@@ -1687,7 +1708,8 @@ export default function PettyCashPage() {
                         <Tag color={cat.color} style={{ fontWeight: 500 }}>
                           {cat.icon} {cat.name}
                         </Tag>
-                      ) : 'Sin clasificar'
+                      ) : 'Sin clasificar',
+                      sorter: (a, b) => (a.category?.name || '').localeCompare(b.category?.name || ''),
                     },
                     {
                       title: 'Total',
@@ -1695,7 +1717,8 @@ export default function PettyCashPage() {
                       key: 'total',
                       render: (total) => <span style={{ fontWeight: 700, color: '#000' }}>${total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>,
                       align: 'right',
-                      width: 120
+                      width: 120,
+                      sorter: (a, b) => (a.total || 0) - (b.total || 0),
                     },
                     {
                       title: 'Estado',
@@ -1706,7 +1729,8 @@ export default function PettyCashPage() {
                           {status.replace('_', ' ')}
                         </Tag>
                       ),
-                      width: 120
+                      width: 120,
+                      sorter: (a, b) => (a.status || '').localeCompare(b.status || ''),
                     },
                     {
                       title: 'Estado SAT',
@@ -1799,28 +1823,26 @@ export default function PettyCashPage() {
                       key: 'actions',
                       render: (_, rec) => (
                         <Space>
+                          <Tooltip title={rec.status === 'pendiente' ? "Editar gasto/factura" : "Editar clasificación/descripción (gasto en reposición)"}>
+                            <Button 
+                              type="text" 
+                              icon={<EditOutlined style={{ color: '#1890ff' }} />} 
+                              onClick={() => handleEditInvoiceOpen(rec)} 
+                            />
+                          </Tooltip>
                           {rec.status === 'pendiente' ? (
-                            <>
-                              <Tooltip title="Editar gasto/factura">
-                                <Button 
-                                  type="text" 
-                                  icon={<EditOutlined style={{ color: '#1890ff' }} />} 
-                                  onClick={() => handleEditInvoiceOpen(rec)} 
-                                />
-                              </Tooltip>
-                              <Popconfirm
-                                title="¿Eliminar este gasto?"
-                                description="Esta acción eliminará el gasto del registro."
-                                onConfirm={() => handleDeleteInvoice(rec.id)}
-                                okText="Sí, eliminar"
-                                cancelText="No"
-                              >
-                                <Button type="text" danger icon={<DeleteOutlined />} />
-                              </Popconfirm>
-                            </>
+                            <Popconfirm
+                              title="¿Eliminar este gasto?"
+                              description="Esta acción eliminará el gasto del registro."
+                              onConfirm={() => handleDeleteInvoice(rec.id)}
+                              okText="Sí, eliminar"
+                              cancelText="No"
+                            >
+                              <Button type="text" danger icon={<DeleteOutlined />} />
+                            </Popconfirm>
                           ) : (
-                            <Tooltip title="Gasto asociado a una reposición activa (no modificable/eliminable)">
-                              <Button type="text" disabled icon={<EditOutlined />} />
+                            <Tooltip title="Este gasto forma parte de una reposición y no puede ser eliminado.">
+                              <Button type="text" disabled icon={<DeleteOutlined />} />
                             </Tooltip>
                           )}
                           {rec.uuid && (
@@ -1879,14 +1901,17 @@ export default function PettyCashPage() {
                       dataIndex: 'folio',
                       key: 'folio',
                       render: (val) => <Text strong style={{ color: '#1890ff' }}>{val}</Text>,
-                      width: 140
+                      width: 140,
+                      sorter: (a, b) => (a.folio || '').localeCompare(b.folio || ''),
                     },
                     {
                       title: 'Creación',
                       dataIndex: 'created_at',
                       key: 'created_at',
                       render: (val) => dayjs(val).format('DD/MM/YYYY HH:mm'),
-                      width: 160
+                      width: 160,
+                      sorter: (a, b) => dayjs(a.created_at || 0).unix() - dayjs(b.created_at || 0).unix(),
+                      defaultSortOrder: 'descend',
                     },
                     {
                       title: 'Monto Total',
@@ -1894,14 +1919,16 @@ export default function PettyCashPage() {
                       key: 'total_amount',
                       render: (val) => <span style={{ fontWeight: 700 }}>${val.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>,
                       align: 'right',
-                      width: 130
+                      width: 130,
+                      sorter: (a, b) => (a.total_amount || 0) - (b.total_amount || 0),
                     },
                     {
                       title: 'Gastos',
                       dataIndex: 'invoice_count',
                       key: 'invoice_count',
                       align: 'center',
-                      width: 100
+                      width: 100,
+                      sorter: (a, b) => (a.invoice_count || 0) - (b.invoice_count || 0),
                     },
                     {
                       title: 'Estado',
@@ -1912,7 +1939,8 @@ export default function PettyCashPage() {
                           {status.replace('_', ' ')}
                         </Tag>
                       ),
-                      width: 120
+                      width: 120,
+                      sorter: (a, b) => (a.status || '').localeCompare(b.status || ''),
                     },
                     {
                       title: 'Firma de Recibido',
@@ -1958,7 +1986,7 @@ export default function PettyCashPage() {
                             <Button 
                               type="primary" 
                               size="small" 
-                              onClick={() => handleUpdateReimbStatus(rec.id, 'approved')}
+                              onClick={() => handleUpdateReimbStatus(rec.id, 'aprobado')}
                             >
                               Aprobar
                             </Button>
@@ -2092,24 +2120,87 @@ export default function PettyCashPage() {
                       dataSource={counts}
                       rowKey="id"
                       size="small"
+                      expandable={{
+                        expandedRowRender: (record) => (
+                          <div style={{ padding: '16px', background: '#fafafa', borderRadius: 8 }}>
+                            <Row gutter={[24, 24]}>
+                              <Col xs={24} md={10}>
+                                <Title level={5} style={{ fontSize: 13, color: '#555', marginBottom: 12 }}>💵 Desglose de Efectivo Contado:</Title>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', maxWidth: 300 }}>
+                                  {record.bills_1000 > 0 && <div>$1,000 × {record.bills_1000}</div>}
+                                  {record.bills_1000 > 0 && <div><strong>${(record.bills_1000 * 1000).toFixed(2)}</strong></div>}
+                                  {record.bills_500 > 0 && <div>$500 × {record.bills_500}</div>}
+                                  {record.bills_500 > 0 && <div><strong>${(record.bills_500 * 500).toFixed(2)}</strong></div>}
+                                  {record.bills_200 > 0 && <div>$200 × {record.bills_200}</div>}
+                                  {record.bills_200 > 0 && <div><strong>${(record.bills_200 * 200).toFixed(2)}</strong></div>}
+                                  {record.bills_100 > 0 && <div>$100 × {record.bills_100}</div>}
+                                  {record.bills_100 > 0 && <div><strong>${(record.bills_100 * 100).toFixed(2)}</strong></div>}
+                                  {record.bills_50 > 0 && <div>$50 × {record.bills_50}</div>}
+                                  {record.bills_50 > 0 && <div><strong>${(record.bills_50 * 50).toFixed(2)}</strong></div>}
+                                  {record.bills_20 > 0 && <div>$20 × {record.bills_20}</div>}
+                                  {record.bills_20 > 0 && <div><strong>${(record.bills_20 * 20).toFixed(2)}</strong></div>}
+                                  
+                                  {record.coins_10 > 0 && <div>$10 × {record.coins_10}</div>}
+                                  {record.coins_10 > 0 && <div><strong>${(record.coins_10 * 10).toFixed(2)}</strong></div>}
+                                  {record.coins_5 > 0 && <div>$5 × {record.coins_5}</div>}
+                                  {record.coins_5 > 0 && <div><strong>${(record.coins_5 * 5).toFixed(2)}</strong></div>}
+                                  {record.coins_2 > 0 && <div>$2 × {record.coins_2}</div>}
+                                  {record.coins_2 > 0 && <div><strong>${(record.coins_2 * 2).toFixed(2)}</strong></div>}
+                                  {record.coins_1 > 0 && <div>$1 × {record.coins_1}</div>}
+                                  {record.coins_1 > 0 && <div><strong>${(record.coins_1 * 1).toFixed(2)}</strong></div>}
+                                  
+                                  <div style={{ borderTop: '1px solid #ddd', paddingTop: 8 }}><strong>Total Físico:</strong></div>
+                                  <div style={{ borderTop: '1px solid #ddd', paddingTop: 8 }}><strong>${record.total_counted.toFixed(2)}</strong></div>
+                                </div>
+                              </Col>
+                              
+                              <Col xs={24} md={14}>
+                                <Title level={5} style={{ fontSize: 13, color: '#555', marginBottom: 12 }}>🧾 Gastos/Facturas Pendientes al Momento:</Title>
+                                {record.invoices_details === undefined || record.invoices_details === null ? (
+                                  <span style={{ color: '#8c8c8c', fontStyle: 'italic' }}>Detalle de facturas no disponible para arqueos históricos previos a esta actualización.</span>
+                                ) : record.invoices_details.length > 0 ? (
+                                  <Table
+                                    dataSource={record.invoices_details}
+                                    rowKey="id"
+                                    size="small"
+                                    pagination={false}
+                                    columns={[
+                                      { title: 'Fecha Gasto', dataIndex: 'fecha_emision', render: (d) => d ? dayjs(d).format('DD/MM/YYYY') : '—' },
+                                      { title: 'Folio', dataIndex: 'folio', render: (f, rec) => f || (rec.is_manual ? 'Gasto Manual' : 'S/F') },
+                                      { title: 'Proveedor', dataIndex: 'emisor_nombre', ellipsis: true },
+                                      { title: 'Total', dataIndex: 'total', align: 'right', render: (t) => <strong>${t.toFixed(2)}</strong> }
+                                    ]}
+                                  />
+                                ) : (
+                                  <span style={{ color: '#52c41a', fontStyle: 'italic' }}>No había gastos/facturas pendientes de reposición al momento de este arqueo (Caja completa).</span>
+                                )}
+                              </Col>
+                            </Row>
+                          </div>
+                        )
+                      }}
                       columns={[
                         {
                           title: 'Fecha',
                           dataIndex: 'count_date',
                           render: (val) => dayjs(val).format('DD/MM/YYYY HH:mm'),
-                          width: 140
+                          width: 140,
+                          sorter: (a, b) => dayjs(a.count_date || 0).unix() - dayjs(b.count_date || 0).unix(),
+                          defaultSortOrder: 'descend',
                         },
                         {
                           title: 'Contado',
                           dataIndex: 'total_counted',
                           render: (v) => <strong>${v.toFixed(2)}</strong>,
-                          align: 'right'
+                          align: 'right',
+                          sorter: (a, b) => (a.total_counted || 0) - (b.total_counted || 0),
                         },
                         {
                           title: 'Esperado',
                           dataIndex: 'expected_balance',
                           render: (v) => `$${v.toFixed(2)}`,
-                          align: 'right'
+                          align: 'right',
+                          sorter: (a, b) => (a.expected_balance || 0) - (b.expected_balance || 0),
                         },
                         {
                           title: 'Diferencia',
@@ -2119,7 +2210,8 @@ export default function PettyCashPage() {
                             <Tag color={diff === 0 ? 'green' : 'red'}>
                               {diff === 0 ? '$0.00' : `${diff > 0 ? '+' : ''}$${diff.toFixed(2)}`}
                             </Tag>
-                          )
+                          ),
+                          sorter: (a, b) => (a.difference || 0) - (b.difference || 0),
                         },
                         {
                           title: 'Notas',
@@ -2462,7 +2554,16 @@ export default function PettyCashPage() {
             layout="vertical"
             onFinish={handleUpdateInvoice}
           >
-            {!selectedInvoiceForEdit.is_manual && (
+            {selectedInvoiceForEdit.status !== 'pendiente' && (
+              <Alert 
+                message="Gasto en Reposición Activa"
+                description="Este gasto ya forma parte de un paquete de reposición. Los montos y datos fiscales no son editables para mantener la consistencia del paquete. Solo puedes reclasificar la categoría o modificar la descripción."
+                type="warning"
+                showIcon
+                style={{ marginBottom: 16 }}
+              />
+            )}
+            {!selectedInvoiceForEdit.is_manual && selectedInvoiceForEdit.status === 'pendiente' && (
               <Alert 
                 message="Factura Formal SAT"
                 description="Los datos fiscales (Fecha, Proveedor, RFC y Total) se leyeron del XML oficial y no son editables. Solo puedes reclasificar la categoría o modificar la descripción."
@@ -2481,7 +2582,7 @@ export default function PettyCashPage() {
                 >
                   <DatePicker 
                     style={{ width: '100%' }} 
-                    disabled={!selectedInvoiceForEdit.is_manual} 
+                    disabled={!selectedInvoiceForEdit.is_manual || selectedInvoiceForEdit.status !== 'pendiente'} 
                   />
                 </Form.Item>
               </Col>
@@ -2496,7 +2597,7 @@ export default function PettyCashPage() {
                     max={5000.00} 
                     precision={2} 
                     style={{ width: '100%' }} 
-                    disabled={!selectedInvoiceForEdit.is_manual}
+                    disabled={!selectedInvoiceForEdit.is_manual || selectedInvoiceForEdit.status !== 'pendiente'}
                   />
                 </Form.Item>
               </Col>
@@ -2512,7 +2613,7 @@ export default function PettyCashPage() {
                   <Input 
                     placeholder="RFC de 12 o 13 caracteres" 
                     maxLength={13} 
-                    disabled={!selectedInvoiceForEdit.is_manual} 
+                    disabled={!selectedInvoiceForEdit.is_manual || selectedInvoiceForEdit.status !== 'pendiente'} 
                   />
                 </Form.Item>
               </Col>
@@ -2524,7 +2625,7 @@ export default function PettyCashPage() {
                 >
                   <Input 
                     placeholder="Razón Social o Nombre" 
-                    disabled={!selectedInvoiceForEdit.is_manual} 
+                    disabled={!selectedInvoiceForEdit.is_manual || selectedInvoiceForEdit.status !== 'pendiente'} 
                   />
                 </Form.Item>
               </Col>

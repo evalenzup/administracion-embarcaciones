@@ -229,6 +229,8 @@ function VesselsPage() {
           </Space>
         );
       },
+      sorter: (a, b) => (a.name || '').localeCompare(b.name || ''),
+      defaultSortOrder: 'ascend',
     },
     {
       title: 'Tipo',
@@ -239,6 +241,7 @@ function VesselsPage() {
         const info = VESSEL_TYPE_MAP[type] || VESSEL_TYPE_MAP.otro;
         return <Tag color={info.color}>{info.label}</Tag>;
       },
+      sorter: (a, b) => (a.vessel_type || '').localeCompare(b.vessel_type || ''),
     },
     {
       title: 'Estado',
@@ -249,6 +252,7 @@ function VesselsPage() {
         const info = STATUS_MAP[status] || { label: status, color: 'default' };
         return <Badge status={info.color} text={info.label} />;
       },
+      sorter: (a, b) => (a.status || '').localeCompare(b.status || ''),
     },
     {
       title: 'Puerto Base',
@@ -257,6 +261,7 @@ function VesselsPage() {
       render: (port) => port ? (
         <Space><EnvironmentOutlined style={{ color: '#1B4F72' }} />{port}</Space>
       ) : <Text type="secondary">—</Text>,
+      sorter: (a, b) => (a.home_port || '').localeCompare(b.home_port || ''),
     },
     {
       title: 'Motor',
@@ -267,6 +272,7 @@ function VesselsPage() {
           {record.engine_power_hp ? ` (${record.engine_power_hp} HP)` : ''}
         </Text>
       ) : <Text type="secondary">—</Text>,
+      sorter: (a, b) => (a.engine_type || '').localeCompare(b.engine_type || ''),
     },
       {
         title: 'Acciones',

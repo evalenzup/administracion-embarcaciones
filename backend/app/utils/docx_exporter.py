@@ -230,10 +230,14 @@ def generate_docx(cruise: CruisePlan) -> io.BytesIO:
     run_sec1.font.size = Pt(12)
     run_sec1.font.color.rgb = RGBColor(0x0A, 0x26, 0x47)
 
+    captain_crew = next((c for c in cruise.crew if (c.role.value if hasattr(c.role, "value") else str(c.role)) == "capitan"), None)
+    captain_name = captain_crew.personnel.full_name if (captain_crew and captain_crew.personnel) else (cruise.captain.full_name if cruise.captain else "Sin asignar")
+
     table_data = [
         ("Nombre del Crucero", cruise.name),
         ("Embarcación", cruise.vessel.name if cruise.vessel else "—"),
-        ("Capitán", cruise.captain.full_name if cruise.captain else "Sin asignar"),
+        ("Capitán", captain_name),
+        ("Responsable del Crucero", cruise.cruise_responsible or "—"),
         ("Proyecto Asociado", cruise.project_name or "—"),
         ("Fuente de Financiamiento", cruise.funding_source or "—"),
         ("Área de Estudio", cruise.study_area or "—"),

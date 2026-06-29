@@ -154,6 +154,12 @@ async def create_cruise(
         if port:
             cruise_data["return_port"] = port.name
 
+    if cruise_data.get("project_id"):
+        from app.models.project import Project
+        project = db.query(Project).filter(Project.id == cruise_data["project_id"]).first()
+        if project:
+            cruise_data["project_name"] = project.name
+
     # Auto-generar número de crucero si no se especifica
     if not cruise_data.get("cruise_number"):
         vessel = db.query(Vessel).filter(Vessel.id == data.vessel_id).first()
@@ -261,6 +267,16 @@ async def update_cruise(
                 update_dict["return_port"] = port.name
         else:
             update_dict["return_port"] = None
+
+    if "project_id" in update_dict:
+        proj_id = update_dict["project_id"]
+        if proj_id:
+            from app.models.project import Project
+            project = db.query(Project).filter(Project.id == proj_id).first()
+            if project:
+                update_dict["project_name"] = project.name
+        else:
+            update_dict["project_name"] = None
 
     for key, value in update_dict.items():
         setattr(cruise, key, value)

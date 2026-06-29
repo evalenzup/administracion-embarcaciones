@@ -241,11 +241,20 @@ function InventoryPage() {
           ) : null}
         </div>
       ),
+      sorter: (a, b) => (a.name || '').localeCompare(b.name || ''),
+      defaultSortOrder: 'ascend',
     },
-    { title: 'Embarcación', key: 'vessel', width: 140, render: (_, r) => <Text>{r.vessel?.name}</Text> },
+    { 
+      title: 'Embarcación', 
+      key: 'vessel', 
+      width: 140, 
+      render: (_, r) => <Text>{r.vessel?.name}</Text>,
+      sorter: (a, b) => (a.vessel?.name || '').localeCompare(b.vessel?.name || ''),
+    },
     {
       title: 'Categoría', dataIndex: 'category', width: 120,
       render: (c) => <Tag color={CATEGORY_MAP[c]?.color}>{CATEGORY_MAP[c]?.label}</Tag>,
+      sorter: (a, b) => (a.category || '').localeCompare(b.category || ''),
     },
     {
       title: 'Stock', key: 'stock', width: 120,
@@ -259,12 +268,20 @@ function InventoryPage() {
           <Badge status={STOCK_STATUS[r.stock_status]?.badge} text={STOCK_STATUS[r.stock_status]?.label} />
         </div>
       ),
+      sorter: (a, b) => (a.quantity || 0) - (b.quantity || 0),
     },
     {
       title: 'Mínimo', dataIndex: 'min_quantity', width: 80,
       render: (v, r) => <Text type="secondary">{v} {r.unit}</Text>,
+      sorter: (a, b) => (a.min_quantity || 0) - (b.min_quantity || 0),
     },
-    { title: 'Ubicación', dataIndex: 'location', width: 140, render: (v) => v || '—' },
+    { 
+      title: 'Ubicación', 
+      dataIndex: 'location', 
+      width: 140, 
+      render: (v) => v || '—',
+      sorter: (a, b) => (a.location || '').localeCompare(b.location || ''),
+    },
     {
       title: 'Acciones', key: 'actions', width: 140,
       render: (_, r) => (

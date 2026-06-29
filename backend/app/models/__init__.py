@@ -25,9 +25,16 @@ from app.models.finance_setting import FinanceSetting
 from app.models.petty_cash_reimbursement import PettyCashReimbursement, ReimbursementStatus
 from app.models.petty_cash_invoice import PettyCashInvoice, InvoiceStatus
 from app.models.petty_cash_count import PettyCashCount
+from app.models.account import Account, AccountTransaction, TransactionType
+from app.models.service_request import ServiceRequest, ServiceStageHistory, ServiceObservation
+from app.models.provider import Provider
+from app.models.project import Project
 
 __all__ = [
     "Permission", "Role", "role_permissions", "User", "UserRole",
+    "ServiceRequest", "ServiceStageHistory", "ServiceObservation",
+    "Provider",
+    "Project",
     "AuditLog", "Vessel", "VesselRate", "VesselRateClientType", "Document",
     "Port",
     "MaintenanceCategory", "MaintenanceRecord",
@@ -54,5 +61,8 @@ __all__ = [
     "PettyCashInvoice",
     "InvoiceStatus",
     "PettyCashCount",
+    "Account",
+    "AccountTransaction",
+    "TransactionType",
 ]
 

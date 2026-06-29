@@ -86,10 +86,17 @@ async def create_request(
     if data.departure_date >= data.return_date:
         raise HTTPException(status_code=400, detail="La fecha de salida debe ser anterior a la de regreso")
 
+    req_data = data.model_dump()
+    if req_data.get("project_id"):
+        from app.models.project import Project
+        project = db.query(Project).filter(Project.id == req_data["project_id"]).first()
+        if project:
+            req_data["project_name"] = project.name
+
     req = VesselRequest(
         applicant_id=current_user.id,
         status=RequestStatus.PENDIENTE,
-        **data.model_dump()
+        **req_data
     )
     db.add(req)
     db.commit()
@@ -133,6 +140,16 @@ async def update_request(
         ret = update_data.get("return_date", req.return_date)
         if dep >= ret:
             raise HTTPException(status_code=400, detail="La fecha de salida debe ser anterior a la de regreso")
+
+    if "project_id" in update_data:
+        proj_id = update_data["project_id"]
+        if proj_id:
+            from app.models.project import Project
+            project = db.query(Project).filter(Project.id == proj_id).first()
+            if project:
+                update_data["project_name"] = project.name
+        else:
+            update_data["project_name"] = None
 
     for key, value in update_data.items():
         setattr(req, key, value)
@@ -208,8 +225,10 @@ async def review_request(
         plan = CruisePlan(
             vessel_id=req.vessel_id,
             vessel_request_id=req.id,
+            project_id=req.project_id,
             created_by_id=req.applicant_id,
             scientific_leader=req.scientific_leader,
+            cruise_responsible=req.cruise_responsible,
             name=req.project_name[:197] + "..." if len(req.project_name) > 200 else req.project_name,
             project_name=req.project_name,
             objective=req.objective,

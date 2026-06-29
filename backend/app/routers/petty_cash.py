@@ -19,6 +19,7 @@ from app.models.finance_setting import FinanceSetting
 from app.models.petty_cash_invoice import PettyCashInvoice, InvoiceStatus
 from app.models.petty_cash_reimbursement import PettyCashReimbursement, ReimbursementStatus
 from app.models.petty_cash_count import PettyCashCount
+from app.models.provider import Provider
 
 from app.schemas.financial_category import (
     FinancialCategoryCreate, FinancialCategoryUpdate, FinancialCategoryResponse
@@ -41,6 +42,165 @@ from app.utils.sat_validator import query_sat_cfdi_status
 from app.services.audit import log_action
 
 router = APIRouter(prefix="/api/v1/petty-cash", tags=["Finanzas — Fondo Fijo"])
+
+
+def sync_invoice_to_accounts(db: Session, invoice: PettyCashInvoice) -> None:
+    """Registra o actualiza el cargo (debit) de una factura de caja chica en estados de cuenta."""
+    from app.models.account import Account, AccountTransaction, TransactionType
+    
+    # Obtener o crear cuenta de Fondo Fijo
+    ff_account = db.query(Account).filter(Account.name == "Fondo Fijo (Caja Chica)").first()
+    if not ff_account:
+        ff_account = Account(
+            name="Fondo Fijo (Caja Chica)",
+            description="Fondo institucional de caja chica para gastos menores de embarcaciones de la DEO.",
+            account_number="FF-DEO-01",
+            is_active=True
+        )
+        db.add(ff_account)
+        db.flush()
+        
+    # Verificar si ya existe movimiento para esta factura
+    tx = db.query(AccountTransaction).filter(
+        AccountTransaction.petty_cash_invoice_id == invoice.id
+    ).first()
+    
+    if not tx:
+        # Registrar nuevo cargo
+        tx = AccountTransaction(
+            account_id=ff_account.id,
+            type=TransactionType.CARGO,
+            amount=invoice.total,
+            concept=f"Gasto: {invoice.emisor_nombre}",
+            description=invoice.description,
+            reference=invoice.folio or (invoice.uuid[:8] if invoice.uuid else f"MAN-{invoice.id}"),
+            transaction_date=invoice.fecha_emision or invoice.created_at,
+            petty_cash_invoice_id=invoice.id,
+            created_by_id=invoice.registered_by_id
+        )
+        db.add(tx)
+    else:
+        # Actualizar cargo existente
+        tx.amount = invoice.total
+        tx.concept = f"Gasto: {invoice.emisor_nombre}"
+        tx.description = invoice.description
+        tx.reference = invoice.folio or (invoice.uuid[:8] if invoice.uuid else f"MAN-{invoice.id}")
+        if invoice.fecha_emision:
+            tx.transaction_date = invoice.fecha_emision
+            
+    db.flush()
+
+
+def delete_invoice_transaction(db: Session, invoice_id: int) -> None:
+    """Elimina el cargo asociado a una factura cuando se elimina de caja chica."""
+    from app.models.account import AccountTransaction
+    db.query(AccountTransaction).filter(
+        AccountTransaction.petty_cash_invoice_id == invoice_id
+    ).delete()
+    db.flush()
+
+
+def sync_reimbursement_payment_to_accounts(db: Session, reimbursement: PettyCashReimbursement) -> None:
+    """Registra el abono en caja chica y el cargo correspondiente en la cuenta 624602."""
+    from app.models.account import Account, AccountTransaction, TransactionType
+    
+    if reimbursement.status != ReimbursementStatus.PAGADO:
+        return
+        
+    # 1. Obtener o crear Fondo Fijo
+    ff_account = db.query(Account).filter(Account.name == "Fondo Fijo (Caja Chica)").first()
+    if not ff_account:
+        ff_account = Account(
+            name="Fondo Fijo (Caja Chica)",
+            description="Fondo institucional de caja chica para gastos menores de embarcaciones de la DEO.",
+            account_number="FF-DEO-01",
+            is_active=True
+        )
+        db.add(ff_account)
+        db.flush()
+
+    # 2. Obtener o crear Cuenta de Recursos Autogenerados (624602)
+    ra_account = db.query(Account).filter(Account.account_number == "624602").first()
+    if not ra_account:
+        ra_account = Account(
+            name="Recursos autogenerados del Departamento de embarcaciones oceanográficas",
+            description="Cuenta de control para recursos autogenerados (Proyecto D1A313).",
+            account_number="624602",
+            is_active=True
+        )
+        db.add(ra_account)
+        db.flush()
+        
+    # 3. Buscar movimientos existentes vinculados a esta reposición
+    tx = db.query(AccountTransaction).filter(
+        AccountTransaction.petty_cash_reimbursement_id == reimbursement.id,
+        AccountTransaction.account_id == ff_account.id
+    ).first()
+    
+    linked_tx = db.query(AccountTransaction).filter(
+        AccountTransaction.petty_cash_reimbursement_id == reimbursement.id,
+        AccountTransaction.account_id == ra_account.id
+    ).first()
+    
+    if not tx:
+        # Crear abono en Fondo Fijo
+        tx = AccountTransaction(
+            account_id=ff_account.id,
+            type=TransactionType.ABONO,
+            amount=reimbursement.total_amount,
+            concept=f"Reposición de Fondo Fijo: {reimbursement.folio}",
+            description=f"Reembolso de efectivo aprobado por contabilidad conteniendo {reimbursement.invoice_count} comprobantes.",
+            reference=reimbursement.folio,
+            transaction_date=reimbursement.paid_date or datetime.now(),
+            petty_cash_reimbursement_id=reimbursement.id,
+            created_by_id=reimbursement.created_by_id
+        )
+        db.add(tx)
+        db.flush()
+        
+        # Crear cargo en Cuenta 624602
+        linked_tx = AccountTransaction(
+            account_id=ra_account.id,
+            type=TransactionType.CARGO,
+            amount=reimbursement.total_amount,
+            concept=f"Reposición de Fondo Fijo: {reimbursement.folio}",
+            description=f"Fondo asignado para la reposición de la caja chica descontado de esta cuenta.",
+            reference=reimbursement.folio,
+            transaction_date=reimbursement.paid_date or datetime.now(),
+            petty_cash_reimbursement_id=reimbursement.id,
+            transfer_transaction_id=tx.id,
+            created_by_id=reimbursement.created_by_id
+        )
+        db.add(linked_tx)
+        db.flush()
+        
+        # Vincular el abono original con el cargo
+        tx.transfer_transaction_id = linked_tx.id
+    else:
+        # Actualizar abono
+        tx.amount = reimbursement.total_amount
+        tx.concept = f"Reposición de Fondo Fijo: {reimbursement.folio}"
+        if reimbursement.paid_date:
+            tx.transaction_date = reimbursement.paid_date
+            
+        # Actualizar cargo correspondiente
+        if linked_tx:
+            linked_tx.amount = reimbursement.total_amount
+            linked_tx.concept = f"Reposición de Fondo Fijo: {reimbursement.folio}"
+            if reimbursement.paid_date:
+                linked_tx.transaction_date = reimbursement.paid_date
+            
+    db.flush()
+
+
+def delete_reimbursement_transaction(db: Session, reimbursement_id: int) -> None:
+    """Elimina el abono asociado a una reposición cuando se cancela/elimina."""
+    from app.models.account import AccountTransaction
+    db.query(AccountTransaction).filter(
+        AccountTransaction.petty_cash_reimbursement_id == reimbursement_id
+    ).delete()
+    db.flush()
+
 
 
 # Helper para obtener el saldo del fondo asignado desde configuraciones
@@ -404,6 +564,28 @@ async def register_invoice(
     except Exception:
         sat_status = "Error de Conexión"
 
+    # Crear o buscar proveedor
+    provider_id = None
+    try:
+        rfc = parsed["emisor_rfc"].upper().strip()
+        legal_name = parsed["emisor_nombre"].strip()
+        provider = db.query(Provider).filter(Provider.rfc == rfc).first()
+        if not provider:
+            provider = Provider(
+                rfc=rfc,
+                legal_name=legal_name,
+                commercial_name=legal_name
+            )
+            db.add(provider)
+            db.flush()
+        else:
+            if not provider.legal_name:
+                provider.legal_name = legal_name
+                db.flush()
+        provider_id = provider.id
+    except Exception as e:
+        print(f"⚠️ Error al asociar proveedor en Caja Chica: {e}")
+
     # Crear modelo
     invoice = PettyCashInvoice(
         uuid=uuid_str,
@@ -411,6 +593,7 @@ async def register_invoice(
         serie=parsed["serie"],
         emisor_rfc=parsed["emisor_rfc"],
         emisor_nombre=parsed["emisor_nombre"],
+        provider_id=provider_id,
         emisor_regimen_fiscal=parsed["emisor_regimen_fiscal"],
         receptor_rfc=parsed["receptor_rfc"],
         receptor_nombre=parsed["receptor_nombre"],
@@ -439,6 +622,11 @@ async def register_invoice(
     db.add(invoice)
     db.commit()
     db.refresh(invoice)
+    try:
+        sync_invoice_to_accounts(db, invoice)
+        db.commit()
+    except Exception as ex:
+        print(f"⚠️ Error al sincronizar factura XML con cuenta: {ex}")
 
     log_action(
         db=db, user_id=current_user.id, username=current_user.username,
@@ -503,6 +691,11 @@ async def register_invoice_manual(
     db.add(invoice)
     db.commit()
     db.refresh(invoice)
+    try:
+        sync_invoice_to_accounts(db, invoice)
+        db.commit()
+    except Exception as ex:
+        print(f"⚠️ Error al sincronizar factura manual con cuenta: {ex}")
 
     log_action(
         db=db, user_id=current_user.id, username=current_user.username,
@@ -604,12 +797,35 @@ async def link_xml_to_invoice(
     except Exception:
         sat_status = "Error de Conexión"
 
+    # Crear o buscar proveedor
+    provider_id = None
+    try:
+        rfc = parsed["emisor_rfc"].upper().strip()
+        legal_name = parsed["emisor_nombre"].strip()
+        provider = db.query(Provider).filter(Provider.rfc == rfc).first()
+        if not provider:
+            provider = Provider(
+                rfc=rfc,
+                legal_name=legal_name,
+                commercial_name=legal_name
+            )
+            db.add(provider)
+            db.flush()
+        else:
+            if not provider.legal_name:
+                provider.legal_name = legal_name
+                db.flush()
+        provider_id = provider.id
+    except Exception as e:
+        print(f"⚠️ Error al asociar proveedor en Caja Chica: {e}")
+
     # Actualizar los datos del gasto con los valores fiscales reales de la factura
     invoice.uuid = uuid_str
     invoice.folio = parsed["folio"]
     invoice.serie = parsed["serie"]
     invoice.emisor_rfc = parsed["emisor_rfc"]
     invoice.emisor_nombre = parsed["emisor_nombre"]
+    invoice.provider_id = provider_id
     invoice.emisor_regimen_fiscal = parsed["emisor_regimen_fiscal"]
     invoice.receptor_rfc = parsed["receptor_rfc"]
     invoice.receptor_nombre = parsed["receptor_nombre"]
@@ -718,12 +934,21 @@ async def update_invoice(
     if not invoice:
         raise HTTPException(status_code=404, detail="Factura no encontrada")
 
-    # 1. Validar que la factura esté PENDIENTE
+    # 1. Validar que la factura esté PENDIENTE (o solo se intente cambiar categoría/descripción si está en reposición)
     if invoice.status != InvoiceStatus.PENDIENTE:
-        raise HTTPException(
-            status_code=400,
-            detail="Solo se pueden editar facturas/gastos en estado 'pendiente' (que no formen parte de una reposición)."
+        has_restricted_changes = (
+            data.fecha_emision is not None or
+            data.emisor_rfc is not None or
+            data.emisor_nombre is not None or
+            data.total is not None or
+            data.subtotal is not None or
+            data.iva is not None
         )
+        if has_restricted_changes:
+            raise HTTPException(
+                status_code=400,
+                detail="No está permitido modificar montos o datos de facturas/gastos que forman parte de una reposición. Solo se puede cambiar la categoría o la descripción."
+            )
 
     # 2. Manejar edición según si es manual o formal con XML
     if invoice.is_manual:
@@ -795,6 +1020,11 @@ async def update_invoice(
 
     db.commit()
     db.refresh(invoice)
+    try:
+        sync_invoice_to_accounts(db, invoice)
+        db.commit()
+    except Exception as ex:
+        print(f"⚠️ Error al actualizar factura en cuentas: {ex}")
 
     log_action(
         db=db, user_id=current_user.id, username=current_user.username,
@@ -844,6 +1074,10 @@ async def delete_invoice(
     total = invoice.total
     desc = invoice.description
     db.delete(invoice)
+    try:
+        delete_invoice_transaction(db, id)
+    except Exception as ex:
+        print(f"⚠️ Error al eliminar movimiento de factura: {ex}")
     db.commit()
 
     log_action(
@@ -1061,6 +1295,12 @@ async def update_reimbursement_status(
 
     db.commit()
     db.refresh(reimbursement)
+    if new_status == ReimbursementStatus.PAGADO:
+        try:
+            sync_reimbursement_payment_to_accounts(db, reimbursement)
+            db.commit()
+        except Exception as ex:
+            print(f"⚠️ Error al registrar abono de reposición: {ex}")
 
     log_action(
         db=db, user_id=current_user.id, username=current_user.username,
@@ -1153,6 +1393,10 @@ async def delete_reimbursement(
 
     folio = reimbursement.folio
     db.delete(reimbursement)
+    try:
+        delete_reimbursement_transaction(db, id)
+    except Exception as ex:
+        print(f"⚠️ Error al eliminar movimiento de reposición: {ex}")
     db.commit()
 
     log_action(
@@ -1228,6 +1472,25 @@ async def create_cash_count(
     expected_balance = petty_cash_assigned - spent_pending
     difference = total_counted - expected_balance
 
+    # Obtener el desglose de facturas/gastos pendientes en este instante para guardarlo en el arqueo
+    pending_invoices = db.query(PettyCashInvoice).filter(
+        PettyCashInvoice.status != InvoiceStatus.REPUESTA
+    ).all()
+    invoices_list = []
+    for inv in pending_invoices:
+        invoices_list.append({
+            "id": inv.id,
+            "fecha_emision": inv.fecha_emision.isoformat() if inv.fecha_emision else None,
+            "folio": inv.folio,
+            "emisor_nombre": inv.emisor_nombre,
+            "emisor_rfc": inv.emisor_rfc,
+            "total": inv.total,
+            "category_name": inv.category.name if inv.category else None,
+            "category_icon": inv.category.icon if inv.category else None,
+            "description": inv.description,
+            "is_manual": inv.is_manual
+        })
+
     count = PettyCashCount(
         bills_1000=data.bills_1000,
         bills_500=data.bills_500,
@@ -1243,6 +1506,7 @@ async def create_cash_count(
         expected_balance=expected_balance,
         difference=difference,
         notes=data.notes,
+        invoices_details=invoices_list,
         counted_by_id=current_user.id
     )
 
@@ -1354,6 +1618,13 @@ async def get_petty_cash_summary(
     count_pending = db.query(PettyCashInvoice).filter(PettyCashInvoice.status == InvoiceStatus.PENDIENTE).count()
     amount_pending = db.query(func.sum(PettyCashInvoice.total)).filter(PettyCashInvoice.status == InvoiceStatus.PENDIENTE).scalar() or 0.0
 
+    active_reimbursements_count = db.query(PettyCashReimbursement).filter(
+        PettyCashReimbursement.status != ReimbursementStatus.PAGADO
+    ).count()
+    active_reimbursements_amount = db.query(func.sum(PettyCashReimbursement.total_amount)).filter(
+        PettyCashReimbursement.status != ReimbursementStatus.PAGADO
+    ).scalar() or 0.0
+
     # Generar historial diario desde enero al mes presente del año en curso
     from datetime import timedelta
     today = datetime.now().date()
@@ -1456,6 +1727,8 @@ async def get_petty_cash_summary(
         "recent_counts": recent_counts_resp,
         "invoices_pending_count": count_pending,
         "invoices_pending_amount": float(amount_pending),
+        "active_reimbursements_count": active_reimbursements_count,
+        "active_reimbursements_amount": float(active_reimbursements_amount),
         "daily_history": daily_history,
         "monthly_category_expenses": monthly_category_expenses
     }

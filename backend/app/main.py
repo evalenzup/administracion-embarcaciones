@@ -12,7 +12,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 from app.database import engine, Base, SessionLocal
 from app.routers import auth, users, roles, vessels, audit, documents, maintenance, inventory, logbooks, cruises, personnel, equipment
-from app.routers import cruise_participants, participant_profiles, vessel_requests, ports, fuel_logs, vessel_rates, cruise_billings, petty_cash
+from app.routers import cruise_participants, participant_profiles, vessel_requests, ports, fuel_logs, vessel_rates, cruise_billings, petty_cash, accounts, services, providers, projects
+
 
 # Importar modelos para que SQLAlchemy los registre
 import app.models  # noqa: F401
@@ -36,6 +37,7 @@ async def lifespan(app: FastAPI):
     os.makedirs("uploads/petty_cash/xml", exist_ok=True)
     os.makedirs("uploads/petty_cash/pdf", exist_ok=True)
     os.makedirs("uploads/petty_cash/scans", exist_ok=True)
+    os.makedirs("uploads/services", exist_ok=True)
 
     # Ejecutar seed
     from app.services.seed import seed_database
@@ -95,6 +97,10 @@ app.include_router(vessel_requests.router)
 app.include_router(vessel_rates.router)
 app.include_router(cruise_billings.router)
 app.include_router(petty_cash.router)
+app.include_router(accounts.router)
+app.include_router(services.router)
+app.include_router(providers.router)
+app.include_router(projects.router)
 app.include_router(audit.router)
 
 

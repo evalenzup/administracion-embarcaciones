@@ -35,6 +35,11 @@ class ChangePasswordRequest(BaseModel):
 
 # ── User schemas ──────────────────────────────────────────────
 
+class UserResetPassword(BaseModel):
+    """Solicitud de reseteo de contraseña por administrador."""
+    password: str = Field(..., min_length=6)
+
+
 class UserCreate(BaseModel):
     """Crear un nuevo usuario."""
     username: str = Field(..., min_length=2, max_length=50)

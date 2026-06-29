@@ -12,7 +12,7 @@ from app.models.user import User, UserRole
 from app.models.role import Role
 from app.models.personnel import Personnel
 from app.models.participant_profile import ParticipantProfile
-from app.schemas.user import UserCreate, UserUpdate, UserResponse, UserList
+from app.schemas.user import UserCreate, UserUpdate, UserResponse, UserList, UserResetPassword
 from app.utils.security import hash_password
 
 router = APIRouter(prefix="/api/v1/users", tags=["Usuarios"])
@@ -271,3 +271,22 @@ async def delete_user(
     db.commit()
 
     return {"message": "Usuario eliminado correctamente"}
+
+
+@router.post("/{user_id}/reset-password")
+async def reset_user_password(
+    user_id: int,
+    data: UserResetPassword,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("users", "edit")),
+):
+    """Restablecer la contraseña de un usuario (admin)."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    user.hashed_password = hash_password(data.password)
+    db.commit()
+
+    return {"message": "Contraseña restablecida correctamente"}
+

@@ -194,3 +194,9 @@ class CruiseBillingSummary(BaseModel):
 class CruiseBillingStats(BaseModel):
     summary: CruiseBillingSummary
     monthly_billing: list[dict] # {month: str, total_mxn: float, total_usd: float}
+
+
+class CruiseBillingBatchTransfer(BaseModel):
+    billing_ids: list[int]
+    payment_reference: str = Field(..., max_length=200)
+    transfer_date: date

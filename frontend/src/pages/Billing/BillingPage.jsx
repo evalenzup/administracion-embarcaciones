@@ -8,7 +8,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Table, Button, Modal, Form, Input, InputNumber, Select, DatePicker,
   Space, Tag, Card, Row, Col, Statistic, message, Tooltip, Popconfirm,
-  Typography, Divider, Empty, Upload, Tabs, Switch
+  Typography, Divider, Empty, Upload, Tabs, Switch, Alert
 } from 'antd';
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined,
@@ -20,7 +20,7 @@ import dayjs from 'dayjs';
 import apiClient from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 
-const { Title, Text } = Typography;
+const { Title, Text, Paragraph } = Typography;
 const { Option } = Select;
 const { RangePicker } = DatePicker;
 const { TextArea } = Input;
@@ -77,6 +77,14 @@ export default function BillingPage() {
   // Detalle visual
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [selectedBilling, setSelectedBilling] = useState(null);
+
+  // Transferencia Consolidada
+  const [batchTransferModalOpen, setBatchTransferModalOpen] = useState(false);
+  const [eligibleBillings, setEligibleBillings] = useState([]);
+  const [selectedBillingIds, setSelectedBillingIds] = useState([]);
+  const [batchFolio, setBatchFolio] = useState('');
+  const [batchDate, setBatchDate] = useState(dayjs());
+  const [savingBatch, setSavingBatch] = useState(false);
 
   const canCreate = hasPermission('billing', 'create');
   const canEdit = hasPermission('billing', 'edit');
@@ -228,6 +236,62 @@ export default function BillingPage() {
     fetchStats();
   };
 
+  const handleOpenBatchTransfer = async () => {
+    setLoading(true);
+    try {
+      const [resPorCobrar, resCobrado] = await Promise.all([
+        apiClient.get('/cruise-billings', { params: { status: 'por_cobrar', limit: 100 } }),
+        apiClient.get('/cruise-billings', { params: { status: 'cobrado', limit: 100 } })
+      ]);
+      const pending = [
+        ...(resPorCobrar.data.items || []),
+        ...(resCobrado.data.items || [])
+      ];
+      setEligibleBillings(pending);
+      setSelectedBillingIds([]);
+      setBatchFolio('');
+      setBatchDate(dayjs());
+      setBatchTransferModalOpen(true);
+    } catch {
+      message.error('Error al obtener cobros pendientes para transferencia');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleProcessBatchTransfer = async () => {
+    if (!batchFolio.trim()) {
+      message.error('Por favor ingrese el folio o referencia de la transferencia');
+      return;
+    }
+    if (!batchDate) {
+      message.error('Por favor seleccione la fecha de transferencia');
+      return;
+    }
+    if (selectedBillingIds.length === 0) {
+      message.error('Debe seleccionar al menos un cobro');
+      return;
+    }
+
+    setSavingBatch(true);
+    try {
+      await apiClient.post('/cruise-billings/batch-transfer', {
+        billing_ids: selectedBillingIds,
+        payment_reference: batchFolio,
+        transfer_date: batchDate.format('YYYY-MM-DD')
+      });
+      message.success('Transferencia masiva registrada con éxito');
+      setBatchTransferModalOpen(false);
+      fetchBillings();
+      fetchStats();
+    } catch (err) {
+      const errorMsg = err.response?.data?.detail || 'Error al procesar la transferencia masiva';
+      message.error(errorMsg);
+    } finally {
+      setSavingBatch(false);
+    }
+  };
+
   // ── Columnas de la tabla principal ─────────────────────────
   const columns = [
     {
@@ -239,12 +303,14 @@ export default function BillingPage() {
           {cruise.cruise_number && <Text type="secondary" style={{ fontSize: 11 }}>{cruise.cruise_number}</Text>}
         </div>
       ) : <Text type="secondary">—</Text>,
+      sorter: (a, b) => (a.cruise?.name || '').localeCompare(b.cruise?.name || ''),
     },
     {
       title: 'Embarcación',
       dataIndex: ['cruise', 'vessel', 'name'],
       width: 140,
       render: (name) => <Tag color="blue" style={{ fontWeight: 500 }}>{name || '—'}</Tag>,
+      sorter: (a, b) => (a.cruise?.vessel?.name || '').localeCompare(b.cruise?.vessel?.name || ''),
     },
     {
       title: 'Proyecto / Solicitante',
@@ -258,6 +324,7 @@ export default function BillingPage() {
           </Text>
         </div>
       ),
+      sorter: (a, b) => (a.billing_entity || '').localeCompare(b.billing_entity || ''),
     },
     {
       title: 'Monto Total',
@@ -276,6 +343,8 @@ export default function BillingPage() {
           )}
         </div>
       ),
+      sorter: (a, b) => (a.total || 0) - (b.total || 0),
+      defaultSortOrder: 'descend',
     },
     {
       title: 'Estado',
@@ -285,6 +354,7 @@ export default function BillingPage() {
         const conf = STATUS_CONFIG[status] || { color: 'default', text: status };
         return <Tag color={conf.color} icon={conf.icon} style={{ fontWeight: 600 }}>{conf.text}</Tag>;
       },
+      sorter: (a, b) => (a.status || '').localeCompare(b.status || ''),
     },
     {
       title: 'Documentos',
@@ -682,6 +752,14 @@ export default function BillingPage() {
               >
                 Refrescar
               </Button>
+              {canEdit && (
+                <Button
+                  icon={<SyncOutlined />}
+                  onClick={handleOpenBatchTransfer}
+                >
+                  Registrar Transferencia Consolidada
+                </Button>
+              )}
               {canCreate && (
                 <Button
                   type="primary"
@@ -747,6 +825,144 @@ export default function BillingPage() {
         onClose={() => setRateModalOpen(false)}
         onSaved={handleRateSaved}
       />
+
+      {/* Modal: Registrar Transferencia Consolidada */}
+      <Modal
+        title={<strong>Registrar Transferencia Consolidada (DEO)</strong>}
+        open={batchTransferModalOpen}
+        onCancel={() => setBatchTransferModalOpen(false)}
+        footer={null}
+        width={900}
+        destroyOnClose
+      >
+        <Paragraph>
+          Seleccione los cobros de cruceros que forman parte de la transferencia bancaria recibida. Al confirmar, todos los cobros seleccionados se marcarán como <strong>Transferido</strong> y se registrará automáticamente su abono en la cuenta de Recursos Autogenerados (624602).
+        </Paragraph>
+
+        {eligibleBillings.length === 0 ? (
+          <Alert
+            message="No hay cobros pendientes de transferir"
+            description="Todos los cobros de cruceros registrados ya se encuentran en estado 'Transferido'."
+            type="info"
+            showIcon
+            style={{ marginBottom: 20 }}
+          />
+        ) : (
+          <div>
+            <Row gutter={16} style={{ marginBottom: 16 }}>
+              <Col span={12}>
+                <Form layout="vertical">
+                  <Form.Item label={<strong>Folio / Referencia de Transferencia</strong>} required>
+                    <Input
+                      placeholder="Ej. TR-991823"
+                      value={batchFolio}
+                      onChange={(e) => setBatchFolio(e.target.value)}
+                    />
+                  </Form.Item>
+                </Form>
+              </Col>
+              <Col span={12}>
+                <Form layout="vertical">
+                  <Form.Item label={<strong>Fecha de Transferencia</strong>} required>
+                    <DatePicker
+                      format="DD/MM/YYYY"
+                      style={{ width: '100%' }}
+                      value={batchDate}
+                      onChange={setBatchDate}
+                    />
+                  </Form.Item>
+                </Form>
+              </Col>
+            </Row>
+
+            <div style={{ maxHeight: 250, overflowY: 'auto', marginBottom: 16, border: '1px solid #f0f0f0', borderRadius: 8 }}>
+              <Table
+                dataSource={eligibleBillings}
+                rowKey="id"
+                pagination={false}
+                size="small"
+                rowSelection={{
+                  selectedRowKeys: selectedBillingIds,
+                  onChange: setSelectedBillingIds
+                }}
+                columns={[
+                  { 
+                    title: 'Crucero', 
+                    render: (_, rec) => (
+                      <Text strong>{rec.cruise?.name || `ID: ${rec.cruise_id}`}</Text>
+                    ) 
+                  },
+                  { 
+                    title: 'Proyecto / Razón Social', 
+                    dataIndex: 'billing_entity', 
+                    render: (text) => text || 'N/A',
+                    ellipsis: true 
+                  },
+                  { 
+                    title: 'Contacto', 
+                    dataIndex: 'billing_contact', 
+                    render: (text) => text || 'N/A',
+                    ellipsis: true 
+                  },
+                  { 
+                    title: 'Estado Actual', 
+                    dataIndex: 'status', 
+                    render: (st) => {
+                      const conf = STATUS_CONFIG[st] || { color: 'default', text: st };
+                      return <Tag color={conf.color}>{conf.text}</Tag>;
+                    } 
+                  },
+                  { 
+                    title: 'Total', 
+                    dataIndex: 'total', 
+                    align: 'right', 
+                    render: (val, rec) => (
+                      <strong>
+                        {new Intl.NumberFormat('es-MX', { style: 'currency', currency: rec.currency || 'MXN' }).format(val)}
+                      </strong>
+                    ) 
+                  }
+                ]}
+              />
+            </div>
+
+            <Row gutter={16} style={{ marginBottom: 20 }}>
+              <Col span={12}>
+                <Card size="small" style={{ background: '#fafafa' }}>
+                  <div>Cobros Seleccionados: <strong>{selectedBillingIds.length}</strong></div>
+                </Card>
+              </Col>
+              <Col span={12}>
+                <Card size="small" style={{ background: '#fafafa' }}>
+                  <div>Monto Consolidado Transferido:</div>
+                  <Title level={4} style={{ margin: '4px 0', color: '#52c41a' }}>
+                    {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(
+                      eligibleBillings
+                        .filter(b => selectedBillingIds.includes(b.id))
+                        .reduce((sum, b) => sum + (b.total * (b.exchange_rate || 1.0)), 0)
+                    )} MXN
+                  </Title>
+                </Card>
+              </Col>
+            </Row>
+
+            <div style={{ textAlign: 'right' }}>
+              <Space>
+                <Button onClick={() => setBatchTransferModalOpen(false)}>Cancelar</Button>
+                <Button 
+                  type="primary" 
+                  onClick={handleProcessBatchTransfer}
+                  loading={savingBatch}
+                  disabled={selectedBillingIds.length === 0 || !batchFolio.trim()}
+                  style={{ borderRadius: 6 }}
+                >
+                  Registrar Transferencia
+                </Button>
+              </Space>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
@@ -955,7 +1171,6 @@ export function BillingFormModal({ open, billing, cruises, vessels, onClose, onS
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
-      setSaving(true);
 
       const payload = {
         ...values,
@@ -963,69 +1178,95 @@ export function BillingFormModal({ open, billing, cruises, vessels, onClose, onS
         transfer_date: values.transfer_date ? values.transfer_date.format('YYYY-MM-DD') : null,
       };
 
-      let billingId = null;
+      const isStatusChangingToTransfer = 
+        values.status === 'transferido' && (!billing || billing.status !== 'transferido');
 
-      if (billing) {
-        // Editar
-        await apiClient.put(`/cruise-billings/${billing.id}`, payload);
-        billingId = billing.id;
-        message.success('Información financiera actualizada');
-      } else {
-        // Crear
-        const res = await apiClient.post('/cruise-billings', payload);
-        billingId = res.data.id;
-        message.success('Cobro registrado exitosamente');
-      }
+      const executeSave = async () => {
+        setSaving(true);
+        try {
+          let billingId = null;
 
-      // Subir recibo si hay
-      if (receiptFileList.length > 0 && billingId) {
-        const formData = new FormData();
-        const fileObj = receiptFileList[0].originFileObj || receiptFileList[0];
-        formData.append('file', fileObj);
-        await apiClient.post(`/cruise-billings/${billingId}/upload-receipt`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
-        message.success('Recibo subido correctamente');
-      }
+          if (billing) {
+            // Editar
+            await apiClient.put(`/cruise-billings/${billing.id}`, payload);
+            billingId = billing.id;
+            message.success('Información financiera actualizada');
+          } else {
+            // Crear
+            const res = await apiClient.post('/cruise-billings', payload);
+            billingId = res.data.id;
+            message.success('Cobro registrado exitosamente');
+          }
 
-      // Subir orden de embarcación si hay
-      if (vesselOrderFileList.length > 0 && billingId) {
-        const formData = new FormData();
-        const fileObj = vesselOrderFileList[0].originFileObj || vesselOrderFileList[0];
-        formData.append('file', fileObj);
-        await apiClient.post(`/cruise-billings/${billingId}/upload-vessel-order`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
-        message.success('Orden de Embarcación subida correctamente');
-      }
+          // Subir recibo si hay
+          if (receiptFileList.length > 0 && billingId) {
+            const formData = new FormData();
+            const fileObj = receiptFileList[0].originFileObj || receiptFileList[0];
+            formData.append('file', fileObj);
+            await apiClient.post(`/cruise-billings/${billingId}/upload-receipt`, formData, {
+              headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            message.success('Recibo subido correctamente');
+          }
 
-      // Subir orden de embarcación firmada si hay
-      if (signedOrderFileList.length > 0 && billingId) {
-        const formData = new FormData();
-        const fileObj = signedOrderFileList[0].originFileObj || signedOrderFileList[0];
-        formData.append('file', fileObj);
-        await apiClient.post(`/cruise-billings/${billingId}/upload-signed-vessel-order`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
-        message.success('Orden de Embarcación Firmada subida correctamente');
-      }
+          // Subir orden de embarcación si hay
+          if (vesselOrderFileList.length > 0 && billingId) {
+            const formData = new FormData();
+            const fileObj = vesselOrderFileList[0].originFileObj || vesselOrderFileList[0];
+            formData.append('file', fileObj);
+            await apiClient.post(`/cruise-billings/${billingId}/upload-vessel-order`, formData, {
+              headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            message.success('Orden de Embarcación subida correctamente');
+          }
 
-      onClose();
-      onSaved();
-    } catch (error) {
-      let errorMsg = 'Error al guardar la información financiera';
-      if (error.response?.data?.detail) {
-        if (typeof error.response.data.detail === 'string') {
-          errorMsg = error.response.data.detail;
-        } else if (Array.isArray(error.response.data.detail)) {
-          errorMsg = error.response.data.detail.map(d => `${d.loc.join('.')}: ${d.msg}`).join(', ');
-        } else {
-          errorMsg = JSON.stringify(error.response.data.detail);
+          // Subir orden de embarcación firmada si hay
+          if (signedOrderFileList.length > 0 && billingId) {
+            const formData = new FormData();
+            const fileObj = signedOrderFileList[0].originFileObj || signedOrderFileList[0];
+            formData.append('file', fileObj);
+            await apiClient.post(`/cruise-billings/${billingId}/upload-signed-vessel-order`, formData, {
+              headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            message.success('Orden de Embarcación Firmada subida correctamente');
+          }
+
+          onClose();
+          onSaved();
+        } catch (error) {
+          let errorMsg = 'Error al guardar la información financiera';
+          if (error.response?.data?.detail) {
+            if (typeof error.response.data.detail === 'string') {
+              errorMsg = error.response.data.detail;
+            } else if (Array.isArray(error.response.data.detail)) {
+              errorMsg = error.response.data.detail.map(d => `${d.loc.join('.')}: ${d.msg}`).join(', ');
+            } else {
+              errorMsg = JSON.stringify(error.response.data.detail);
+            }
+          }
+          message.error(errorMsg);
+        } finally {
+          setSaving(false);
         }
+      };
+
+      if (isStatusChangingToTransfer) {
+        Modal.confirm({
+          title: 'Confirmar Transferencia Bancaria',
+          content: 'Al cambiar el estado a "Transferido (Cuenta DEO)", se registrará automáticamente el abono correspondiente en la cuenta de Recursos Autogenerados (624602). ¿Desea proceder con este cambio?',
+          okText: 'Confirmar y registrar',
+          cancelText: 'Cancelar',
+          okButtonProps: { style: { backgroundColor: '#0A2647' } },
+          onOk: () => {
+            executeSave();
+          }
+        });
+      } else {
+        executeSave();
       }
-      message.error(errorMsg);
-    } finally {
-      setSaving(false);
+
+    } catch (error) {
+      // Form validation error, handled by Ant Design
     }
   };
 

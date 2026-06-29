@@ -96,7 +96,28 @@ PERMISSIONS = [
     ("petty_cash", "create", "Crear en fondo fijo"),
     ("petty_cash", "edit",   "Editar en fondo fijo"),
     ("petty_cash", "delete", "Eliminar en fondo fijo"),
+    # Estados de Cuenta y Movimientos
+    ("accounts", "view",   "Ver estados de cuenta y saldos"),
+    ("accounts", "create", "Registrar cargos o abonos manuales"),
+    ("accounts", "edit",   "Editar cuentas o transacciones"),
+    ("accounts", "delete", "Eliminar transacciones o cuentas"),
+    # Solicitudes de Servicios (Finanzas)
+    ("services", "view",   "Ver solicitudes de servicios"),
+    ("services", "create", "Crear solicitudes de servicios"),
+    ("services", "edit",   "Editar solicitudes de servicios"),
+    ("services", "delete", "Eliminar solicitudes de servicios"),
+    # Catálogo de Proveedores (Finanzas)
+    ("providers", "view",   "Ver catálogo de proveedores"),
+    ("providers", "create", "Crear proveedores manualmente"),
+    ("providers", "edit",   "Editar datos de proveedores"),
+    ("providers", "delete", "Eliminar proveedores del catálogo"),
+    # Proyectos
+    ("projects", "view",   "Ver proyectos"),
+    ("projects", "create", "Crear proyectos"),
+    ("projects", "edit",   "Editar proyectos"),
+    ("projects", "delete", "Eliminar proyectos"),
 ]
+
 
 # ── Definición de roles con sus permisos ──
 ROLES = {
@@ -120,6 +141,7 @@ ROLES = {
             "ports:view",
             "fuel_logs:view", "fuel_logs:create", "fuel_logs:edit",
             "billing:view", "billing:create", "billing:edit",
+            "projects:view", "projects:create", "projects:edit", "projects:delete",
         ],
     },
     "Jefe de Máquinas": {
@@ -137,6 +159,7 @@ ROLES = {
             "ports:view",
             "fuel_logs:view", "fuel_logs:create", "fuel_logs:edit", "fuel_logs:delete",
             "billing:view",
+            "projects:view",
         ],
     },
     "Operador": {
@@ -155,6 +178,7 @@ ROLES = {
             "ports:view",
             "fuel_logs:view", "fuel_logs:create",
             "billing:view",
+            "projects:view", "projects:create", "projects:edit", "projects:delete",
         ],
     },
     "Consulta": {
@@ -173,6 +197,7 @@ ROLES = {
             "ports:view",
             "fuel_logs:view",
             "billing:view",
+            "projects:view",
         ],
     },
     "Investigador": {
@@ -185,6 +210,7 @@ ROLES = {
             "ports:view",
             "fuel_logs:view",
             "billing:view",
+            "projects:view",
         ],
     },
 }
@@ -374,5 +400,192 @@ def seed_database(db: Session) -> None:
         print("  -> Creado ajuste de caja chica inicial de $80,000.00 MXN")
     db.flush()
 
+    # ── 8. Sincronizar cuentas y transacciones de caja chica ──
+    try:
+        sync_petty_cash_to_accounts(db)
+    except Exception as ex:
+        print(f"⚠️ Error al sincronizar caja chica con cuentas: {ex}")
+        db.rollback()
+
+    # ── 9. Crear proyectos por defecto si no existen ──
+    try:
+        from app.models.project import Project
+        existing_projects = {p.account_number for p in db.query(Project).all()}
+        
+        default_projects = [
+            ("624602", "Recursos Autogenerados DEO", "Dr. Emmanuel Valenzuela", "Embarcaciones Oceanográficas", "Oceanología"),
+            ("D1A313", "Mantenimiento y Operación del B/O Alpha Helix", "M. en C. Ernesto Valenzuela", "Embarcaciones Oceanográficas", "Oceanología"),
+            ("624108", "Presupuesto Institucional DEO", "Dr. Emmanuel Valenzuela", "Embarcaciones Oceanográficas", "Oceanología"),
+            ("O37072", "Fortalecimiento de la Infraestructura Oceanográfica de la DEO", "M. en C. Ernesto Valenzuela", "Embarcaciones Oceanográficas", "Oceanología"),
+            ("SECIHTI-2025", "Estudio de las corrientes en el Golfo de California", "Dra. Laura Gómez", "Oceanografía Física", "Oceanología"),
+            ("CONAHCYT-8472", "Monitoreo Biológico del Pacífico Mexicano", "Dr. Alejandro Flores", "Ecología Marina", "Oceanología"),
+        ]
+        for account, name, responsible, dept, div in default_projects:
+            if account not in existing_projects:
+                proj = Project(
+                    account_number=account,
+                    name=name,
+                    responsible_name=responsible,
+                    department=dept,
+                    division=div,
+                    is_active=True
+                )
+                db.add(proj)
+                print(f"  -> Creado proyecto de prueba: {account} - {name}")
+        db.flush()
+    except Exception as ex:
+        print(f"⚠️ Error al crear proyectos de prueba: {ex}")
+        db.rollback()
+
     db.commit()
     print(f"✅ Sincronización de seed completada.")
+
+
+def sync_petty_cash_to_accounts(db: Session) -> None:
+    """Sincroniza retroactivamente los datos de caja chica y crea cuentas iniciales."""
+    from sqlalchemy import func
+    from app.models.account import Account, AccountTransaction, TransactionType
+    from app.models.petty_cash_invoice import PettyCashInvoice, InvoiceStatus
+    from app.models.petty_cash_reimbursement import PettyCashReimbursement, ReimbursementStatus
+    from app.models.finance_setting import FinanceSetting
+
+    print("🌱 Sincronizando Caja Chica con Estados de Cuenta...")
+
+    # 1. Crear cuentas iniciales si no existen
+    ff_account = db.query(Account).filter(Account.name == "Fondo Fijo (Caja Chica)").first()
+    if not ff_account:
+        ff_account = Account(
+            name="Fondo Fijo (Caja Chica)",
+            description="Fondo institucional de caja chica para gastos menores de embarcaciones de la DEO.",
+            account_number="FF-DEO-01",
+            is_active=True
+        )
+        db.add(ff_account)
+        db.flush()
+        print("  -> Creada cuenta: Fondo Fijo (Caja Chica)")
+
+    ra_account = db.query(Account).filter(Account.account_number == "624602").first()
+    if not ra_account:
+        ra_account = Account(
+            name="Recursos autogenerados del Departamento de embarcaciones oceanográficas",
+            description="Cuenta de control para recursos autogenerados (Proyecto D1A313).",
+            account_number="624602",
+            is_active=True
+        )
+        db.add(ra_account)
+        print("  -> Creada cuenta: 624602 (Recursos autogenerados)")
+
+    de_account = db.query(Account).filter(Account.account_number == "624108").first()
+    if not de_account:
+        de_account = Account(
+            name="Departamento de embarcaciones oceanográficas",
+            description="Cuenta de control para el presupuesto institucional del departamento (Proyecto O37072).",
+            account_number="624108",
+            is_active=True
+        )
+        db.add(de_account)
+        print("  -> Creada cuenta: 624108 (Departamento de embarcaciones)")
+    
+    db.flush()
+
+    # 2. Asegurar el Abono de Saldo Inicial en Fondo Fijo
+    initial_tx = db.query(AccountTransaction).filter(
+        AccountTransaction.account_id == ff_account.id,
+        AccountTransaction.concept.ilike("%Saldo Inicial%")
+    ).first()
+    if not initial_tx:
+        pc_setting = db.query(FinanceSetting).filter(FinanceSetting.key == "petty_cash_assigned").first()
+        initial_amount = float(pc_setting.value) if pc_setting else 80000.00
+        
+        initial_tx = AccountTransaction(
+            account_id=ff_account.id,
+            type=TransactionType.ABONO,
+            amount=initial_amount,
+            concept="Saldo Inicial / Apertura de Fondo Fijo",
+            description="Asignación inicial del fondo de caja chica establecido por la institución.",
+            reference="Apertura",
+            transaction_date=ff_account.created_at or func.now()
+        )
+        db.add(initial_tx)
+        db.flush()
+        print(f"  -> Creado saldo inicial de ${initial_amount} MXN en Fondo Fijo")
+
+    # 3. Sincronizar Invoices existentes (cargos)
+    existing_invoices = db.query(PettyCashInvoice).all()
+    invoices_synced = 0
+    for inv in existing_invoices:
+        inv_tx = db.query(AccountTransaction).filter(
+            AccountTransaction.petty_cash_invoice_id == inv.id
+        ).first()
+        if not inv_tx:
+            inv_tx = AccountTransaction(
+                account_id=ff_account.id,
+                type=TransactionType.CARGO,
+                amount=inv.total,
+                concept=f"Gasto: {inv.emisor_nombre}",
+                description=inv.description,
+                reference=inv.folio or (inv.uuid[:8] if inv.uuid else f"MAN-{inv.id}"),
+                transaction_date=inv.fecha_emision or inv.created_at,
+                petty_cash_invoice_id=inv.id,
+                created_by_id=inv.registered_by_id
+            )
+            db.add(inv_tx)
+            invoices_synced += 1
+    
+    if invoices_synced > 0:
+        print(f"  -> Sincronizados {invoices_synced} gastos de caja chica como cargos.")
+
+    # 4. Sincronizar Reimbursements PAGADOS existentes (abonos en Fondo Fijo, cargos en 624602)
+    existing_reimbursements = db.query(PettyCashReimbursement).filter(
+        PettyCashReimbursement.status == ReimbursementStatus.PAGADO
+    ).all()
+    reimb_synced = 0
+    for reimb in existing_reimbursements:
+        reimb_tx = db.query(AccountTransaction).filter(
+            AccountTransaction.petty_cash_reimbursement_id == reimb.id,
+            AccountTransaction.account_id == ff_account.id
+        ).first()
+        
+        linked_tx = db.query(AccountTransaction).filter(
+            AccountTransaction.petty_cash_reimbursement_id == reimb.id,
+            AccountTransaction.account_id == ra_account.id
+        ).first()
+
+        if not reimb_tx:
+            reimb_tx = AccountTransaction(
+                account_id=ff_account.id,
+                type=TransactionType.ABONO,
+                amount=reimb.total_amount,
+                concept=f"Reposición de Fondo Fijo: {reimb.folio}",
+                description=f"Reembolso de efectivo aprobado por contabilidad conteniendo {reimb.invoice_count} comprobantes.",
+                reference=reimb.folio,
+                transaction_date=reimb.paid_date or reimb.created_at,
+                petty_cash_reimbursement_id=reimb.id,
+                created_by_id=reimb.created_by_id
+            )
+            db.add(reimb_tx)
+            db.flush()
+            
+            linked_tx = AccountTransaction(
+                account_id=ra_account.id,
+                type=TransactionType.CARGO,
+                amount=reimb.total_amount,
+                concept=f"Reposición de Fondo Fijo: {reimb.folio}",
+                description=f"Fondo asignado para la reposición de la caja chica descontado de esta cuenta.",
+                reference=reimb.folio,
+                transaction_date=reimb.paid_date or reimb.created_at,
+                petty_cash_reimbursement_id=reimb.id,
+                transfer_transaction_id=reimb_tx.id,
+                created_by_id=reimb.created_by_id
+            )
+            db.add(linked_tx)
+            db.flush()
+            
+            reimb_tx.transfer_transaction_id = linked_tx.id
+            reimb_synced += 1
+            
+    if reimb_synced > 0:
+        print(f"  -> Sincronizadas {reimb_synced} reposiciones pagadas como abonos de Caja Chica y cargos de cuenta 624602.")
+
+    db.flush()
+

@@ -27,6 +27,8 @@ function VesselRequestsPage() {
   const [pagination, setPagination] = useState({ current: 1, pageSize: 15 });
   const [filterVessel, setFilterVessel] = useState(null);
   const [filterStatus, setFilterStatus] = useState(null);
+  const [projectsList, setProjectsList] = useState([]);
+  const [showCustomProjectInput, setShowCustomProjectInput] = useState(false);
   
   // Modals / Drawers State
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -52,6 +54,15 @@ function VesselRequestsPage() {
     }
   }, []);
 
+  const fetchProjects = useCallback(async () => {
+    try {
+      const res = await apiClient.get('/projects', { params: { active_only: true } });
+      setProjectsList(res.data);
+    } catch {
+      message.error('Error al cargar proyectos');
+    }
+  }, []);
+
   const fetchRequests = useCallback(async () => {
     setLoading(true);
     try {
@@ -72,7 +83,8 @@ function VesselRequestsPage() {
 
   useEffect(() => {
     fetchVessels();
-  }, [fetchVessels]);
+    fetchProjects();
+  }, [fetchVessels, fetchProjects]);
 
   useEffect(() => {
     fetchRequests();
@@ -81,8 +93,10 @@ function VesselRequestsPage() {
   const openCreate = () => {
     setEditingRequest(null);
     form.resetFields();
+    setShowCustomProjectInput(false);
     form.setFieldsValue({
       scientific_leader: user?.full_name || '',
+      cruise_responsible: '',
       scientists_count: 5
     });
     setDrawerOpen(true);
@@ -91,10 +105,14 @@ function VesselRequestsPage() {
   const openEdit = (req) => {
     setEditingRequest(req);
     form.resetFields();
+    const isCustomProject = !req.project_id && req.project_name;
+    setShowCustomProjectInput(isCustomProject);
     form.setFieldsValue({
       vessel_id: req.vessel_id,
+      project_id: req.project_id || (req.project_name ? 'otro' : undefined),
       project_name: req.project_name,
       scientific_leader: req.scientific_leader,
+      cruise_responsible: req.cruise_responsible || '',
       scientists_count: req.scientists_count,
       objective: req.objective,
       study_area: req.study_area,
@@ -114,11 +132,23 @@ function VesselRequestsPage() {
       }
 
       const [start, end] = values.dates;
+
+      let pId = null;
+      let pName = '';
+      if (values.project_id && values.project_id !== 'otro') {
+        pId = values.project_id;
+        const matchedProj = projectsList.find(p => p.id === pId);
+        pName = matchedProj ? matchedProj.name : '';
+      } else {
+        pName = values.project_name || '';
+      }
       
       const payload = {
         vessel_id: values.vessel_id,
-        project_name: values.project_name,
+        project_id: pId,
+        project_name: pName,
         scientific_leader: values.scientific_leader,
+        cruise_responsible: values.cruise_responsible,
         scientists_count: values.scientists_count,
         objective: values.objective,
         study_area: values.study_area,
@@ -186,19 +216,27 @@ function VesselRequestsPage() {
       render: (_, r) => (
         <div>
           <Text strong style={{ fontSize: 13 }}>{r.project_name}</Text>
+          {r.project && (
+            <><br /><Text type="secondary" style={{ fontSize: 11 }}>💳 Cuenta: {r.project.account_number}</Text></>
+          )}
           <br />
           <Text type="secondary" style={{ fontSize: 11 }}>🧪 Líder: {r.scientific_leader}</Text>
+          {r.cruise_responsible && (
+            <><br /><Text type="secondary" style={{ fontSize: 11 }}>👤 Responsable: {r.cruise_responsible}</Text></>
+          )}
           {is_admin && (
             <><br /><Text type="secondary" style={{ fontSize: 10 }}>👤 Solicitante: {r.applicant?.full_name}</Text></>
           )}
         </div>
-      )
+      ),
+      sorter: (a, b) => (a.project_name || '').localeCompare(b.project_name || ''),
     },
     {
       title: 'Embarcación',
       key: 'vessel',
       render: (_, r) => <Text>{r.vessel?.name}</Text>,
-      width: 140
+      width: 140,
+      sorter: (a, b) => (a.vessel?.name || '').localeCompare(b.vessel?.name || ''),
     },
     {
       title: 'Fechas',
@@ -209,7 +247,9 @@ function VesselRequestsPage() {
           <div>📅 Regreso: {dayjs(r.return_date).format('DD/MM/YYYY')}</div>
         </div>
       ),
-      width: 180
+      width: 180,
+      sorter: (a, b) => dayjs(a.departure_date || 0).unix() - dayjs(b.departure_date || 0).unix(),
+      defaultSortOrder: 'descend',
     },
     {
       title: 'Estado',
@@ -218,7 +258,8 @@ function VesselRequestsPage() {
       render: (st) => {
         const v = STATUS_MAP[st] || STATUS_MAP.pendiente;
         return <Tag color={v.color}>{v.label}</Tag>;
-      }
+      },
+      sorter: (a, b) => (a.status || '').localeCompare(b.status || ''),
     },
     {
       title: 'Notas Administrador',
@@ -370,12 +411,56 @@ function VesselRequestsPage() {
             <Select placeholder="Seleccionar barco" options={vessels.map(v => ({ value: v.id, label: v.name }))} />
           </Form.Item>
 
-          <Form.Item name="project_name" label="Nombre del Proyecto / Campaña" rules={[{ required: true, message: 'El nombre es requerido' }]}>
-            <Input placeholder="ej. Muestreo de Fitoplancton Golfo de California" />
+          <Form.Item name="project_id" label="Proyecto de Investigación" rules={[{ required: true, message: 'Selecciona un proyecto del catálogo o captura manualmente' }]}>
+            <Select
+              showSearch
+              placeholder="Seleccionar proyecto del catálogo"
+              optionFilterProp="children"
+              onChange={(val) => {
+                setShowCustomProjectInput(val === 'otro');
+                if (val !== 'otro') {
+                  const matchedProj = projectsList.find(p => p.id === val);
+                  if (matchedProj) {
+                    form.setFieldsValue({ 
+                      project_name: matchedProj.name,
+                      scientific_leader: matchedProj.responsible_name,
+                      cruise_responsible: matchedProj.responsible_name
+                    });
+                  }
+                } else {
+                  form.setFieldsValue({ project_name: '', scientific_leader: user?.full_name || '', cruise_responsible: '' });
+                }
+              }}
+            >
+              <Select.OptGroup label="Catálogo de Proyectos">
+                {projectsList.map(p => (
+                  <Select.Option key={p.id} value={p.id}>
+                    {p.account_number} — {p.name} ({p.responsible_name})
+                  </Select.Option>
+                ))}
+              </Select.OptGroup>
+              <Select.OptGroup label="Alternativa">
+                <Select.Option value="otro">✍️ Otro (Capturar manualmente)</Select.Option>
+              </Select.OptGroup>
+            </Select>
           </Form.Item>
+
+          {showCustomProjectInput && (
+            <Form.Item 
+              name="project_name" 
+              label="Nombre del Proyecto / Campaña (Manual)" 
+              rules={[{ required: true, message: 'El nombre es requerido' }]}
+            >
+              <Input placeholder="ej. Muestreo de Fitoplancton Golfo de California" />
+            </Form.Item>
+          )}
 
           <Form.Item name="scientific_leader" label="Jefe de Crucero (Investigador Principal)" rules={[{ required: true, message: 'El líder es requerido' }]}>
             <Input placeholder="Nombre del investigador a cargo" />
+          </Form.Item>
+
+          <Form.Item name="cruise_responsible" label="Responsable del Crucero (No necesariamente se embarca)">
+            <Input placeholder="Nombre de la persona responsable del crucero (opcional)" />
           </Form.Item>
 
           <Form.Item name="dates" label="Rango de Fechas (Salida y Regreso)" rules={[{ required: true, message: 'Las fechas son requeridas' }]}>

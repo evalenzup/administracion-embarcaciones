@@ -28,6 +28,8 @@ import {
   DollarOutlined,
   HistoryOutlined,
   WalletOutlined,
+  BankOutlined,
+  AppstoreOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -96,6 +98,12 @@ const menuConfig = [
         label: 'Facturación y Cobros',
         permission: { module: 'billing', action: 'view' },
       },
+      {
+        key: '/projects',
+        icon: <AppstoreOutlined />,
+        label: 'Proyectos',
+        permission: { module: 'projects', action: 'view' },
+      },
     ]
   },
   {
@@ -103,10 +111,28 @@ const menuConfig = [
     label: 'Finanzas',
     children: [
       {
+        key: '/finance/accounts',
+        icon: <BankOutlined />,
+        label: 'Estados de Cuenta',
+        permission: { module: 'accounts', action: 'view' },
+      },
+      {
         key: '/finance/petty-cash',
         icon: <WalletOutlined />,
         label: 'Fondo Fijo',
         permission: { module: 'petty_cash', action: 'view' },
+      },
+      {
+        key: '/finance/services',
+        icon: <AppstoreOutlined />,
+        label: 'Servicios',
+        permission: { module: 'services', action: 'view' },
+      },
+      {
+        key: '/finance/providers',
+        icon: <TeamOutlined />,
+        label: 'Proveedores',
+        permission: { module: 'providers', action: 'view' },
       },
     ]
   },
@@ -234,7 +260,11 @@ const breadcrumbMap = {
   '/admin/audit': 'Actividad del Sistema',
   '/fuel-logs': 'Combustible',
   '/billing': 'Facturación y Cobros',
+  '/projects': 'Catálogo de Proyectos',
+  '/finance/accounts': 'Estados de Cuenta',
   '/finance/petty-cash': 'Fondo Fijo (Caja Chica)',
+  '/finance/services': 'Servicios',
+  '/finance/providers': 'Catálogo de Proveedores',
   '/help': 'Ayuda y Manuales',
 };
 

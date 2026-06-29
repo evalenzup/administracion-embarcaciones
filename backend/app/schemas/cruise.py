@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from app.models.cruise import CruiseStatus
 from app.schemas.cruise_crew import CruiseCrewResponse
 from app.schemas.port import PortResponse
+from app.schemas.project import ProjectResponse
 
 
 class WaypointCreate(BaseModel):
@@ -107,10 +108,12 @@ class CruisePlanCreate(BaseModel):
     fuel_consumed: float | None = None
     crew_count: int | None = None
     scientists_count: int | None = None
+    project_id: int | None = None
     project_name: str | None = Field(None, max_length=300)
     study_area: str | None = None
     disciplines: str | None = None
     funding_source: str | None = Field(None, max_length=300)
+    cruise_responsible: str | None = Field(None, max_length=200)
     notes: str | None = None
     waypoints: list[WaypointCreate] = []
 
@@ -132,10 +135,12 @@ class CruisePlanUpdate(BaseModel):
     fuel_consumed: float | None = None
     crew_count: int | None = None
     scientists_count: int | None = None
+    project_id: int | None = None
     project_name: str | None = Field(None, max_length=300)
     study_area: str | None = None
     disciplines: str | None = None
     funding_source: str | None = Field(None, max_length=300)
+    cruise_responsible: str | None = Field(None, max_length=200)
     notes: str | None = None
     trip_report: str | None = None
 
@@ -231,10 +236,13 @@ class CruisePlanResponse(BaseModel):
     fuel_consumed: float | None = None
     crew_count: int | None = None
     scientists_count: int | None = None
+    project_id: int | None = None
     project_name: str | None = None
+    project: ProjectResponse | None = None
     study_area: str | None = None
     disciplines: str | None = None
     funding_source: str | None = None
+    cruise_responsible: str | None = None
     notes: str | None = None
     duration_days: int | None = None
     vessel: VesselBasicCruise

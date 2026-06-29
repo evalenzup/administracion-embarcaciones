@@ -45,6 +45,7 @@ class CashCountResponse(BaseModel):
     expected_balance: float
     difference: float
     notes: str | None
+    invoices_details: list | None = None
     
     counted_by_id: int | None
     counted_by: UserBasicResponse | None = None

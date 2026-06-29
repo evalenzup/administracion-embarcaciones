@@ -71,6 +71,7 @@ class PettyCashInvoice(Base):
     reimbursement_id = Column(Integer, ForeignKey("petty_cash_reimbursements.id", ondelete="SET NULL"), nullable=True, index=True)
     
     # Trazabilidad de carga
+    provider_id = Column(Integer, ForeignKey("providers.id", ondelete="SET NULL"), nullable=True)
     registered_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -80,6 +81,7 @@ class PettyCashInvoice(Base):
     category = relationship("FinancialCategory", lazy="selectin")
     reimbursement = relationship("PettyCashReimbursement", back_populates="invoices", lazy="select")
     registered_by = relationship("User", lazy="selectin", foreign_keys=[registered_by_id])
+    provider = relationship("Provider", back_populates="petty_cash_invoices")
 
     def __repr__(self):
         return f"<PettyCashInvoice {self.uuid or 'MANUAL-' + str(self.id)} - Total: {self.total} ({self.status.value})>"

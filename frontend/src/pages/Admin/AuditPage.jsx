@@ -114,6 +114,8 @@ export default function AuditPage() {
       key: 'created_at',
       width: 170,
       render: (date) => dayjs(date).format('DD/MM/YYYY HH:mm:ss'),
+      sorter: (a, b) => dayjs(a.created_at || 0).unix() - dayjs(b.created_at || 0).unix(),
+      defaultSortOrder: 'descend',
     },
     {
       title: 'Usuario',
@@ -126,6 +128,7 @@ export default function AuditPage() {
           <Text strong>{user}</Text>
         </Space>
       ),
+      sorter: (a, b) => (a.username || '').localeCompare(b.username || ''),
     },
     {
       title: 'Acción',
@@ -140,6 +143,7 @@ export default function AuditPage() {
           </Tag>
         );
       },
+      sorter: (a, b) => (a.action || '').localeCompare(b.action || ''),
     },
     {
       title: 'Módulo',
@@ -147,6 +151,7 @@ export default function AuditPage() {
       key: 'module',
       width: 160,
       render: (mod) => <Tag color="cyan">{MODULE_NAMES[mod] || mod}</Tag>,
+      sorter: (a, b) => (a.module || '').localeCompare(b.module || ''),
     },
     {
       title: 'Descripción',

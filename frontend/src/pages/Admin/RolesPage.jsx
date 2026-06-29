@@ -156,11 +156,14 @@ function RolesPage() {
           {record.is_system_role && <Tag color="blue">Sistema</Tag>}
         </Space>
       ),
+      sorter: (a, b) => (a.name || '').localeCompare(b.name || ''),
+      defaultSortOrder: 'ascend',
     },
     {
       title: 'Descripción',
       dataIndex: 'description',
       key: 'description',
+      sorter: (a, b) => (a.description || '').localeCompare(b.description || ''),
     },
     {
       title: 'Permisos',
@@ -168,6 +171,7 @@ function RolesPage() {
       render: (_, record) => (
         <Tag color="cyan">{record.permissions.length} permisos</Tag>
       ),
+      sorter: (a, b) => (a.permissions?.length || 0) - (b.permissions?.length || 0),
     },
     {
       title: 'Acciones',

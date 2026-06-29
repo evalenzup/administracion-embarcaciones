@@ -143,6 +143,7 @@ function ParticipantDetailModal({ participant, open, onClose, onRefresh }) {
         <Col span={12}><Text type="secondary">Nacionalidad</Text><br /><Text>{participant.nationality || '—'}</Text></Col>
         <Col span={12}><Text type="secondary">Correo</Text><br /><Text>{participant.email || '—'}</Text></Col>
         <Col span={12}><Text type="secondary">Teléfono</Text><br /><Text>{participant.phone || '—'}</Text></Col>
+        <Col span={12}><Text type="secondary">CURP</Text><br /><Text style={{ textTransform: 'uppercase' }}>{participant.curp || '—'}</Text></Col>
         <Col span={24}>
           <Text type="secondary">Tipo</Text><br />
           {participant.is_cicese_staff
@@ -261,6 +262,7 @@ function ParticipantEditModal({ open, onClose, onSaved, participant, selfRegistr
       first_name: person.first_name, last_name: person.last_name,
       institution: 'CICESE', nationality: person.nationality || 'Mexicana',
       email: person.email, phone: person.phone,
+      curp: person.curp || undefined,
       id_document_number: person.passport_number || undefined,
       id_document_type:   person.passport_number ? 'pasaporte' : undefined,
       id_document_expiry: person.passport_expiry ? dayjs(person.passport_expiry) : undefined,
@@ -394,8 +396,27 @@ function ParticipantEditModal({ open, onClose, onSaved, participant, selfRegistr
           <Col span={12}><Form.Item name="last_name" label="Apellidos" rules={[{ required: true }]}><Input /></Form.Item></Col>
         </Row>
         <Row gutter={16}>
-          <Col span={14}><Form.Item name="institution" label="Institución"><Input prefix={<BankOutlined style={{ color: '#ccc' }} />} placeholder="CICESE, UNAM, SCRIPPS..." /></Form.Item></Col>
-          <Col span={10}><Form.Item name="nationality" label="Nacionalidad"><Input /></Form.Item></Col>
+          <Col span={10}><Form.Item name="institution" label="Institución"><Input prefix={<BankOutlined style={{ color: '#ccc' }} />} placeholder="CICESE, UNAM, SCRIPPS..." /></Form.Item></Col>
+          <Col span={6}><Form.Item name="nationality" label="Nacionalidad"><Input /></Form.Item></Col>
+          <Col span={8}>
+            <Form.Item
+              name="curp"
+              label="CURP"
+              rules={[
+                {
+                  pattern: /^[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z\d]\d$/,
+                  message: 'CURP no válida'
+                }
+              ]}
+            >
+              <Input
+                placeholder="18 caracteres"
+                maxLength={18}
+                style={{ textTransform: 'uppercase' }}
+                onChange={(e) => form.setFieldsValue({ curp: e.target.value.toUpperCase() })}
+              />
+            </Form.Item>
+          </Col>
         </Row>
         <Row gutter={16}>
           <Col span={12}><Form.Item name="email" label="Correo"><Input /></Form.Item></Col>
@@ -570,12 +591,15 @@ function ParticipantsPage() {
           </div>
         </Space>
       ),
+      sorter: (a, b) => (a.full_name || '').localeCompare(b.full_name || ''),
+      defaultSortOrder: 'ascend',
     },
     {
       title: 'Tipo', key: 'tipo', width: 120,
       render: (_, r) => r.is_cicese_staff
         ? <Tag color="#0A2647">CICESE</Tag>
         : <Tag color="#6b7280">Externo</Tag>,
+      sorter: (a, b) => (a.is_cicese_staff ? 1 : 0) - (b.is_cicese_staff ? 1 : 0),
     },
     {
       title: 'Identificación Oficial', key: 'doc', width: 180,
@@ -596,6 +620,7 @@ function ParticipantsPage() {
           {r.cruise_count} 🧭
         </Tag>
       ),
+      sorter: (a, b) => (a.cruise_count || 0) - (b.cruise_count || 0),
     },
     {
       title: 'Acciones', key: 'actions', width: 110,

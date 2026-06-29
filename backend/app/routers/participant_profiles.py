@@ -151,6 +151,16 @@ async def create_participant(
             payload["id_document_number"] = person.passport_number
             payload["id_document_type"]   = "pasaporte"
             payload["id_document_expiry"] = person.passport_expiry
+        if not payload.get("curp") and person.curp:
+            payload["curp"] = person.curp
+
+    # Verificar que el CURP sea único si se provee
+    if payload.get("curp"):
+        existing_curp = db.query(ParticipantProfile).filter(
+            ParticipantProfile.curp == payload["curp"]
+        ).first()
+        if existing_curp:
+            raise HTTPException(status_code=400, detail="Ya existe un participante registrado con este CURP")
 
     profile = ParticipantProfile(created_by_id=current_user.id, **payload)
     db.add(profile)
@@ -199,7 +209,16 @@ async def update_participant(
     if not is_admin and profile.created_by_id != current_user.id and not is_self:
         raise HTTPException(status_code=403, detail="No tienes permiso para modificar este perfil (pertenece a otro creador)")
 
-    for key, value in data.model_dump(exclude_unset=True).items():
+    update_data = data.model_dump(exclude_unset=True)
+    if "curp" in update_data and update_data["curp"]:
+        existing_curp = db.query(ParticipantProfile).filter(
+            ParticipantProfile.curp == update_data["curp"],
+            ParticipantProfile.id != pid
+        ).first()
+        if existing_curp:
+            raise HTTPException(status_code=400, detail="Ya existe un participante registrado con este CURP")
+
+    for key, value in update_data.items():
         setattr(profile, key, value)
     db.commit()
     db.refresh(profile)

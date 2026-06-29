@@ -194,18 +194,21 @@ function DocumentsPage() {
           </div>
         </Space>
       ),
+      sorter: (a, b) => (a.title || '').localeCompare(b.title || ''),
     },
     {
       title: 'Embarcación',
       key: 'vessel',
       render: (_, r) => <Text>{r.vessel?.name}</Text>,
       width: 160,
+      sorter: (a, b) => (a.vessel?.name || '').localeCompare(b.vessel?.name || ''),
     },
     {
       title: 'Categoría',
       dataIndex: 'category',
       width: 130,
       render: (cat) => <Tag color={CATEGORY_MAP[cat]?.color}>{CATEGORY_MAP[cat]?.label}</Tag>,
+      sorter: (a, b) => (a.category || '').localeCompare(b.category || ''),
     },
     {
       title: 'Vigencia',
@@ -226,12 +229,15 @@ function DocumentsPage() {
           </div>
         );
       },
+      sorter: (a, b) => (a.days_to_expiry || 0) - (b.days_to_expiry || 0),
     },
     {
       title: 'Vencimiento',
       dataIndex: 'expiry_date',
       width: 120,
       render: (d, r) => r.is_permanent ? <Tag color="green">Permanente</Tag> : (d ? dayjs(d).format('DD/MM/YYYY') : '—'),
+      sorter: (a, b) => dayjs(a.expiry_date || 0).unix() - dayjs(b.expiry_date || 0).unix(),
+      defaultSortOrder: 'ascend',
     },
     {
       title: 'Acciones', key: 'actions', width: 140,

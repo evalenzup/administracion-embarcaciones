@@ -25,9 +25,11 @@ class VesselRequest(Base):
     id = Column(Integer, primary_key=True, index=True)
     applicant_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     vessel_id = Column(Integer, ForeignKey("vessels.id", ondelete="CASCADE"), nullable=False, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True)
 
     project_name = Column(String(300), nullable=False)
     scientific_leader = Column(String(200), nullable=False)
+    cruise_responsible = Column(String(200), nullable=True)
     objective = Column(Text, nullable=True)
     study_area = Column(Text, nullable=True)
 
@@ -55,6 +57,7 @@ class VesselRequest(Base):
     applicant = relationship("User", foreign_keys=[applicant_id], backref="vessel_requests", lazy="selectin")
     approved_by = relationship("User", foreign_keys=[approved_by_id], lazy="selectin")
     vessel = relationship("Vessel", backref="vessel_requests", lazy="selectin")
+    project = relationship("Project", back_populates="vessel_requests", lazy="selectin")
 
     def __repr__(self):
         return f"<VesselRequest {self.project_name} ({self.status.value})>"

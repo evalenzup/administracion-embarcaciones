@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Table, Button, Space, Tag, Modal, Form, Input, Select, Switch, Typography, Card, message, Popconfirm, Tooltip, Row, Col, Input as AntInput } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, CopyOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, CopyOutlined, KeyOutlined } from '@ant-design/icons';
 import apiClient from '../../api/client';
 import { CanAccess } from '../../components/common/CanAccess';
 
@@ -155,6 +155,33 @@ function UsersPage() {
     }
   };
 
+  const handleResetPasswordClick = (user) => {
+    Modal.confirm({
+      title: '¿Restablecer contraseña?',
+      content: `Se generará una nueva contraseña temporal para el usuario ${user.username} (${user.full_name}). Esta acción no se puede deshacer.`,
+      okText: 'Restablecer',
+      cancelText: 'Cancelar',
+      okType: 'danger',
+      onOk: async () => {
+        const tempPassword = generateRandomPassword();
+        try {
+          await apiClient.post(`/users/${user.id}/reset-password`, { password: tempPassword });
+          message.success('Contraseña restablecida correctamente');
+          setCreatedCredentials({
+            username: user.username,
+            password: tempPassword,
+            email: user.email,
+            fullName: user.full_name,
+            isReset: true
+          });
+          setCredentialsModalOpen(true);
+        } catch (error) {
+          message.error(error.response?.data?.detail || 'Error al restablecer la contraseña');
+        }
+      }
+    });
+  };
+
   const columns = [
     {
       title: 'Usuario',
@@ -166,16 +193,20 @@ function UsersPage() {
           {record.is_superadmin && <Tag color="gold">Superadmin</Tag>}
         </Space>
       ),
+      sorter: (a, b) => (a.username || '').localeCompare(b.username || ''),
+      defaultSortOrder: 'ascend',
     },
     {
       title: 'Nombre Completo',
       dataIndex: 'full_name',
       key: 'full_name',
+      sorter: (a, b) => (a.full_name || '').localeCompare(b.full_name || ''),
     },
     {
       title: 'Email',
       dataIndex: 'email',
       key: 'email',
+      sorter: (a, b) => (a.email || '').localeCompare(b.email || ''),
     },
     {
       title: 'Roles',
@@ -197,16 +228,20 @@ function UsersPage() {
           {active ? 'Activo' : 'Inactivo'}
         </Tag>
       ),
+      sorter: (a, b) => (a.is_active ? 1 : 0) - (b.is_active ? 1 : 0),
     },
     {
       title: 'Acciones',
       key: 'actions',
-      width: 120,
+      width: 150,
       render: (_, record) => (
         <Space>
           <CanAccess module="users" action="edit">
             <Tooltip title="Editar">
               <Button type="text" icon={<EditOutlined />} onClick={() => openEditModal(record)} />
+            </Tooltip>
+            <Tooltip title="Restablecer Contraseña">
+              <Button type="text" icon={<KeyOutlined style={{ color: '#fa8c16' }} />} onClick={() => handleResetPasswordClick(record)} />
             </Tooltip>
           </CanAccess>
           <CanAccess module="users" action="delete">
@@ -379,9 +414,11 @@ function UsersPage() {
           ? 'http://158.97.12.24:3010'
           : window.location.origin;
 
+        const isReset = createdCredentials?.isReset;
+
         return (
           <Modal
-            title={<span style={{ color: '#0A2647', fontWeight: 600 }}>¡Usuario Creado Exitosamente!</span>}
+            title={<span style={{ color: '#0A2647', fontWeight: 600 }}>{isReset ? '¡Contraseña Restablecida Exitosamente!' : '¡Usuario Creado Exitosamente!'}</span>}
             open={credentialsModalOpen}
             onCancel={() => setCredentialsModalOpen(false)}
             footer={[
@@ -406,7 +443,9 @@ function UsersPage() {
           >
             <div style={{ marginTop: 16 }}>
               <p style={{ color: '#555' }}>
-                Por favor, copia estas credenciales temporales y compártelas con el usuario. El usuario podrá cambiar esta contraseña por una personalizada desde su perfil.
+                {isReset
+                  ? 'Por favor, copia estas nuevas credenciales temporales y compártelas con el usuario. El usuario podrá cambiar esta contraseña por una personalizada desde su perfil.'
+                  : 'Por favor, copia estas credenciales temporales y compártelas con el usuario. El usuario podrá cambiar esta contraseña por una personalizada desde su perfil.'}
               </p>
               <Card style={{ backgroundColor: '#f0f4f8', borderRadius: 8, marginTop: 16, border: '1px solid #dcdcdc' }}>
                 <div style={{ marginBottom: 8 }}>

@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2" xmlns:kml="http://www.opengis.net/kml/2.2" xmlns:atom="http://www.w3.org/2005/Atom">
+<Document>
+	<name>Salida curso 2026.kml</name>
+	<StyleMap id="m_ylw-pushpin">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#s_ylw-pushpin</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#s_ylw-pushpin_hl</styleUrl>
+		</Pair>
+	</StyleMap>
+	<StyleMap id="m_ylw-pushpin0">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#s_ylw-pushpin0</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#s_ylw-pushpin_hl1</styleUrl>
+		</Pair>
+	</StyleMap>
+	<Style id="s_ylw-pushpin">
+		<IconStyle>
+			<scale>1.1</scale>
+			<Icon>
+				<href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+			</Icon>
+			<hotSpot x="20" y="2" xunits="pixels" yunits="pixels"/>
+		</IconStyle>
+	</Style>
+	<Style id="s_ylw-pushpin0">
+		<IconStyle>
+			<scale>1.1</scale>
+			<Icon>
+				<href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+			</Icon>
+			<hotSpot x="20" y="2" xunits="pixels" yunits="pixels"/>
+		</IconStyle>
+	</Style>
+	<Style id="s_ylw-pushpin_hl">
+		<IconStyle>
+			<scale>1.3</scale>
+			<Icon>
+				<href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+			</Icon>
+			<hotSpot x="20" y="2" xunits="pixels" yunits="pixels"/>
+		</IconStyle>
+	</Style>
+	<Style id="s_ylw-pushpin_hl1">
+		<IconStyle>
+			<scale>1.3</scale>
+			<Icon>
+				<href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href>
+			</Icon>
+			<hotSpot x="20" y="2" xunits="pixels" yunits="pixels"/>
+		</IconStyle>
+	</Style>
+	<Folder>
+		<name>Salida curso 2026</name>
+		<open>1</open>
+		<Placemark>
+			<name>Bajo La Soledad</name>
+			<LookAt>
+				<gx:TimeStamp><when>2025-06-13T17:15:51Z</when>
+</gx:TimeStamp>
+				<longitude>-116.6843119176408</longitude>
+				<latitude>31.69748098846772</latitude>
+				<altitude>0</altitude>
+				<heading>0.009324858968079464</heading>
+				<tilt>45.00000000000002</tilt>
+				<range>21683.60823894307</range>
+				<gx:altitudeMode>relativeToSeaFloor</gx:altitudeMode>
+			</LookAt>
+			<styleUrl>#m_ylw-pushpin0</styleUrl>
+			<Point>
+				<gx:drawOrder>1</gx:drawOrder>
+				<coordinates>-116.78717,31.61542,0</coordinates>
+			</Point>
+		</Placemark>
+		<Placemark>
+			<name>Derrotero</name>
+			<styleUrl>#m_ylw-pushpin</styleUrl>
+			<LineString>
+				<tessellate>1</tessellate>
+				<coordinates>
+					-116.7015961035375,31.89080445014544,0 -116.792570439251,31.80955890632114,0 -116.7888492021292,31.80944211547749,0 -116.7868446068013,31.80613916600621,0 -116.7855259445798,31.80241579531698,0 -116.7853793812505,31.79916058112984,0 -116.7854313460108,31.79748893011858,0 -116.7852851148117,31.79535772660947,0 -116.7850512450962,31.79358557203443,0 -116.7848853064953,31.79232244234646,0 -116.7844620704754,31.79107722491079,0 -116.7843016241607,31.78984482734863,0 -116.7848041942851,31.7887774232855,0 -116.7869169667506,31.61690646692771,0 -116.7506980372439,31.74822133885105,0 -116.7526502632916,31.75024322871018,0 -116.7551375149826,31.75215956105455,0 -116.7558718070098,31.75411858952619,0 -116.756444705872,31.75684300104184,0 -116.7554783926674,31.75875442222438,0 -116.7539105413787,31.75890611118019,0 -116.7523467590227,31.75772820242364,0 -116.7506834955312,31.7567096622171,0 -116.749037412102,31.75570156072097,0 -116.7468431856799,31.75399605253041,0 -116.7455038759291,31.75315486130206,0 -116.7449879254147,31.75093923584198,0 -116.7461478983143,31.74930846514242,0 -116.7477242809168,31.74859503796619,0 -116.7496892824443,31.74809886569552,0 -116.7376927758859,31.75295047388216,0 -116.6393265789284,31.7468142907851,0 -116.6154935341593,31.8082278849771,0 -116.6158887167085,31.83941449988337,0 -116.6219601554049,31.83981412106916,0 -116.6230154519321,31.84214999647613,0 -116.6228306717153,31.84412689879366,0 -116.6217331452595,31.84604318207547,0 -116.6210326728034,31.84822261139694,0 -116.620642167021,31.85005413328896,0 -116.6217880407506,31.85178223760253,0 -116.6231554593676,31.85078736985266,0 -116.6244818799534,31.8505374699669,0 -116.625456761678,31.85155827998014,0 -116.6264027595462,31.85314237735564,0 -116.6266397285573,31.85429173137944,0 -116.6259753774902,31.85600593106722,0 -116.6250562151405,31.85663175795641,0 -116.62459848573,31.85751279291924,0 -116.6255442842345,31.85847411711475,0 -116.6262578602799,31.85823081007379,0 -116.6271605776612,31.85863149522358,0 -116.6275693170949,31.85887304618971,0 -116.6283666481236,31.85903303098565,0 -116.6283288084018,31.85694752977609,0 -116.6283115460433,31.855686523946,0 -116.628812005034,31.8539715789918,0 -116.6280850827607,31.85306224475024,0 -116.6272562181371,31.85155412570752,0 -116.6265050493414,31.85051329088669,0 -116.6252875760799,31.8489741126749,0 -116.6249078820916,31.84760207904226,0 -116.624489217891,31.84575757902692,0 -116.6244546212674,31.8445020255246,0 -116.6244150302072,31.84224560369388,0 -116.6244830143054,31.83984867327228,0 -116.6255490544074,31.83886777843663,0 -116.6263586534131,31.8391915163582,0 -116.6697579077662,31.85887915482097,0 -116.7023688327177,31.89226837444297,0 
+				</coordinates>
+			</LineString>
+		</Placemark>
+		<atom:link rel="app" href="https://www.google.com/earth/about/versions/#earth-pro" title="Google Earth Pro 7.3.7.1155"></atom:link>
+	</Folder>
+</Document>
+</kml>

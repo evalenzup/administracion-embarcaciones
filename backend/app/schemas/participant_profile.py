@@ -25,6 +25,7 @@ class ParticipantProfileCreate(BaseModel):
     nationality: str | None = Field("Mexicana", max_length=100)
     email:       str | None = Field(None, max_length=200)
     phone:       str | None = Field(None, max_length=30)
+    curp:        str | None = Field(None, max_length=20, pattern=r"^[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z\d]\d$")
 
     id_document_type:   ParticipantIdDocumentType | None = None
     id_document_number: str | None = Field(None, max_length=80)
@@ -42,6 +43,7 @@ class ParticipantProfileUpdate(BaseModel):
     nationality:  str | None = Field(None, max_length=100)
     email:        str | None = Field(None, max_length=200)
     phone:        str | None = Field(None, max_length=30)
+    curp:         str | None = Field(None, max_length=20, pattern=r"^[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z\d]\d$")
 
     id_document_type:   ParticipantIdDocumentType | None = None
     id_document_number: str | None = Field(None, max_length=80)
@@ -65,6 +67,7 @@ class ParticipantProfileResponse(BaseModel):
     nationality: str | None = None
     email:       str | None = None
     phone:       str | None = None
+    curp:        str | None = None
 
     id_document_type:   ParticipantIdDocumentType | None = None
     id_document_number: str | None = None

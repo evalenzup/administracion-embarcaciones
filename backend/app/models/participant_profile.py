@@ -50,6 +50,7 @@ class ParticipantProfile(Base):
     # ── Datos personales ───────────────────────────────────────
     first_name   = Column(String(100), nullable=False)
     last_name    = Column(String(100), nullable=False)
+    curp         = Column(String(20), nullable=True, unique=True)
     institution  = Column(String(200), nullable=True, default="CICESE")
     nationality  = Column(String(100), nullable=True, default="Mexicana")
     email        = Column(String(200), nullable=True)

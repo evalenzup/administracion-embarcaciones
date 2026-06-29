@@ -32,6 +32,7 @@ class CruisePlan(Base):
     captain_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     vessel_request_id = Column(Integer, ForeignKey("vessel_requests.id", ondelete="SET NULL"), nullable=True, index=True)
     created_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True)
     scientific_leader = Column(String(200), nullable=True)
     departure_port_id = Column(Integer, ForeignKey("ports.id", ondelete="SET NULL"), nullable=True)
     return_port_id = Column(Integer, ForeignKey("ports.id", ondelete="SET NULL"), nullable=True)
@@ -58,6 +59,7 @@ class CruisePlan(Base):
     study_area = Column(Text, nullable=True)
     disciplines = Column(Text, nullable=True)
     funding_source = Column(String(300), nullable=True)
+    cruise_responsible = Column(String(200), nullable=True)
 
     notes = Column(Text, nullable=True)
 
@@ -79,6 +81,7 @@ class CruisePlan(Base):
     captain = relationship("User", foreign_keys=[captain_id], backref="commanded_cruises", lazy="selectin")
     vessel_request = relationship("VesselRequest", backref="cruise_plans", lazy="selectin")
     created_by = relationship("User", foreign_keys=[created_by_id], backref="created_cruises", lazy="selectin")
+    project = relationship("Project", back_populates="cruises", lazy="selectin")
     waypoints = relationship("CruiseWaypoint", back_populates="cruise", lazy="selectin",
                              cascade="all, delete-orphan", order_by="CruiseWaypoint.order_index")
     participants = relationship("CruiseParticipant", back_populates="cruise", lazy="selectin",

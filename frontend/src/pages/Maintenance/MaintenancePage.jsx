@@ -219,23 +219,38 @@ function RecordsTab({ vessels, categories, equipments }) {
           )}
         </div>
       ),
+      sorter: (a, b) => (a.title || '').localeCompare(b.title || ''),
     },
-    { title: 'Embarcación', key: 'vessel', width: 140, render: (_, r) => <Text>{r.vessel?.name}</Text> },
+    { 
+      title: 'Embarcación', 
+      key: 'vessel', 
+      width: 140, 
+      render: (_, r) => <Text>{r.vessel?.name}</Text>,
+      sorter: (a, b) => (a.vessel?.name || '').localeCompare(b.vessel?.name || ''),
+    },
     {
       title: 'Tipo', dataIndex: 'maintenance_type', width: 110,
       render: (t) => <Tag color={TYPE_MAP[t]?.color}>{TYPE_MAP[t]?.label}</Tag>,
+      sorter: (a, b) => (a.maintenance_type || '').localeCompare(b.maintenance_type || ''),
     },
     {
       title: 'Prioridad', dataIndex: 'priority', width: 100,
       render: (p) => <Tag color={PRIORITY_MAP[p]?.color}>{PRIORITY_MAP[p]?.label}</Tag>,
+      sorter: (a, b) => {
+        const weights = { critica: 4, alta: 3, media: 2, baja: 1 };
+        return (weights[a.priority] || 0) - (weights[b.priority] || 0);
+      },
     },
     {
       title: 'Estado', dataIndex: 'status', width: 130,
       render: (s) => <Badge status={STATUS_MAP[s]?.badge} text={STATUS_MAP[s]?.label} />,
+      sorter: (a, b) => (a.status || '').localeCompare(b.status || ''),
     },
     {
       title: 'Fecha Prog.', dataIndex: 'scheduled_date', width: 110,
       render: (d) => d ? dayjs(d).format('DD/MM/YYYY') : '—',
+      sorter: (a, b) => dayjs(a.scheduled_date || 0).unix() - dayjs(b.scheduled_date || 0).unix(),
+      defaultSortOrder: 'descend',
     },
     {
       title: 'Acciones', key: 'actions', width: 100,

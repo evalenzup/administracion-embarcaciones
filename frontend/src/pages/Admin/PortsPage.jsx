@@ -146,6 +146,8 @@ function PortsPage() {
       dataIndex: 'name',
       key: 'name',
       render: (text) => <strong>{text}</strong>,
+      sorter: (a, b) => (a.name || '').localeCompare(b.name || ''),
+      defaultSortOrder: 'ascend',
     },
     {
       title: 'Coordenadas',
@@ -173,6 +175,7 @@ function PortsPage() {
           {active ? 'Activo' : 'Inactivo'}
         </Tag>
       ),
+      sorter: (a, b) => (a.is_active ? 1 : 0) - (b.is_active ? 1 : 0),
     },
     {
       title: 'Acciones',

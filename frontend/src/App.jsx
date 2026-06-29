@@ -31,6 +31,10 @@ import VesselRequestsPage from './pages/VesselRequests/VesselRequestsPage';
 import FuelLogsPage from './pages/FuelLogs/FuelLogsPage';
 import BillingPage from './pages/Billing/BillingPage';
 import PettyCashPage from './pages/Finance/PettyCashPage';
+import AccountsPage from './pages/Finance/AccountsPage';
+import ServicesPage from './pages/Finance/ServicesPage';
+import ProvidersPage from './pages/Finance/ProvidersPage';
+import ProjectsPage from './pages/Projects/ProjectsPage';
 
 /**
  * Ruta protegida: redirige a login si no está autenticado.
@@ -109,7 +113,11 @@ function AppRoutes() {
         <Route path="/equipment" element={<EquipmentPage />} />
         <Route path="/fuel-logs" element={<FuelLogsPage />} />
         <Route path="/billing" element={<BillingPage />} />
+        <Route path="/projects" element={<ProjectsPage />} />
+        <Route path="/finance/accounts" element={<AccountsPage />} />
         <Route path="/finance/petty-cash" element={<PettyCashPage />} />
+        <Route path="/finance/services" element={<ServicesPage />} />
+        <Route path="/finance/providers" element={<ProvidersPage />} />
         <Route path="/help" element={<HelpPage />} />
         <Route path="/admin/users" element={<UsersPage />} />
         <Route path="/admin/roles" element={<RolesPage />} />

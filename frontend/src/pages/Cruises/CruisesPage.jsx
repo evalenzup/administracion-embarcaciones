@@ -1249,6 +1249,8 @@ function CruisesPage() {
   const [vessels, setVessels] = useState([]);
   const [captains, setCaptains] = useState([]);
   const [ports, setPorts] = useState([]);
+  const [projectsList, setProjectsList] = useState([]);
+  const [showCustomProjectInput, setShowCustomProjectInput] = useState(false);
   const [summary, setSummary] = useState({ total: 0, borrador: 0, pendiente: 0, planificado: 0, en_curso: 0, completado: 0, total_nm: 0 });
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
@@ -1266,6 +1268,80 @@ function CruisesPage() {
 
   const selectedVesselId = Form.useWatch('vessel_id', form);
   const selectedVesselObj = vessels.find(v => v.id === selectedVesselId);
+
+  const watchedDepartureDate = Form.useWatch('departure_date', form);
+  const watchedDeparturePortId = Form.useWatch('departure_port_id', form);
+  const watchedReturnPortId = Form.useWatch('return_port_id', form);
+
+  const suggestedReturnDate = useMemo(() => {
+    if (!watchedDepartureDate) return null;
+
+    const waypoints = editingCruise?.waypoints || [];
+    const departurePort = ports.find(p => p.id === watchedDeparturePortId);
+    const returnPort = ports.find(p => p.id === watchedReturnPortId);
+    const maxSpeed = editingCruise?.vessel?.max_speed_knots || selectedVesselObj?.max_speed_knots || null;
+
+    const tripPoints = [];
+    if (departurePort && departurePort.latitude != null && departurePort.longitude != null) {
+      tripPoints.push({
+        latitude: departurePort.latitude,
+        longitude: departurePort.longitude,
+        name: departurePort.name,
+        isPort: true
+      });
+    }
+    const validWaypoints = waypoints.filter(
+      w => w.latitude != null && w.longitude != null && isFinite(w.latitude) && isFinite(w.longitude)
+    );
+    validWaypoints.forEach(w => {
+      tripPoints.push(w);
+    });
+    if (returnPort && returnPort.latitude != null && returnPort.longitude != null) {
+      tripPoints.push({
+        latitude: returnPort.latitude,
+        longitude: returnPort.longitude,
+        name: returnPort.name,
+        isPort: true
+      });
+    }
+
+    if (tripPoints.length < 2) {
+      let totalHours = 0;
+      validWaypoints.forEach(wp => {
+        if (wp.duration_hours) totalHours += wp.duration_hours;
+      });
+      if (totalHours > 0) {
+        return dayjs(watchedDepartureDate).add(totalHours, 'hour');
+      }
+      return null;
+    }
+
+    let totalMeters = 0;
+    let totalHours = 0;
+
+    for (let i = 1; i < tripPoints.length; i++) {
+      const prev = tripPoints[i - 1];
+      const curr = tripPoints[i];
+
+      const p1 = L.latLng(prev.latitude, prev.longitude);
+      const p2 = L.latLng(curr.latitude, curr.longitude);
+      const distMeters = p1.distanceTo(p2);
+      totalMeters += distMeters;
+
+      const distNm = distMeters / 1852;
+      const speed = curr.speed_knots || maxSpeed || 10;
+      totalHours += (distNm / speed);
+    }
+
+    waypoints.forEach(wp => {
+      if (wp.duration_hours) totalHours += wp.duration_hours;
+    });
+
+    if (totalHours > 0) {
+      return dayjs(watchedDepartureDate).add(totalHours, 'hour');
+    }
+    return null;
+  }, [watchedDepartureDate, watchedDeparturePortId, watchedReturnPortId, editingCruise?.waypoints, editingCruise?.vessel, selectedVesselObj, ports]);
 
   // Nuevos estados para Muestreo Científico y Logística
   const [checklist, setChecklist] = useState([]);
@@ -1325,14 +1401,16 @@ function CruisesPage() {
 
   const fetchMeta = useCallback(async () => {
     try {
-      const [vr, sr, pr] = await Promise.all([
+      const [vr, sr, pr, projRes] = await Promise.all([
         apiClient.get('/vessels/options'),
         apiClient.get('/cruises/summary', { params: filterVessel ? { vessel_id: filterVessel } : {} }),
         apiClient.get('/ports/options'),
+        apiClient.get('/projects', { params: { active_only: true } }),
       ]);
       setVessels(vr.data);
       setSummary(sr.data);
       setPorts(pr.data || []);
+      setProjectsList(projRes.data || []);
     } catch { /* */ }
     // Fetch users separately so a limit error doesn’t block vessels
     try {
@@ -1558,6 +1636,7 @@ function CruisesPage() {
   const openCreate = () => {
     setEditingCruise(null);
     form.resetFields();
+    setShowCustomProjectInput(false);
     form.setFieldsValue({ status: 'borrador' });
     setModalOpen(true);
   };
@@ -1579,8 +1658,11 @@ function CruisesPage() {
       fetchCruiseLogEntries(c.id);
       fetchCruiseBilling(c.id);
       setActiveTab(initialTab);
+      const isCustomProject = !fullCruise.project_id && fullCruise.project_name;
+      setShowCustomProjectInput(isCustomProject);
       form.setFieldsValue({
         ...fullCruise,
+        project_id: fullCruise.project_id || (fullCruise.project_name ? 'otro' : undefined),
         departure_date: fullCruise.departure_date ? dayjs(fullCruise.departure_date) : null,
         return_date: fullCruise.return_date ? dayjs(fullCruise.return_date) : null,
       });
@@ -1607,8 +1689,21 @@ function CruisesPage() {
         }
       }
 
+      // Determinar project_id y project_name
+      let pId = null;
+      let pName = '';
+      if (values.project_id && values.project_id !== 'otro') {
+        pId = values.project_id;
+        const matchedProj = projectsList.find(p => p.id === pId);
+        pName = matchedProj ? matchedProj.name : '';
+      } else {
+        pName = values.project_name || '';
+      }
+
       const payload = {
         ...values,
+        project_id: pId,
+        project_name: pName,
         departure_date: values.departure_date?.format('YYYY-MM-DDTHH:mm:ss') || null,
         return_date: values.return_date?.format('YYYY-MM-DDTHH:mm:ss') || null,
       };
@@ -1676,7 +1771,8 @@ function CruisesPage() {
       dataIndex: 'cruise_number',
       key: 'cruise_number',
       width: 145,
-      render: (val) => val ? <Text code style={{ fontWeight: 600 }}>{val}</Text> : <Text type="secondary">—</Text>
+      render: (val) => val ? <Text code style={{ fontWeight: 600 }}>{val}</Text> : <Text type="secondary">—</Text>,
+      sorter: (a, b) => (a.cruise_number || '').localeCompare(b.cruise_number || ''),
     },
     {
       title: 'Plan de Crucero',
@@ -1685,14 +1781,23 @@ function CruisesPage() {
       render: (_, r) => (
         <div>
           <Text strong>{r.name}</Text>
+          {r.project_name && <><br /><Text type="secondary" style={{ fontSize: 11 }}>📁 Proyecto: {r.project_name}</Text></>}
           {r.objective && <><br /><Text type="secondary" style={{ fontSize: 11 }}>{r.objective?.substring(0, 70)}...</Text></>}
         </div>
       ),
+      sorter: (a, b) => (a.name || '').localeCompare(b.name || ''),
     },
-    { title: 'Embarcación', key: 'vessel', width: 140, render: (_, r) => <Text>{r.vessel?.name}</Text> },
+    { 
+      title: 'Embarcación', 
+      key: 'vessel', 
+      width: 140, 
+      render: (_, r) => <Text>{r.vessel?.name}</Text>,
+      sorter: (a, b) => (a.vessel?.name || '').localeCompare(b.vessel?.name || ''),
+    },
     {
       title: 'Estado', dataIndex: 'status', width: 120,
       render: (s) => <Tag color={STATUS_MAP[s]?.color}>{STATUS_MAP[s]?.label}</Tag>,
+      sorter: (a, b) => (a.status || '').localeCompare(b.status || ''),
     },
     {
       title: 'Facturación',
@@ -1774,6 +1879,8 @@ function CruisesPage() {
           {r.duration_days != null && <Text type="secondary">{r.duration_days} días</Text>}
         </div>
       ),
+      sorter: (a, b) => dayjs(a.departure_date || 0).unix() - dayjs(b.departure_date || 0).unix(),
+      defaultSortOrder: 'descend',
     },
     {
       title: 'Métricas', key: 'metrics', width: 140,
@@ -1869,8 +1976,37 @@ function CruisesPage() {
 
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item name="project_name" label="Proyecto asociado">
-                <Input placeholder="ej: Proyecto Bacab Lum — SEP-CONACYT" />
+              <Form.Item name="project_id" label="Proyecto asociado" rules={[{ required: true, message: 'Selecciona un proyecto' }]}>
+                <Select
+                  showSearch
+                  placeholder="Seleccionar proyecto"
+                  optionFilterProp="children"
+                  onChange={(val) => {
+                    setShowCustomProjectInput(val === 'otro');
+                    if (val !== 'otro') {
+                      const matchedProj = projectsList.find(p => p.id === val);
+                      if (matchedProj) {
+                        form.setFieldsValue({ 
+                          project_name: matchedProj.name,
+                          cruise_responsible: matchedProj.responsible_name
+                        });
+                      }
+                    } else {
+                      form.setFieldsValue({ project_name: '', cruise_responsible: '' });
+                    }
+                  }}
+                >
+                  <Select.OptGroup label="Catálogo de Proyectos">
+                    {projectsList.map(p => (
+                      <Select.Option key={p.id} value={p.id}>
+                        {p.account_number} — {p.name}
+                      </Select.Option>
+                    ))}
+                  </Select.OptGroup>
+                  <Select.OptGroup label="Alternativa">
+                    <Select.Option value="otro">✍️ Otro (Capturar manualmente)</Select.Option>
+                  </Select.OptGroup>
+                </Select>
               </Form.Item>
             </Col>
             <Col span={12}>
@@ -1879,6 +2015,24 @@ function CruisesPage() {
               </Form.Item>
             </Col>
           </Row>
+
+          <Row gutter={16}>
+            <Col span={24}>
+              <Form.Item name="cruise_responsible" label="Responsable del Crucero (No necesariamente se embarca)">
+                <Input placeholder="Nombre de la persona responsable del crucero (opcional)" />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          {showCustomProjectInput && (
+            <Row gutter={16}>
+              <Col span={24}>
+                <Form.Item name="project_name" label="Nombre del Proyecto (Manual)" rules={[{ required: true, message: 'El nombre es requerido' }]}>
+                  <Input placeholder="ej: Proyecto Bacab Lum — SEP-CONACYT" />
+                </Form.Item>
+              </Col>
+            </Row>
+          )}
 
           <Row gutter={16}>
             <Col span={12}>
@@ -1962,7 +2116,28 @@ function CruisesPage() {
           </Row>
           <Row gutter={16}>
             <Col span={12}><Form.Item name="departure_date" label="Fecha y hora salida"><DatePicker style={{ width: '100%' }} format="DD/MM/YYYY HH:mm" showTime={{ format: 'HH:mm' }} /></Form.Item></Col>
-            <Col span={12}><Form.Item name="return_date" label="Fecha y hora regreso (calculada)"><DatePicker disabled placeholder="Se calcula con la ruta" style={{ width: '100%' }} format="DD/MM/YYYY HH:mm" showTime={{ format: 'HH:mm' }} /></Form.Item></Col>
+            <Col span={12}>
+              <Form.Item
+                name="return_date"
+                label="Fecha y hora regreso"
+                extra={
+                  suggestedReturnDate ? (
+                    <span style={{ fontSize: '12px', color: '#595959' }}>
+                      Sugerido por ruta: <strong>{suggestedReturnDate.format('DD/MM/YYYY HH:mm')}</strong>{' '}
+                      <a onClick={() => form.setFieldsValue({ return_date: suggestedReturnDate })} style={{ marginLeft: 6 }}>
+                        (Aplicar sugerido)
+                      </a>
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: '12px', color: '#8c8c8c' }}>
+                      No hay ruta configurada para calcular una fecha sugerida
+                    </span>
+                  )
+                }
+              >
+                <DatePicker placeholder="Seleccionar fecha y hora" style={{ width: '100%' }} format="DD/MM/YYYY HH:mm" showTime={{ format: 'HH:mm' }} />
+              </Form.Item>
+            </Col>
           </Row>
           <Row gutter={16}>
             <Col span={8}><Form.Item name="planned_nm" label="Millas planificadas"><InputNumber disabled placeholder="Autocalculado" style={{ width: '100%' }} min={0} /></Form.Item></Col>
@@ -2034,7 +2209,12 @@ function CruisesPage() {
             onSave={() => {
               fetchCruises();
               apiClient.get(`/cruises/${editingCruise.id}`).then(res => {
-                setEditingCruise(res.data);
+                const fullCruise = res.data;
+                setEditingCruise(fullCruise);
+                form.setFieldsValue({
+                  planned_nm: fullCruise.planned_nm,
+                  return_date: fullCruise.return_date ? dayjs(fullCruise.return_date) : null,
+                });
               });
             }}
           />
@@ -2926,8 +3106,37 @@ function CruisesPage() {
 
             <Row gutter={16}>
               <Col span={12}>
-                <Form.Item name="project_name" label="Proyecto asociado">
-                  <Input placeholder="ej: Proyecto Bacab Lum — SEP-CONACYT" />
+                <Form.Item name="project_id" label="Proyecto asociado" rules={[{ required: true, message: 'Selecciona un proyecto' }]}>
+                  <Select
+                    showSearch
+                    placeholder="Seleccionar proyecto"
+                    optionFilterProp="children"
+                    onChange={(val) => {
+                      setShowCustomProjectInput(val === 'otro');
+                      if (val !== 'otro') {
+                        const matchedProj = projectsList.find(p => p.id === val);
+                        if (matchedProj) {
+                          form.setFieldsValue({ 
+                            project_name: matchedProj.name,
+                            cruise_responsible: matchedProj.responsible_name
+                          });
+                        }
+                      } else {
+                        form.setFieldsValue({ project_name: '', cruise_responsible: '' });
+                      }
+                    }}
+                  >
+                    <Select.OptGroup label="Catálogo de Proyectos">
+                      {projectsList.map(p => (
+                        <Select.Option key={p.id} value={p.id}>
+                          {p.account_number} — {p.name}
+                        </Select.Option>
+                      ))}
+                    </Select.OptGroup>
+                    <Select.OptGroup label="Alternativa">
+                      <Select.Option value="otro">✍️ Otro (Capturar manualmente)</Select.Option>
+                    </Select.OptGroup>
+                  </Select>
                 </Form.Item>
               </Col>
               <Col span={12}>
@@ -2936,6 +3145,24 @@ function CruisesPage() {
                 </Form.Item>
               </Col>
             </Row>
+
+            <Row gutter={16}>
+              <Col span={24}>
+                <Form.Item name="cruise_responsible" label="Responsable del Crucero (No necesariamente se embarca)">
+                  <Input placeholder="Nombre de la persona responsable del crucero (opcional)" />
+                </Form.Item>
+              </Col>
+            </Row>
+
+            {showCustomProjectInput && (
+              <Row gutter={16}>
+                <Col span={24}>
+                  <Form.Item name="project_name" label="Nombre del Proyecto (Manual)" rules={[{ required: true, message: 'El nombre es requerido' }]}>
+                    <Input placeholder="ej: Proyecto Bacab Lum — SEP-CONACYT" />
+                  </Form.Item>
+                </Col>
+              </Row>
+            )}
 
             <Row gutter={16}>
               <Col span={12}>
@@ -2996,7 +3223,28 @@ function CruisesPage() {
             </Row>
             <Row gutter={16}>
               <Col span={12}><Form.Item name="departure_date" label="Fecha y hora salida"><DatePicker style={{ width: '100%' }} format="DD/MM/YYYY HH:mm" showTime={{ format: 'HH:mm' }} /></Form.Item></Col>
-              <Col span={12}><Form.Item name="return_date" label="Fecha y hora regreso (calculada)"><DatePicker disabled placeholder="Se calcula con la ruta" style={{ width: '100%' }} format="DD/MM/YYYY HH:mm" showTime={{ format: 'HH:mm' }} /></Form.Item></Col>
+              <Col span={12}>
+                <Form.Item
+                  name="return_date"
+                  label="Fecha y hora regreso"
+                  extra={
+                    suggestedReturnDate ? (
+                      <span style={{ fontSize: '12px', color: '#595959' }}>
+                        Sugerido por ruta: <strong>{suggestedReturnDate.format('DD/MM/YYYY HH:mm')}</strong>{' '}
+                        <a onClick={() => form.setFieldsValue({ return_date: suggestedReturnDate })} style={{ marginLeft: 6 }}>
+                          (Aplicar sugerido)
+                        </a>
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: '12px', color: '#8c8c8c' }}>
+                        No hay ruta configurada para calcular una fecha sugerida
+                      </span>
+                    )
+                  }
+                >
+                  <DatePicker placeholder="Seleccionar fecha y hora" style={{ width: '100%' }} format="DD/MM/YYYY HH:mm" showTime={{ format: 'HH:mm' }} />
+                </Form.Item>
+              </Col>
             </Row>
             <Row gutter={16}>
               <Col span={8}><Form.Item name="planned_nm" label="Millas planificadas"><InputNumber disabled placeholder="Autocalculado" style={{ width: '100%' }} min={0} /></Form.Item></Col>

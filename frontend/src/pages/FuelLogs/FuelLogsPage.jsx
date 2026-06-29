@@ -497,11 +497,14 @@ export default function FuelLogsPage({ preselectedVesselId = null, inModal = fal
           {r.load_time && <div style={{ fontSize: 11, color: '#999' }}>{r.load_time}</div>}
         </div>
       ),
+      sorter: (a, b) => dayjs(a.load_date || 0).unix() - dayjs(b.load_date || 0).unix(),
+      defaultSortOrder: 'descend',
     },
     {
       title: 'Embarcación',
       dataIndex: ['vessel', 'name'],
       render: (name) => <Tag color="blue" style={{ fontWeight: 600 }}>{name || '—'}</Tag>,
+      sorter: (a, b) => (a.vessel?.name || '').localeCompare(b.vessel?.name || ''),
     },
     {
       title: 'Litros',
@@ -513,18 +516,21 @@ export default function FuelLogsPage({ preselectedVesselId = null, inModal = fal
           {v?.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 1 })} L
         </Text>
       ),
+      sorter: (a, b) => (a.liters || 0) - (b.liters || 0),
     },
     {
       title: 'Combustible',
       dataIndex: 'fuel_type',
       width: 110,
       render: (v) => <Tag>{v}</Tag>,
+      sorter: (a, b) => (a.fuel_type || '').localeCompare(b.fuel_type || ''),
     },
     {
       title: 'Proveedor',
       dataIndex: 'supplier',
       ellipsis: true,
       render: (v) => v || <Text type="secondary">—</Text>,
+      sorter: (a, b) => (a.supplier || '').localeCompare(b.supplier || ''),
     },
     {
       title: 'Costo Total',
@@ -536,6 +542,7 @@ export default function FuelLogsPage({ preselectedVesselId = null, inModal = fal
             ${v.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </Text>
         : <Text type="secondary">—</Text>,
+      sorter: (a, b) => (a.total_cost || 0) - (b.total_cost || 0),
     },
     {
       title: 'Crucero',

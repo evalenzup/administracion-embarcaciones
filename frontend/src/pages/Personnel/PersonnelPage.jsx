@@ -506,14 +506,18 @@ function PersonnelPage() {
           </div>
         </Space>
       ),
+      sorter: (a, b) => (a.full_name || '').localeCompare(b.full_name || ''),
+      defaultSortOrder: 'ascend',
     },
     {
       title: 'Puesto', dataIndex: 'role', width: 160,
       render: (r) => <Tag color={ROLE_MAP[r]?.color}>{ROLE_MAP[r]?.label}</Tag>,
+      sorter: (a, b) => (a.role || '').localeCompare(b.role || ''),
     },
     {
       title: 'Estado', dataIndex: 'status', width: 100,
       render: (s) => <Badge status={STATUS_MAP[s]?.badge} text={STATUS_MAP[s]?.label} />,
+      sorter: (a, b) => (a.status || '').localeCompare(b.status || ''),
     },
     { title: 'Email', dataIndex: 'email', width: 200, render: (v) => v || '—' },
     {
@@ -523,6 +527,7 @@ function PersonnelPage() {
     {
       title: 'Ingreso', dataIndex: 'hire_date', width: 110,
       render: (d) => d ? dayjs(d).format('DD/MM/YYYY') : '—',
+      sorter: (a, b) => dayjs(a.hire_date || 0).unix() - dayjs(b.hire_date || 0).unix(),
     },
     {
       title: 'Acciones', key: 'actions', width: 110,
