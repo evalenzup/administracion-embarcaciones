@@ -153,6 +153,11 @@ export default function ServicesPage() {
       entered_at: dayjs(item.entered_at),
       notes: item.notes || '',
     });
+    setAuthEmailFileList([]);
+    setXmlFileList([]);
+    setPdfFileList([]);
+    setConformityFileList([]);
+    setPaymentFileList([]);
     setEditHistoryModalOpen(true);
   };
 
@@ -169,9 +174,36 @@ export default function ServicesPage() {
         }
       );
 
-      message.success('Fecha de la etapa actualizada correctamente.');
+      const uploadDoc = async (documentType, file) => {
+        const formData = new FormData();
+        formData.append('document_type', documentType);
+        formData.append('file', file);
+        return apiClient.put(`/services/${selectedService.id}/documents`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+      };
+
+      let updatedServiceResponse = res;
+      if (editingHistoryItem.stage === 'aprobado_hacienda' && authEmailFileList.length > 0) {
+        updatedServiceResponse = await uploadDoc('authorization_email', authEmailFileList[0]);
+      } else if (editingHistoryItem.stage === 'en_proceso_pago') {
+        if (xmlFileList.length > 0) {
+          updatedServiceResponse = await uploadDoc('invoice_xml', xmlFileList[0]);
+        }
+        if (pdfFileList.length > 0) {
+          updatedServiceResponse = await uploadDoc('invoice_pdf', pdfFileList[0]);
+        }
+        if (conformityFileList.length > 0) {
+          updatedServiceResponse = await uploadDoc('conformity_letter', conformityFileList[0]);
+        }
+      } else if (editingHistoryItem.stage === 'pagado' && paymentFileList.length > 0) {
+        updatedServiceResponse = await uploadDoc('payment_receipt', paymentFileList[0]);
+      }
+
+      message.success('Fecha de la etapa y documentos actualizados correctamente.');
       setEditHistoryModalOpen(false);
-      setSelectedService(res.data);
+      setSelectedService(updatedServiceResponse.data);
+      loadServiceDetail(selectedService.id);
       loadServices();
     } catch (err) {
       const errorMsg = err.response?.data?.detail || 'Error al actualizar la fecha de la etapa.';
@@ -797,7 +829,7 @@ export default function ServicesPage() {
                       Ver Presupuesto
                     </Button>
                   )}
-                  {hasPermission('services', 'edit') && selectedService.budget_file && (
+                  {hasPermission('services', 'edit') && (
                     <Upload
                       showUploadList={false}
                       beforeUpload={(file) => {
@@ -805,12 +837,12 @@ export default function ServicesPage() {
                         return false;
                       }}
                     >
-                      <Button size="small" icon={<UploadOutlined />} type="dashed">
-                        Reemplazar
+                      <Button size="small" icon={<UploadOutlined />} type={selectedService.budget_file ? "dashed" : "primary"}>
+                        {selectedService.budget_file ? "Reemplazar" : "Subir"}
                       </Button>
                     </Upload>
                   )}
-                  {!selectedService.budget_file && (
+                  {!selectedService.budget_file && !hasPermission('services', 'edit') && (
                     <Text type="secondary">No cargado</Text>
                   )}
                 </Space>
@@ -828,7 +860,7 @@ export default function ServicesPage() {
                       Ver Captura
                     </Button>
                   )}
-                  {hasPermission('services', 'edit') && selectedService.authorization_email_file && (
+                  {hasPermission('services', 'edit') && (
                     <Upload
                       showUploadList={false}
                       beforeUpload={(file) => {
@@ -836,12 +868,12 @@ export default function ServicesPage() {
                         return false;
                       }}
                     >
-                      <Button size="small" icon={<UploadOutlined />} type="dashed">
-                        Reemplazar
+                      <Button size="small" icon={<UploadOutlined />} type={selectedService.authorization_email_file ? "dashed" : "primary"}>
+                        {selectedService.authorization_email_file ? "Reemplazar" : "Subir"}
                       </Button>
                     </Upload>
                   )}
-                  {!selectedService.authorization_email_file && (
+                  {!selectedService.authorization_email_file && !hasPermission('services', 'edit') && (
                     <Text type="secondary">No cargado (Opcional)</Text>
                   )}
                 </Space>
@@ -859,7 +891,7 @@ export default function ServicesPage() {
                       Descargar XML
                     </Button>
                   )}
-                  {hasPermission('services', 'edit') && selectedService.invoice_xml_file && (
+                  {hasPermission('services', 'edit') && (
                     <Upload
                       showUploadList={false}
                       beforeUpload={(file) => {
@@ -867,12 +899,12 @@ export default function ServicesPage() {
                         return false;
                       }}
                     >
-                      <Button size="small" icon={<UploadOutlined />} type="dashed">
-                        Reemplazar
+                      <Button size="small" icon={<UploadOutlined />} type={selectedService.invoice_xml_file ? "dashed" : "primary"}>
+                        {selectedService.invoice_xml_file ? "Reemplazar" : "Subir"}
                       </Button>
                     </Upload>
                   )}
-                  {!selectedService.invoice_xml_file && (
+                  {!selectedService.invoice_xml_file && !hasPermission('services', 'edit') && (
                     <Text type="secondary">No cargado</Text>
                   )}
                 </Space>
@@ -890,7 +922,7 @@ export default function ServicesPage() {
                       Ver Factura PDF
                     </Button>
                   )}
-                  {hasPermission('services', 'edit') && selectedService.invoice_pdf_file && (
+                  {hasPermission('services', 'edit') && (
                     <Upload
                       showUploadList={false}
                       beforeUpload={(file) => {
@@ -898,12 +930,12 @@ export default function ServicesPage() {
                         return false;
                       }}
                     >
-                      <Button size="small" icon={<UploadOutlined />} type="dashed">
-                        Reemplazar
+                      <Button size="small" icon={<UploadOutlined />} type={selectedService.invoice_pdf_file ? "dashed" : "primary"}>
+                        {selectedService.invoice_pdf_file ? "Reemplazar" : "Subir"}
                       </Button>
                     </Upload>
                   )}
-                  {!selectedService.invoice_pdf_file && (
+                  {!selectedService.invoice_pdf_file && !hasPermission('services', 'edit') && (
                     <Text type="secondary">No cargado</Text>
                   )}
                 </Space>
@@ -921,7 +953,7 @@ export default function ServicesPage() {
                       Ver Carta
                     </Button>
                   )}
-                  {hasPermission('services', 'edit') && selectedService.conformity_letter_file && (
+                  {hasPermission('services', 'edit') && (
                     <Upload
                       showUploadList={false}
                       beforeUpload={(file) => {
@@ -929,12 +961,12 @@ export default function ServicesPage() {
                         return false;
                       }}
                     >
-                      <Button size="small" icon={<UploadOutlined />} type="dashed">
-                        Reemplazar
+                      <Button size="small" icon={<UploadOutlined />} type={selectedService.conformity_letter_file ? "dashed" : "primary"}>
+                        {selectedService.conformity_letter_file ? "Reemplazar" : "Subir"}
                       </Button>
                     </Upload>
                   )}
-                  {!selectedService.conformity_letter_file && (
+                  {!selectedService.conformity_letter_file && !hasPermission('services', 'edit') && (
                     <Text type="secondary">No cargado (Opcional)</Text>
                   )}
                 </Space>
@@ -952,7 +984,7 @@ export default function ServicesPage() {
                       Ver Comprobante
                     </Button>
                   )}
-                  {hasPermission('services', 'edit') && selectedService.payment_receipt_file && (
+                  {hasPermission('services', 'edit') && (
                     <Upload
                       showUploadList={false}
                       beforeUpload={(file) => {
@@ -960,12 +992,12 @@ export default function ServicesPage() {
                         return false;
                       }}
                     >
-                      <Button size="small" icon={<UploadOutlined />} type="dashed">
-                        Reemplazar
+                      <Button size="small" icon={<UploadOutlined />} type={selectedService.payment_receipt_file ? "dashed" : "primary"}>
+                        {selectedService.payment_receipt_file ? "Reemplazar" : "Subir"}
                       </Button>
                     </Upload>
                   )}
-                  {!selectedService.payment_receipt_file && (
+                  {!selectedService.payment_receipt_file && !hasPermission('services', 'edit') && (
                     <Text type="secondary">No cargado (Opcional)</Text>
                   )}
                 </Space>
@@ -1390,6 +1422,146 @@ export default function ServicesPage() {
               maxLength={400}
             />
           </Form.Item>
+
+          {editingHistoryItem?.stage === 'aprobado_hacienda' && (
+            <>
+              <Divider style={{ margin: '12px 0' }} />
+              <Form.Item 
+                label={
+                  <span>
+                    Captura/Correo de Autorización de Hacienda (Opcional) {' '}
+                    {selectedService.authorization_email_file && (
+                      <Text type="secondary">
+                        (<a href={selectedService.authorization_email_file} target="_blank" rel="noreferrer">Ver actual</a>)
+                      </Text>
+                    )}
+                  </span>
+                }
+              >
+                <Upload
+                  accept="image/*,.pdf"
+                  beforeUpload={(file) => {
+                    setAuthEmailFileList([file]);
+                    return false;
+                  }}
+                  onRemove={() => setAuthEmailFileList([])}
+                  fileList={authEmailFileList}
+                >
+                  <Button icon={<UploadOutlined />}>Subir Oficio / Captura</Button>
+                </Upload>
+              </Form.Item>
+            </>
+          )}
+
+          {editingHistoryItem?.stage === 'en_proceso_pago' && (
+            <>
+              <Divider style={{ margin: '12px 0' }} />
+              <Form.Item 
+                label={
+                  <span>
+                    Factura XML (Opcional) {' '}
+                    {selectedService.invoice_xml_file && (
+                      <Text type="secondary">
+                        (<a href={selectedService.invoice_xml_file} target="_blank" rel="noreferrer">Ver actual</a>)
+                      </Text>
+                    )}
+                  </span>
+                }
+              >
+                <Upload
+                  accept=".xml"
+                  beforeUpload={(file) => {
+                    setXmlFileList([file]);
+                    return false;
+                  }}
+                  onRemove={() => setXmlFileList([])}
+                  fileList={xmlFileList}
+                >
+                  <Button icon={<UploadOutlined />}>Seleccionar XML</Button>
+                </Upload>
+              </Form.Item>
+
+              <Form.Item 
+                label={
+                  <span>
+                    Factura PDF (Opcional) {' '}
+                    {selectedService.invoice_pdf_file && (
+                      <Text type="secondary">
+                        (<a href={selectedService.invoice_pdf_file} target="_blank" rel="noreferrer">Ver actual</a>)
+                      </Text>
+                    )}
+                  </span>
+                }
+              >
+                <Upload
+                  accept=".pdf"
+                  beforeUpload={(file) => {
+                    setPdfFileList([file]);
+                    return false;
+                  }}
+                  onRemove={() => setPdfFileList([])}
+                  fileList={pdfFileList}
+                >
+                  <Button icon={<UploadOutlined />}>Seleccionar PDF</Button>
+                </Upload>
+              </Form.Item>
+
+              <Form.Item 
+                label={
+                  <span>
+                    Carta de Conformidad Escaneada (Opcional) {' '}
+                    {selectedService.conformity_letter_file && (
+                      <Text type="secondary">
+                        (<a href={selectedService.conformity_letter_file} target="_blank" rel="noreferrer">Ver actual</a>)
+                      </Text>
+                    )}
+                  </span>
+                }
+              >
+                <Upload
+                  accept="image/*,.pdf"
+                  beforeUpload={(file) => {
+                    setConformityFileList([file]);
+                    return false;
+                  }}
+                  onRemove={() => setConformityFileList([])}
+                  fileList={conformityFileList}
+                >
+                  <Button icon={<UploadOutlined />}>Seleccionar Carta Firmada</Button>
+                </Upload>
+              </Form.Item>
+            </>
+          )}
+
+          {editingHistoryItem?.stage === 'pagado' && (
+            <>
+              <Divider style={{ margin: '12px 0' }} />
+              <Form.Item 
+                label={
+                  <span>
+                    Comprobante de Pago Electrónico (Opcional) {' '}
+                    {selectedService.payment_receipt_file && (
+                      <Text type="secondary">
+                        (<a href={selectedService.payment_receipt_file} target="_blank" rel="noreferrer">Ver actual</a>)
+                      </Text>
+                    )}
+                  </span>
+                }
+              >
+                <Upload
+                  accept="image/*,.pdf"
+                  beforeUpload={(file) => {
+                    setPaymentFileList([file]);
+                    return false;
+                  }}
+                  onRemove={() => setPaymentFileList([])}
+                  fileList={paymentFileList}
+                >
+                  <Button icon={<UploadOutlined />}>Seleccionar Comprobante de Pago</Button>
+                </Upload>
+              </Form.Item>
+            </>
+          )}
         </Form>
       </Modal>
     </div>
