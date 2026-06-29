@@ -860,7 +860,7 @@ export default function ServicesPage() {
                       Ver Captura
                     </Button>
                   )}
-                  {hasPermission('services', 'edit') && (
+                  {hasPermission('services', 'edit') && ['aprobado_hacienda', 'en_proceso_pago', 'pagado'].includes(selectedService.status) && (
                     <Upload
                       showUploadList={false}
                       beforeUpload={(file) => {
@@ -873,7 +873,7 @@ export default function ServicesPage() {
                       </Button>
                     </Upload>
                   )}
-                  {!selectedService.authorization_email_file && !hasPermission('services', 'edit') && (
+                  {!selectedService.authorization_email_file && (!hasPermission('services', 'edit') || !['aprobado_hacienda', 'en_proceso_pago', 'pagado'].includes(selectedService.status)) && (
                     <Text type="secondary">No cargado (Opcional)</Text>
                   )}
                 </Space>
@@ -891,7 +891,7 @@ export default function ServicesPage() {
                       Descargar XML
                     </Button>
                   )}
-                  {hasPermission('services', 'edit') && (
+                  {hasPermission('services', 'edit') && ['en_proceso_pago', 'pagado'].includes(selectedService.status) && (
                     <Upload
                       showUploadList={false}
                       beforeUpload={(file) => {
@@ -904,7 +904,7 @@ export default function ServicesPage() {
                       </Button>
                     </Upload>
                   )}
-                  {!selectedService.invoice_xml_file && !hasPermission('services', 'edit') && (
+                  {!selectedService.invoice_xml_file && (!hasPermission('services', 'edit') || !['en_proceso_pago', 'pagado'].includes(selectedService.status)) && (
                     <Text type="secondary">No cargado</Text>
                   )}
                 </Space>
@@ -922,7 +922,7 @@ export default function ServicesPage() {
                       Ver Factura PDF
                     </Button>
                   )}
-                  {hasPermission('services', 'edit') && (
+                  {hasPermission('services', 'edit') && ['en_proceso_pago', 'pagado'].includes(selectedService.status) && (
                     <Upload
                       showUploadList={false}
                       beforeUpload={(file) => {
@@ -935,7 +935,7 @@ export default function ServicesPage() {
                       </Button>
                     </Upload>
                   )}
-                  {!selectedService.invoice_pdf_file && !hasPermission('services', 'edit') && (
+                  {!selectedService.invoice_pdf_file && (!hasPermission('services', 'edit') || !['en_proceso_pago', 'pagado'].includes(selectedService.status)) && (
                     <Text type="secondary">No cargado</Text>
                   )}
                 </Space>
@@ -953,7 +953,7 @@ export default function ServicesPage() {
                       Ver Carta
                     </Button>
                   )}
-                  {hasPermission('services', 'edit') && (
+                  {hasPermission('services', 'edit') && ['en_proceso_pago', 'pagado'].includes(selectedService.status) && (
                     <Upload
                       showUploadList={false}
                       beforeUpload={(file) => {
@@ -966,7 +966,7 @@ export default function ServicesPage() {
                       </Button>
                     </Upload>
                   )}
-                  {!selectedService.conformity_letter_file && !hasPermission('services', 'edit') && (
+                  {!selectedService.conformity_letter_file && (!hasPermission('services', 'edit') || !['en_proceso_pago', 'pagado'].includes(selectedService.status)) && (
                     <Text type="secondary">No cargado (Opcional)</Text>
                   )}
                 </Space>
@@ -984,7 +984,7 @@ export default function ServicesPage() {
                       Ver Comprobante
                     </Button>
                   )}
-                  {hasPermission('services', 'edit') && (
+                  {hasPermission('services', 'edit') && selectedService.status === 'pagado' && (
                     <Upload
                       showUploadList={false}
                       beforeUpload={(file) => {
@@ -997,7 +997,7 @@ export default function ServicesPage() {
                       </Button>
                     </Upload>
                   )}
-                  {!selectedService.payment_receipt_file && !hasPermission('services', 'edit') && (
+                  {!selectedService.payment_receipt_file && (!hasPermission('services', 'edit') || selectedService.status !== 'pagado') && (
                     <Text type="secondary">No cargado (Opcional)</Text>
                   )}
                 </Space>
