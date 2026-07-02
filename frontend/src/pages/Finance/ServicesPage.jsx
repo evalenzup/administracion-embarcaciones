@@ -147,6 +147,44 @@ export default function ServicesPage() {
   const [savingHistoryEdit, setSavingHistoryEdit] = useState(false);
   const [historyEditForm] = Form.useForm();
 
+  const extractDateFromFile = (file) => {
+    return new Promise((resolve) => {
+      if (file.name.toLowerCase().endsWith('.xml')) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try {
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(e.target.result, 'text/xml');
+            const comprobante = xmlDoc.documentElement;
+            if (comprobante) {
+              const fechaAttr = comprobante.getAttribute('Fecha') || comprobante.getAttribute('fecha');
+              if (fechaAttr) {
+                const parsedDate = dayjs(fechaAttr);
+                if (parsedDate.isValid()) {
+                  resolve(parsedDate);
+                  return;
+                }
+              }
+            }
+          } catch (err) {
+            console.error('Error al parsear la fecha del XML:', err);
+          }
+          resolve(dayjs(file.lastModified));
+        };
+        reader.onerror = () => {
+          resolve(dayjs(file.lastModified));
+        };
+        reader.readAsText(file);
+      } else {
+        if (file.lastModified) {
+          resolve(dayjs(file.lastModified));
+        } else {
+          resolve(dayjs());
+        }
+      }
+    });
+  };
+
   const handleOpenEditHistoryModal = (item) => {
     setEditingHistoryItem(item);
     historyEditForm.setFieldsValue({
@@ -1275,8 +1313,10 @@ export default function ServicesPage() {
                 <Form.Item label="Captura/Correo del Oficio o Aprobación (Opcional)">
                   <Upload
                     accept="image/*,.pdf"
-                    beforeUpload={(file) => {
+                    beforeUpload={async (file) => {
                       setAuthEmailFileList([file]);
+                      const extDate = await extractDateFromFile(file);
+                      transitionForm.setFieldsValue({ date: extDate });
                       return false;
                     }}
                     onRemove={() => setAuthEmailFileList([])}
@@ -1301,8 +1341,10 @@ export default function ServicesPage() {
                 <Form.Item label="Factura XML (Obligatorio)" required>
                   <Upload
                     accept=".xml"
-                    beforeUpload={(file) => {
+                    beforeUpload={async (file) => {
                       setXmlFileList([file]);
+                      const extDate = await extractDateFromFile(file);
+                      transitionForm.setFieldsValue({ date: extDate });
                       return false;
                     }}
                     onRemove={() => setXmlFileList([])}
@@ -1316,8 +1358,10 @@ export default function ServicesPage() {
                 <Form.Item label="Factura PDF (Obligatorio)" required>
                   <Upload
                     accept=".pdf"
-                    beforeUpload={(file) => {
+                    beforeUpload={async (file) => {
                       setPdfFileList([file]);
+                      const extDate = await extractDateFromFile(file);
+                      transitionForm.setFieldsValue({ date: extDate });
                       return false;
                     }}
                     onRemove={() => setPdfFileList([])}
@@ -1331,8 +1375,10 @@ export default function ServicesPage() {
                 <Form.Item label="Carta de Conformidad Escaneada (Opcional)">
                   <Upload
                     accept="image/*,.pdf"
-                    beforeUpload={(file) => {
+                    beforeUpload={async (file) => {
                       setConformityFileList([file]);
+                      const extDate = await extractDateFromFile(file);
+                      transitionForm.setFieldsValue({ date: extDate });
                       return false;
                     }}
                     onRemove={() => setConformityFileList([])}
@@ -1351,8 +1397,10 @@ export default function ServicesPage() {
                 <Form.Item label="Comprobante de Pago Electrónico (Opcional)">
                   <Upload
                     accept="image/*,.pdf"
-                    beforeUpload={(file) => {
+                    beforeUpload={async (file) => {
                       setPaymentFileList([file]);
+                      const extDate = await extractDateFromFile(file);
+                      transitionForm.setFieldsValue({ date: extDate });
                       return false;
                     }}
                     onRemove={() => setPaymentFileList([])}
@@ -1440,8 +1488,10 @@ export default function ServicesPage() {
               >
                 <Upload
                   accept="image/*,.pdf"
-                  beforeUpload={(file) => {
+                  beforeUpload={async (file) => {
                     setAuthEmailFileList([file]);
+                    const extDate = await extractDateFromFile(file);
+                    historyEditForm.setFieldsValue({ entered_at: extDate });
                     return false;
                   }}
                   onRemove={() => setAuthEmailFileList([])}
@@ -1470,8 +1520,10 @@ export default function ServicesPage() {
               >
                 <Upload
                   accept=".xml"
-                  beforeUpload={(file) => {
+                  beforeUpload={async (file) => {
                     setXmlFileList([file]);
+                    const extDate = await extractDateFromFile(file);
+                    historyEditForm.setFieldsValue({ entered_at: extDate });
                     return false;
                   }}
                   onRemove={() => setXmlFileList([])}
@@ -1495,8 +1547,10 @@ export default function ServicesPage() {
               >
                 <Upload
                   accept=".pdf"
-                  beforeUpload={(file) => {
+                  beforeUpload={async (file) => {
                     setPdfFileList([file]);
+                    const extDate = await extractDateFromFile(file);
+                    historyEditForm.setFieldsValue({ entered_at: extDate });
                     return false;
                   }}
                   onRemove={() => setPdfFileList([])}
@@ -1520,8 +1574,10 @@ export default function ServicesPage() {
               >
                 <Upload
                   accept="image/*,.pdf"
-                  beforeUpload={(file) => {
+                  beforeUpload={async (file) => {
                     setConformityFileList([file]);
+                    const extDate = await extractDateFromFile(file);
+                    historyEditForm.setFieldsValue({ entered_at: extDate });
                     return false;
                   }}
                   onRemove={() => setConformityFileList([])}
@@ -1550,8 +1606,10 @@ export default function ServicesPage() {
               >
                 <Upload
                   accept="image/*,.pdf"
-                  beforeUpload={(file) => {
+                  beforeUpload={async (file) => {
                     setPaymentFileList([file]);
+                    const extDate = await extractDateFromFile(file);
+                    historyEditForm.setFieldsValue({ entered_at: extDate });
                     return false;
                   }}
                   onRemove={() => setPaymentFileList([])}
