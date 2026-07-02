@@ -50,6 +50,7 @@ import {
   UploadOutlined,
   EditOutlined,
   RollbackOutlined,
+  DownloadOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import apiClient from '../../api/client';
@@ -148,6 +149,48 @@ export default function ServicesPage() {
   const [editingHistoryItem, setEditingHistoryItem] = useState(null);
   const [savingHistoryEdit, setSavingHistoryEdit] = useState(false);
   const [historyEditForm] = Form.useForm();
+
+  // Modal de Vista Previa de Documentos
+  const [previewModalOpen, setPreviewModalOpen] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState('');
+  const [previewTitle, setPreviewTitle] = useState('');
+  const [previewType, setPreviewType] = useState(''); // 'image', 'pdf', 'xml', 'other'
+  const [xmlPreviewText, setXmlPreviewText] = useState('');
+
+  const handleOpenPreview = (url, title) => {
+    if (!url) return;
+    setPreviewUrl(url);
+    setPreviewTitle(title);
+    setXmlPreviewText('');
+    
+    const lowerUrl = url.toLowerCase();
+    if (lowerUrl.endsWith('.xml')) {
+      setPreviewType('xml');
+      setPreviewModalOpen(true);
+      fetch(url)
+        .then((res) => {
+          if (!res.ok) throw new Error();
+          return res.text();
+        })
+        .then((text) => setXmlPreviewText(text))
+        .catch(() => setXmlPreviewText('No se pudo cargar el contenido del XML en la vista previa. Use el botón de descarga para guardarlo.'));
+    } else if (lowerUrl.endsWith('.pdf')) {
+      setPreviewType('pdf');
+      setPreviewModalOpen(true);
+    } else if (
+      lowerUrl.endsWith('.png') ||
+      lowerUrl.endsWith('.jpg') ||
+      lowerUrl.endsWith('.jpeg') ||
+      lowerUrl.endsWith('.webp') ||
+      lowerUrl.endsWith('.gif')
+    ) {
+      setPreviewType('image');
+      setPreviewModalOpen(true);
+    } else {
+      setPreviewType('other');
+      setPreviewModalOpen(true);
+    }
+  };
 
   const extractDateFromFile = (file) => {
     return new Promise((resolve) => {
@@ -920,7 +963,7 @@ export default function ServicesPage() {
                 </Space>
                 <Space>
                   {selectedService.budget_file && (
-                    <Button type="primary" size="small" ghost href={selectedService.budget_file} target="_blank" icon={<EyeOutlined />}>
+                    <Button type="primary" size="small" ghost onClick={() => handleOpenPreview(selectedService.budget_file, 'Archivo de Presupuesto Inicial (e-Pisa)')} icon={<EyeOutlined />}>
                       Ver Presupuesto
                     </Button>
                   )}
@@ -951,7 +994,7 @@ export default function ServicesPage() {
                 </Space>
                 <Space>
                   {selectedService.authorization_email_file && (
-                    <Button type="primary" size="small" ghost href={selectedService.authorization_email_file} target="_blank" icon={<EyeOutlined />}>
+                    <Button type="primary" size="small" ghost onClick={() => handleOpenPreview(selectedService.authorization_email_file, 'Captura/Correo de Autorización de Hacienda')} icon={<EyeOutlined />}>
                       Ver Captura
                     </Button>
                   )}
@@ -982,8 +1025,8 @@ export default function ServicesPage() {
                 </Space>
                 <Space>
                   {selectedService.invoice_xml_file && (
-                    <Button type="primary" size="small" ghost href={selectedService.invoice_xml_file} target="_blank" icon={<EyeOutlined />}>
-                      Descargar XML
+                    <Button type="primary" size="small" ghost onClick={() => handleOpenPreview(selectedService.invoice_xml_file, 'Factura XML')} icon={<EyeOutlined />}>
+                      Ver XML
                     </Button>
                   )}
                   {hasPermission('services', 'edit') && ['en_proceso_pago', 'pagado'].includes(selectedService.status) && (
@@ -1013,7 +1056,7 @@ export default function ServicesPage() {
                 </Space>
                 <Space>
                   {selectedService.invoice_pdf_file && (
-                    <Button type="primary" size="small" ghost href={selectedService.invoice_pdf_file} target="_blank" icon={<EyeOutlined />}>
+                    <Button type="primary" size="small" ghost onClick={() => handleOpenPreview(selectedService.invoice_pdf_file, 'Factura PDF')} icon={<EyeOutlined />}>
                       Ver Factura PDF
                     </Button>
                   )}
@@ -1044,7 +1087,7 @@ export default function ServicesPage() {
                 </Space>
                 <Space>
                   {selectedService.conformity_letter_file && (
-                    <Button type="primary" size="small" ghost href={selectedService.conformity_letter_file} target="_blank" icon={<EyeOutlined />}>
+                    <Button type="primary" size="small" ghost onClick={() => handleOpenPreview(selectedService.conformity_letter_file, 'Carta de Conformidad Firmada')} icon={<EyeOutlined />}>
                       Ver Carta
                     </Button>
                   )}
@@ -1075,7 +1118,7 @@ export default function ServicesPage() {
                 </Space>
                 <Space>
                   {selectedService.payment_receipt_file && (
-                    <Button type="primary" size="small" ghost href={selectedService.payment_receipt_file} target="_blank" icon={<EyeOutlined />}>
+                    <Button type="primary" size="small" ghost onClick={() => handleOpenPreview(selectedService.payment_receipt_file, 'Comprobante de Pago Completo')} icon={<EyeOutlined />}>
                       Ver Comprobante
                     </Button>
                   )}
@@ -1678,6 +1721,62 @@ export default function ServicesPage() {
             </>
           )}
         </Form>
+      </Modal>
+
+      {/* Modal de Vista Previa de Documento */}
+      <Modal
+        title={previewTitle}
+        visible={previewModalOpen}
+        onCancel={() => setPreviewModalOpen(false)}
+        footer={[
+          <Button key="close" onClick={() => setPreviewModalOpen(false)}>
+            Cerrar
+          </Button>,
+          <Button
+            key="download"
+            type="primary"
+            icon={<DownloadOutlined />}
+            href={previewUrl}
+            download
+            target="_blank"
+          >
+            Descargar Archivo
+          </Button>
+        ]}
+        width={1100}
+        destroyOnClose
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
+          {previewType === 'pdf' && (
+            <iframe
+              src={previewUrl}
+              style={{ width: '100%', height: '750px', border: 'none' }}
+              title="Vista previa PDF"
+            />
+          )}
+          {previewType === 'image' && (
+            <img
+              src={previewUrl}
+              style={{ maxWidth: '100%', maxHeight: '750px', objectFit: 'contain', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+              alt="Vista previa del documento"
+            />
+          )}
+          {previewType === 'xml' && (
+            <div style={{ width: '100%', background: '#f5f5f5', padding: '12px 16px', borderRadius: 8, border: '1px solid #d9d9d9', overflow: 'hidden' }}>
+              <Text strong style={{ display: 'block', marginBottom: 8 }}>Estructura XML de la Factura:</Text>
+              <pre style={{ margin: 0, maxHeight: '650px', overflow: 'auto', fontSize: '12px', color: '#333', fontFamily: 'monospace' }}>
+                {xmlPreviewText}
+              </pre>
+            </div>
+          )}
+          {previewType === 'other' && (
+            <div style={{ textAlign: 'center', padding: '24px 0' }}>
+              <PaperClipOutlined style={{ fontSize: 48, color: '#bfbfbf', marginBottom: 12 }} />
+              <Paragraph>Este archivo no tiene una vista previa compatible en el navegador.</Paragraph>
+              <Paragraph type="secondary">Puede descargarlo usando el botón de la parte inferior.</Paragraph>
+            </div>
+          )}
+        </div>
       </Modal>
     </div>
   );
