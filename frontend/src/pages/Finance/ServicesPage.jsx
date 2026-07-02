@@ -838,7 +838,23 @@ export default function ServicesPage() {
               <Steps
                 current={getStepIndex(selectedService.status)}
                 size="small"
-                style={{ marginBottom: 24, padding: '12px 20px', background: '#f5f5f5', borderRadius: 8 }}
+                onChange={(currentStepIndex) => {
+                  if (!hasPermission('services', 'edit')) {
+                    message.warning('No tiene permisos para editar etapas.');
+                    return;
+                  }
+                  const stepStages = ['solicitado', 'aprobado_hacienda', 'en_proceso_pago', 'pagado'];
+                  const targetStage = stepStages[currentStepIndex];
+                  if (targetStage) {
+                    const historyItem = selectedService.history?.find((h) => h.stage === targetStage);
+                    if (historyItem) {
+                      handleOpenEditHistoryModal(historyItem);
+                    } else {
+                      message.info(`La etapa "${stageConfig[targetStage].label}" aún no ha sido registrada en esta solicitud.`);
+                    }
+                  }
+                }}
+                style={{ marginBottom: 24, padding: '12px 20px', background: '#f5f5f5', borderRadius: 8, cursor: hasPermission('services', 'edit') ? 'pointer' : 'default' }}
               >
                 <Steps.Step title="Solicitado" description={selectedService.stage_durations?.solicitado ? `Espera: ${selectedService.stage_durations.solicitado}` : ''} />
                 <Steps.Step title="Hacienda" description={selectedService.stage_durations?.aprobado_hacienda ? `Espera: ${selectedService.stage_durations.aprobado_hacienda}` : ''} />
