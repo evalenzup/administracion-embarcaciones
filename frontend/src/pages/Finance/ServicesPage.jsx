@@ -751,9 +751,9 @@ export default function ServicesPage() {
       <Drawer
         title={
           selectedService ? (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '95%' }}>
-              <Space>
-                <Title level={4} style={{ margin: 0, color: '#002c8c' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '95%', flexWrap: 'wrap', gap: 12 }}>
+              <Space style={{ flexShrink: 0 }}>
+                <Title level={4} style={{ margin: 0, color: '#002c8c', whiteSpace: 'nowrap' }}>
                   {selectedService.internal_folio}
                 </Title>
                 <Tag color={stageConfig[selectedService.status].color}>
@@ -761,7 +761,7 @@ export default function ServicesPage() {
                 </Tag>
               </Space>
               {hasPermission('services', 'edit') && (
-                <Space>
+                <Space wrap style={{ justifyContent: 'flex-end' }}>
                   {/* Botones de avance de etapa */}
                   {selectedService.status === 'solicitado' && (
                     <Button
@@ -826,7 +826,7 @@ export default function ServicesPage() {
             'Cargando...'
           )
         }
-        width={750}
+        width={850}
         onClose={() => setDrawerOpen(false)}
         visible={drawerOpen}
         bodyStyle={{ paddingBottom: 80 }}
