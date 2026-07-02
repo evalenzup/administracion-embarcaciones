@@ -30,6 +30,7 @@ import {
   Upload,
   Descriptions,
   DatePicker,
+  Dropdown,
 } from 'antd';
 import {
   AppstoreOutlined,
@@ -48,6 +49,7 @@ import {
   PaperClipOutlined,
   UploadOutlined,
   EditOutlined,
+  RollbackOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import apiClient from '../../api/client';
@@ -183,6 +185,16 @@ export default function ServicesPage() {
         }
       }
     });
+  };
+
+  const getPreviousStages = (currentStatus) => {
+    const stagesOrder = ['solicitado', 'aprobado_hacienda', 'en_proceso_pago', 'pagado', 'cancelado'];
+    const currentIndex = stagesOrder.indexOf(currentStatus);
+    if (currentIndex <= 0) return [];
+    if (currentStatus === 'cancelado') {
+      return ['solicitado', 'aprobado_hacienda', 'en_proceso_pago', 'pagado'];
+    }
+    return stagesOrder.slice(0, currentIndex);
   };
 
   const handleOpenEditHistoryModal = (item) => {
@@ -421,13 +433,19 @@ export default function ServicesPage() {
           formData.append('authorization_email_file', authEmailFileList[0]);
         }
       } else if (transitionTarget === 'en_proceso_pago') {
-        if (xmlFileList.length === 0 || pdfFileList.length === 0) {
+        const hasXml = selectedService.invoice_xml_file || xmlFileList.length > 0;
+        const hasPdf = selectedService.invoice_pdf_file || pdfFileList.length > 0;
+        if (!hasXml || !hasPdf) {
           message.error('Los archivos XML y PDF de la factura son obligatorios.');
           setSavingTransition(false);
           return;
         }
-        formData.append('xml_file', xmlFileList[0]);
-        formData.append('pdf_file', pdfFileList[0]);
+        if (xmlFileList.length > 0) {
+          formData.append('xml_file', xmlFileList[0]);
+        }
+        if (pdfFileList.length > 0) {
+          formData.append('pdf_file', pdfFileList[0]);
+        }
         if (conformityFileList.length > 0) {
           formData.append('conformity_file', conformityFileList[0]);
         }
@@ -742,8 +760,9 @@ export default function ServicesPage() {
                   {stageConfig[selectedService.status].label}
                 </Tag>
               </Space>
-              {selectedService.status !== 'pagado' && selectedService.status !== 'cancelado' && (
+              {hasPermission('services', 'edit') && (
                 <Space>
+                  {/* Botones de avance de etapa */}
                   {selectedService.status === 'solicitado' && (
                     <Button
                       type="primary"
@@ -771,13 +790,35 @@ export default function ServicesPage() {
                       Marcar como Pagado <CheckCircleOutlined />
                     </Button>
                   )}
-                  <Button
-                    type="primary"
-                    danger
-                    onClick={() => showTransitionModal('cancelado')}
-                  >
-                    Cancelar Servicio
-                  </Button>
+
+                  {/* Cancelar Servicio */}
+                  {selectedService.status !== 'pagado' && selectedService.status !== 'cancelado' && (
+                    <Button
+                      type="primary"
+                      danger
+                      onClick={() => showTransitionModal('cancelado')}
+                    >
+                      Cancelar Servicio
+                    </Button>
+                  )}
+
+                  {/* Regresar Etapa (para cualquier etapa excepto solicitado) */}
+                  {selectedService.status !== 'solicitado' && (
+                    <Dropdown
+                      menu={{
+                        items: getPreviousStages(selectedService.status).map((stage) => ({
+                          key: stage,
+                          label: `Regresar a: ${stageConfig[stage].label}`,
+                        })),
+                        onClick: ({ key }) => showTransitionModal(key),
+                      }}
+                      trigger={['click']}
+                    >
+                      <Button icon={<RollbackOutlined />}>
+                        Regresar Etapa
+                      </Button>
+                    </Dropdown>
+                  )}
                 </Space>
               )}
             </div>

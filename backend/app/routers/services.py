@@ -298,52 +298,56 @@ async def update_stage(
             srv.authorization_email_file = f"/uploads/services/{unique_filename}"
 
     elif status == "en_proceso_pago":
-        if not xml_file or not pdf_file:
-            raise HTTPException(status_code=400, detail="El archivo XML y PDF de la factura son obligatorios en esta etapa.")
+        if not srv.invoice_xml_file and not xml_file:
+            raise HTTPException(status_code=400, detail="El archivo XML de la factura es obligatorio en esta etapa.")
+        if not srv.invoice_pdf_file and not pdf_file:
+            raise HTTPException(status_code=400, detail="El archivo PDF de la factura es obligatorio en esta etapa.")
         
-        # Guardar XML
-        xml_ext = xml_file.filename.split(".")[-1] if "." in xml_file.filename else "xml"
-        xml_name = f"{srv.id}_invoice_{uuid.uuid4().hex[:8]}.{xml_ext}"
-        xml_path = os.path.join(UPLOAD_DIR, xml_name)
-        with open(xml_path, "wb") as buffer:
-            shutil.copyfileobj(xml_file.file, buffer)
-        srv.invoice_xml_file = f"/uploads/services/{xml_name}"
+        # Guardar XML si se subió uno nuevo
+        if xml_file:
+            xml_ext = xml_file.filename.split(".")[-1] if "." in xml_file.filename else "xml"
+            xml_name = f"{srv.id}_invoice_{uuid.uuid4().hex[:8]}.{xml_ext}"
+            xml_path = os.path.join(UPLOAD_DIR, xml_name)
+            with open(xml_path, "wb") as buffer:
+                shutil.copyfileobj(xml_file.file, buffer)
+            srv.invoice_xml_file = f"/uploads/services/{xml_name}"
 
-        # Parsear XML para extraer datos de proveedor
-        try:
-            with open(xml_path, "rb") as f:
-                xml_content = f.read()
-            parsed = parse_and_validate_cfdi(xml_content)
-            if parsed.get("emisor_rfc") and parsed.get("emisor_nombre"):
-                rfc = parsed["emisor_rfc"].upper().strip()
-                legal_name = parsed["emisor_nombre"].strip()
-                
-                # Buscar si el proveedor ya existe
-                provider = db.query(Provider).filter(Provider.rfc == rfc).first()
-                if not provider:
-                    provider = Provider(
-                        rfc=rfc,
-                        legal_name=legal_name,
-                        commercial_name=srv.provider_name or legal_name
-                    )
-                    db.add(provider)
-                    db.flush()
-                else:
-                    if not provider.legal_name:
-                        provider.legal_name = legal_name
+            # Parsear XML para extraer datos de proveedor
+            try:
+                with open(xml_path, "rb") as f:
+                    xml_content = f.read()
+                parsed = parse_and_validate_cfdi(xml_content)
+                if parsed.get("emisor_rfc") and parsed.get("emisor_nombre"):
+                    rfc = parsed["emisor_rfc"].upper().strip()
+                    legal_name = parsed["emisor_nombre"].strip()
+                    
+                    # Buscar si el proveedor ya existe
+                    provider = db.query(Provider).filter(Provider.rfc == rfc).first()
+                    if not provider:
+                        provider = Provider(
+                            rfc=rfc,
+                            legal_name=legal_name,
+                            commercial_name=srv.provider_name or legal_name
+                        )
+                        db.add(provider)
                         db.flush()
-                
-                srv.provider_id = provider.id
-        except Exception as e:
-            print(f"⚠️ Error al parsear XML para extraer proveedor: {e}")
+                    else:
+                        if not provider.legal_name:
+                            provider.legal_name = legal_name
+                            db.flush()
+                    
+                    srv.provider_id = provider.id
+            except Exception as e:
+                print(f"⚠️ Error al parsear XML para extraer proveedor: {e}")
 
-        # Guardar PDF
-        pdf_ext = pdf_file.filename.split(".")[-1] if "." in pdf_file.filename else "pdf"
-        pdf_name = f"{srv.id}_invoice_{uuid.uuid4().hex[:8]}.{pdf_ext}"
-        pdf_path = os.path.join(UPLOAD_DIR, pdf_name)
-        with open(pdf_path, "wb") as buffer:
-            shutil.copyfileobj(pdf_file.file, buffer)
-        srv.invoice_pdf_file = f"/uploads/services/{pdf_name}"
+        # Guardar PDF si se subió uno nuevo
+        if pdf_file:
+            pdf_ext = pdf_file.filename.split(".")[-1] if "." in pdf_file.filename else "pdf"
+            pdf_name = f"{srv.id}_invoice_{uuid.uuid4().hex[:8]}.{pdf_ext}"
+            pdf_path = os.path.join(UPLOAD_DIR, pdf_name)
+            with open(pdf_path, "wb") as buffer:
+                shutil.copyfileobj(pdf_file.file, buffer)
+            srv.invoice_pdf_file = f"/uploads/services/{pdf_name}"
 
         # Guardar Carta de conformidad (opcional)
         if conformity_file:
