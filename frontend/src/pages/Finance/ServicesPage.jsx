@@ -962,25 +962,11 @@ export default function ServicesPage() {
                   <Text strong>Archivo de Presupuesto Inicial (e-Pisa)</Text>
                 </Space>
                 <Space>
-                  {selectedService.budget_file && (
+                  {selectedService.budget_file ? (
                     <Button type="primary" size="small" ghost onClick={() => handleOpenPreview(selectedService.budget_file, 'Archivo de Presupuesto Inicial (e-Pisa)')} icon={<EyeOutlined />}>
                       Ver Presupuesto
                     </Button>
-                  )}
-                  {hasPermission('services', 'edit') && (
-                    <Upload
-                      showUploadList={false}
-                      beforeUpload={(file) => {
-                        handleReplaceDocument('budget', file);
-                        return false;
-                      }}
-                    >
-                      <Button size="small" icon={<UploadOutlined />} type={selectedService.budget_file ? "dashed" : "primary"}>
-                        {selectedService.budget_file ? "Reemplazar" : "Subir"}
-                      </Button>
-                    </Upload>
-                  )}
-                  {!selectedService.budget_file && !hasPermission('services', 'edit') && (
+                  ) : (
                     <Text type="secondary">No cargado</Text>
                   )}
                 </Space>
@@ -993,25 +979,11 @@ export default function ServicesPage() {
                   <Text strong>Captura/Correo de Autorización de Hacienda</Text>
                 </Space>
                 <Space>
-                  {selectedService.authorization_email_file && (
+                  {selectedService.authorization_email_file ? (
                     <Button type="primary" size="small" ghost onClick={() => handleOpenPreview(selectedService.authorization_email_file, 'Captura/Correo de Autorización de Hacienda')} icon={<EyeOutlined />}>
                       Ver Captura
                     </Button>
-                  )}
-                  {hasPermission('services', 'edit') && ['aprobado_hacienda', 'en_proceso_pago', 'pagado'].includes(selectedService.status) && (
-                    <Upload
-                      showUploadList={false}
-                      beforeUpload={(file) => {
-                        handleReplaceDocument('authorization_email', file);
-                        return false;
-                      }}
-                    >
-                      <Button size="small" icon={<UploadOutlined />} type={selectedService.authorization_email_file ? "dashed" : "primary"}>
-                        {selectedService.authorization_email_file ? "Reemplazar" : "Subir"}
-                      </Button>
-                    </Upload>
-                  )}
-                  {!selectedService.authorization_email_file && (!hasPermission('services', 'edit') || !['aprobado_hacienda', 'en_proceso_pago', 'pagado'].includes(selectedService.status)) && (
+                  ) : (
                     <Text type="secondary">No cargado (Opcional)</Text>
                   )}
                 </Space>
@@ -1024,25 +996,11 @@ export default function ServicesPage() {
                   <Text strong>Factura XML (Obligatorio en Pago)</Text>
                 </Space>
                 <Space>
-                  {selectedService.invoice_xml_file && (
+                  {selectedService.invoice_xml_file ? (
                     <Button type="primary" size="small" ghost onClick={() => handleOpenPreview(selectedService.invoice_xml_file, 'Factura XML')} icon={<EyeOutlined />}>
                       Ver XML
                     </Button>
-                  )}
-                  {hasPermission('services', 'edit') && ['en_proceso_pago', 'pagado'].includes(selectedService.status) && (
-                    <Upload
-                      showUploadList={false}
-                      beforeUpload={(file) => {
-                        handleReplaceDocument('invoice_xml', file);
-                        return false;
-                      }}
-                    >
-                      <Button size="small" icon={<UploadOutlined />} type={selectedService.invoice_xml_file ? "dashed" : "primary"}>
-                        {selectedService.invoice_xml_file ? "Reemplazar" : "Subir"}
-                      </Button>
-                    </Upload>
-                  )}
-                  {!selectedService.invoice_xml_file && (!hasPermission('services', 'edit') || !['en_proceso_pago', 'pagado'].includes(selectedService.status)) && (
+                  ) : (
                     <Text type="secondary">No cargado</Text>
                   )}
                 </Space>
@@ -1055,25 +1013,11 @@ export default function ServicesPage() {
                   <Text strong>Factura PDF (Obligatorio en Pago)</Text>
                 </Space>
                 <Space>
-                  {selectedService.invoice_pdf_file && (
+                  {selectedService.invoice_pdf_file ? (
                     <Button type="primary" size="small" ghost onClick={() => handleOpenPreview(selectedService.invoice_pdf_file, 'Factura PDF')} icon={<EyeOutlined />}>
                       Ver Factura PDF
                     </Button>
-                  )}
-                  {hasPermission('services', 'edit') && ['en_proceso_pago', 'pagado'].includes(selectedService.status) && (
-                    <Upload
-                      showUploadList={false}
-                      beforeUpload={(file) => {
-                        handleReplaceDocument('invoice_pdf', file);
-                        return false;
-                      }}
-                    >
-                      <Button size="small" icon={<UploadOutlined />} type={selectedService.invoice_pdf_file ? "dashed" : "primary"}>
-                        {selectedService.invoice_pdf_file ? "Reemplazar" : "Subir"}
-                      </Button>
-                    </Upload>
-                  )}
-                  {!selectedService.invoice_pdf_file && (!hasPermission('services', 'edit') || !['en_proceso_pago', 'pagado'].includes(selectedService.status)) && (
+                  ) : (
                     <Text type="secondary">No cargado</Text>
                   )}
                 </Space>
@@ -1086,25 +1030,11 @@ export default function ServicesPage() {
                   <Text strong>Carta de Conformidad Firmada</Text>
                 </Space>
                 <Space>
-                  {selectedService.conformity_letter_file && (
+                  {selectedService.conformity_letter_file ? (
                     <Button type="primary" size="small" ghost onClick={() => handleOpenPreview(selectedService.conformity_letter_file, 'Carta de Conformidad Firmada')} icon={<EyeOutlined />}>
                       Ver Carta
                     </Button>
-                  )}
-                  {hasPermission('services', 'edit') && ['en_proceso_pago', 'pagado'].includes(selectedService.status) && (
-                    <Upload
-                      showUploadList={false}
-                      beforeUpload={(file) => {
-                        handleReplaceDocument('conformity_letter', file);
-                        return false;
-                      }}
-                    >
-                      <Button size="small" icon={<UploadOutlined />} type={selectedService.conformity_letter_file ? "dashed" : "primary"}>
-                        {selectedService.conformity_letter_file ? "Reemplazar" : "Subir"}
-                      </Button>
-                    </Upload>
-                  )}
-                  {!selectedService.conformity_letter_file && (!hasPermission('services', 'edit') || !['en_proceso_pago', 'pagado'].includes(selectedService.status)) && (
+                  ) : (
                     <Text type="secondary">No cargado (Opcional)</Text>
                   )}
                 </Space>
@@ -1117,25 +1047,11 @@ export default function ServicesPage() {
                   <Text strong>Comprobante de Pago Completo</Text>
                 </Space>
                 <Space>
-                  {selectedService.payment_receipt_file && (
+                  {selectedService.payment_receipt_file ? (
                     <Button type="primary" size="small" ghost onClick={() => handleOpenPreview(selectedService.payment_receipt_file, 'Comprobante de Pago Completo')} icon={<EyeOutlined />}>
                       Ver Comprobante
                     </Button>
-                  )}
-                  {hasPermission('services', 'edit') && selectedService.status === 'pagado' && (
-                    <Upload
-                      showUploadList={false}
-                      beforeUpload={(file) => {
-                        handleReplaceDocument('payment_receipt', file);
-                        return false;
-                      }}
-                    >
-                      <Button size="small" icon={<UploadOutlined />} type={selectedService.payment_receipt_file ? "dashed" : "primary"}>
-                        {selectedService.payment_receipt_file ? "Reemplazar" : "Subir"}
-                      </Button>
-                    </Upload>
-                  )}
-                  {!selectedService.payment_receipt_file && (!hasPermission('services', 'edit') || selectedService.status !== 'pagado') && (
+                  ) : (
                     <Text type="secondary">No cargado (Opcional)</Text>
                   )}
                 </Space>
