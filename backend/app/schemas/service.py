@@ -28,6 +28,7 @@ class ServiceStageHistoryUpdate(BaseModel):
 class ServiceObservationResponse(BaseModel):
     id: int
     notes: str
+    attachment_file: str | None = None
     created_at: datetime
     user_id: int | None = None
     user_name: str | None = None

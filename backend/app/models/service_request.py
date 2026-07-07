@@ -73,6 +73,7 @@ class ServiceObservation(Base):
     id = Column(Integer, primary_key=True, index=True)
     service_request_id = Column(Integer, ForeignKey("service_requests.id", ondelete="CASCADE"), nullable=False, index=True)
     notes = Column(Text, nullable=False)
+    attachment_file = Column(String(300), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 

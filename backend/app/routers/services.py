@@ -406,22 +406,34 @@ async def update_stage(
 @router.post("/{id}/observations", response_model=ServiceObservationResponse)
 async def add_observation(
     id: int,
-    data: ServiceObservationCreate,
+    notes: str = Form(...),
+    created_at: Optional[datetime] = Form(None),
+    file: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("services", "edit")),
 ):
-    """Registrar un comentario u observación en la bitácora de incidencias."""
+    """Registrar un comentario u observación en la bitácora de incidencias con archivo adjunto opcional."""
     srv = db.query(ServiceRequest).filter(ServiceRequest.id == id).first()
     if not srv:
         raise HTTPException(status_code=404, detail="Solicitud de servicio no encontrada.")
 
+    attachment_path = None
+    if file:
+        ext = file.filename.split(".")[-1].lower() if "." in file.filename else "pdf"
+        unique_filename = f"{srv.id}_obs_{uuid.uuid4().hex[:8]}.{ext}"
+        file_path = os.path.join(UPLOAD_DIR, unique_filename)
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        attachment_path = f"/uploads/services/{unique_filename}"
+
     obs_args = {
         "service_request_id": id,
-        "notes": data.notes,
+        "notes": notes,
+        "attachment_file": attachment_path,
         "user_id": current_user.id
     }
-    if data.created_at is not None:
-        obs_args["created_at"] = data.created_at
+    if created_at is not None:
+        obs_args["created_at"] = created_at
     obs = ServiceObservation(**obs_args)
     db.add(obs)
     db.commit()
@@ -431,6 +443,7 @@ async def add_observation(
     return {
         "id": obs.id,
         "notes": obs.notes,
+        "attachment_file": obs.attachment_file,
         "created_at": obs.created_at,
         "user_id": obs.user_id,
         "user_name": current_user.full_name
@@ -491,6 +504,7 @@ async def replace_document(
     request: Request,
     document_type: str = Form(...),
     file: UploadFile = File(...),
+    date: Optional[datetime] = Form(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("services", "edit")),
 ):
@@ -569,6 +583,26 @@ async def replace_document(
                 srv.provider_id = provider.id
         except Exception as e:
             print(f"⚠️ Error al parsear XML reemplazado: {e}")
+
+    # Si se proporciona una fecha, actualizar el registro histórico de la etapa correspondiente
+    if date:
+        doc_stage_map = {
+            "budget": "solicitado",
+            "authorization_email": "aprobado_hacienda",
+            "invoice_xml": "en_proceso_pago",
+            "invoice_pdf": "en_proceso_pago",
+            "conformity_letter": "en_proceso_pago",
+            "payment_receipt": "pagado"
+        }
+        target_stage = doc_stage_map.get(document_type)
+        if target_stage:
+            hist = db.query(ServiceStageHistory).filter(
+                ServiceStageHistory.service_request_id == srv.id,
+                ServiceStageHistory.stage == target_stage
+            ).first()
+            if hist:
+                hist.entered_at = date
+                srv.updated_at = date
 
     db.commit()
     db.refresh(srv)

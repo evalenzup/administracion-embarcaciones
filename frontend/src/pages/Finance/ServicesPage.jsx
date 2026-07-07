@@ -307,11 +307,14 @@ export default function ServicesPage() {
     }
   };
 
-  const handleReplaceDocument = async (documentType, file) => {
+  const handleReplaceDocument = async (documentType, file, fileDate) => {
     try {
       const formData = new FormData();
       formData.append('document_type', documentType);
       formData.append('file', file);
+      if (fileDate) {
+        formData.append('date', fileDate.toISOString());
+      }
 
       message.loading({ content: 'Subiendo archivo...', key: 'uploading_doc' });
 
@@ -339,6 +342,7 @@ export default function ServicesPage() {
   const [newObservation, setNewObservation] = useState('');
   const [observationDate, setObservationDate] = useState(dayjs());
   const [savingObservation, setSavingObservation] = useState(false);
+  const [observationFileList, setObservationFileList] = useState([]);
 
   // Cargar lista de servicios
   const loadServices = async () => {
@@ -523,13 +527,24 @@ export default function ServicesPage() {
     if (!newObservation.trim()) return;
     setSavingObservation(true);
     try {
-      await apiClient.post(`/services/${selectedService.id}/observations`, {
-        notes: newObservation,
-        created_at: observationDate ? observationDate.toISOString() : undefined,
+      const formData = new FormData();
+      formData.append('notes', newObservation);
+      if (observationDate) {
+        formData.append('created_at', observationDate.toISOString());
+      }
+      if (observationFileList.length > 0) {
+        formData.append('file', observationFileList[0]);
+      }
+
+      await apiClient.post(`/services/${selectedService.id}/observations`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
       });
       message.success('Observación registrada en la bitácora.');
       setNewObservation('');
       setObservationDate(dayjs());
+      setObservationFileList([]);
       // Refrescar detail
       loadServiceDetail(selectedService.id);
       loadServices();
@@ -962,11 +977,26 @@ export default function ServicesPage() {
                   <Text strong>Archivo de Presupuesto Inicial (e-Pisa)</Text>
                 </Space>
                 <Space>
-                  {selectedService.budget_file ? (
+                  {selectedService.budget_file && (
                     <Button type="primary" size="small" ghost onClick={() => handleOpenPreview(selectedService.budget_file, 'Archivo de Presupuesto Inicial (e-Pisa)')} icon={<EyeOutlined />}>
                       Ver Presupuesto
                     </Button>
-                  ) : (
+                  )}
+                  {hasPermission('services', 'edit') && (
+                    <Upload
+                      showUploadList={false}
+                      beforeUpload={async (file) => {
+                        const extDate = await extractDateFromFile(file);
+                        handleReplaceDocument('budget', file, extDate);
+                        return false;
+                      }}
+                    >
+                      <Button size="small" icon={<UploadOutlined />} type={selectedService.budget_file ? "dashed" : "primary"}>
+                        {selectedService.budget_file ? "Reemplazar" : "Subir"}
+                      </Button>
+                    </Upload>
+                  )}
+                  {!selectedService.budget_file && !hasPermission('services', 'edit') && (
                     <Text type="secondary">No cargado</Text>
                   )}
                 </Space>
@@ -979,11 +1009,26 @@ export default function ServicesPage() {
                   <Text strong>Captura/Correo de Autorización de Hacienda</Text>
                 </Space>
                 <Space>
-                  {selectedService.authorization_email_file ? (
+                  {selectedService.authorization_email_file && (
                     <Button type="primary" size="small" ghost onClick={() => handleOpenPreview(selectedService.authorization_email_file, 'Captura/Correo de Autorización de Hacienda')} icon={<EyeOutlined />}>
                       Ver Captura
                     </Button>
-                  ) : (
+                  )}
+                  {hasPermission('services', 'edit') && ['aprobado_hacienda', 'en_proceso_pago', 'pagado'].includes(selectedService.status) && (
+                    <Upload
+                      showUploadList={false}
+                      beforeUpload={async (file) => {
+                        const extDate = await extractDateFromFile(file);
+                        handleReplaceDocument('authorization_email', file, extDate);
+                        return false;
+                      }}
+                    >
+                      <Button size="small" icon={<UploadOutlined />} type={selectedService.authorization_email_file ? "dashed" : "primary"}>
+                        {selectedService.authorization_email_file ? "Reemplazar" : "Subir"}
+                      </Button>
+                    </Upload>
+                  )}
+                  {!selectedService.authorization_email_file && (!hasPermission('services', 'edit') || !['aprobado_hacienda', 'en_proceso_pago', 'pagado'].includes(selectedService.status)) && (
                     <Text type="secondary">No cargado (Opcional)</Text>
                   )}
                 </Space>
@@ -996,11 +1041,26 @@ export default function ServicesPage() {
                   <Text strong>Factura XML (Obligatorio en Pago)</Text>
                 </Space>
                 <Space>
-                  {selectedService.invoice_xml_file ? (
+                  {selectedService.invoice_xml_file && (
                     <Button type="primary" size="small" ghost onClick={() => handleOpenPreview(selectedService.invoice_xml_file, 'Factura XML')} icon={<EyeOutlined />}>
                       Ver XML
                     </Button>
-                  ) : (
+                  )}
+                  {hasPermission('services', 'edit') && ['en_proceso_pago', 'pagado'].includes(selectedService.status) && (
+                    <Upload
+                      showUploadList={false}
+                      beforeUpload={async (file) => {
+                        const extDate = await extractDateFromFile(file);
+                        handleReplaceDocument('invoice_xml', file, extDate);
+                        return false;
+                      }}
+                    >
+                      <Button size="small" icon={<UploadOutlined />} type={selectedService.invoice_xml_file ? "dashed" : "primary"}>
+                        {selectedService.invoice_xml_file ? "Reemplazar" : "Subir"}
+                      </Button>
+                    </Upload>
+                  )}
+                  {!selectedService.invoice_xml_file && (!hasPermission('services', 'edit') || !['en_proceso_pago', 'pagado'].includes(selectedService.status)) && (
                     <Text type="secondary">No cargado</Text>
                   )}
                 </Space>
@@ -1013,11 +1073,26 @@ export default function ServicesPage() {
                   <Text strong>Factura PDF (Obligatorio en Pago)</Text>
                 </Space>
                 <Space>
-                  {selectedService.invoice_pdf_file ? (
+                  {selectedService.invoice_pdf_file && (
                     <Button type="primary" size="small" ghost onClick={() => handleOpenPreview(selectedService.invoice_pdf_file, 'Factura PDF')} icon={<EyeOutlined />}>
                       Ver Factura PDF
                     </Button>
-                  ) : (
+                  )}
+                  {hasPermission('services', 'edit') && ['en_proceso_pago', 'pagado'].includes(selectedService.status) && (
+                    <Upload
+                      showUploadList={false}
+                      beforeUpload={async (file) => {
+                        const extDate = await extractDateFromFile(file);
+                        handleReplaceDocument('invoice_pdf', file, extDate);
+                        return false;
+                      }}
+                    >
+                      <Button size="small" icon={<UploadOutlined />} type={selectedService.invoice_pdf_file ? "dashed" : "primary"}>
+                        {selectedService.invoice_pdf_file ? "Reemplazar" : "Subir"}
+                      </Button>
+                    </Upload>
+                  )}
+                  {!selectedService.invoice_pdf_file && (!hasPermission('services', 'edit') || !['en_proceso_pago', 'pagado'].includes(selectedService.status)) && (
                     <Text type="secondary">No cargado</Text>
                   )}
                 </Space>
@@ -1030,11 +1105,26 @@ export default function ServicesPage() {
                   <Text strong>Carta de Conformidad Firmada</Text>
                 </Space>
                 <Space>
-                  {selectedService.conformity_letter_file ? (
+                  {selectedService.conformity_letter_file && (
                     <Button type="primary" size="small" ghost onClick={() => handleOpenPreview(selectedService.conformity_letter_file, 'Carta de Conformidad Firmada')} icon={<EyeOutlined />}>
                       Ver Carta
                     </Button>
-                  ) : (
+                  )}
+                  {hasPermission('services', 'edit') && ['en_proceso_pago', 'pagado'].includes(selectedService.status) && (
+                    <Upload
+                      showUploadList={false}
+                      beforeUpload={async (file) => {
+                        const extDate = await extractDateFromFile(file);
+                        handleReplaceDocument('conformity_letter', file, extDate);
+                        return false;
+                      }}
+                    >
+                      <Button size="small" icon={<UploadOutlined />} type={selectedService.conformity_letter_file ? "dashed" : "primary"}>
+                        {selectedService.conformity_letter_file ? "Reemplazar" : "Subir"}
+                      </Button>
+                    </Upload>
+                  )}
+                  {!selectedService.conformity_letter_file && (!hasPermission('services', 'edit') || !['en_proceso_pago', 'pagado'].includes(selectedService.status)) && (
                     <Text type="secondary">No cargado (Opcional)</Text>
                   )}
                 </Space>
@@ -1047,11 +1137,26 @@ export default function ServicesPage() {
                   <Text strong>Comprobante de Pago Completo</Text>
                 </Space>
                 <Space>
-                  {selectedService.payment_receipt_file ? (
+                  {selectedService.payment_receipt_file && (
                     <Button type="primary" size="small" ghost onClick={() => handleOpenPreview(selectedService.payment_receipt_file, 'Comprobante de Pago Completo')} icon={<EyeOutlined />}>
                       Ver Comprobante
                     </Button>
-                  ) : (
+                  )}
+                  {hasPermission('services', 'edit') && selectedService.status === 'pagado' && (
+                    <Upload
+                      showUploadList={false}
+                      beforeUpload={async (file) => {
+                        const extDate = await extractDateFromFile(file);
+                        handleReplaceDocument('payment_receipt', file, extDate);
+                        return false;
+                      }}
+                    >
+                      <Button size="small" icon={<UploadOutlined />} type={selectedService.payment_receipt_file ? "dashed" : "primary"}>
+                        {selectedService.payment_receipt_file ? "Reemplazar" : "Subir"}
+                      </Button>
+                    </Upload>
+                  )}
+                  {!selectedService.payment_receipt_file && (!hasPermission('services', 'edit') || selectedService.status !== 'pagado') && (
                     <Text type="secondary">No cargado (Opcional)</Text>
                   )}
                 </Space>
@@ -1073,6 +1178,19 @@ export default function ServicesPage() {
                       <Text strong style={{ color: '#002c8c' }}>{obs.user_name || 'Sistema'}</Text>
                       <br />
                       <Text>{obs.notes}</Text>
+                      {obs.attachment_file && (
+                        <div style={{ marginTop: 4 }}>
+                          <Button
+                            type="link"
+                            size="small"
+                            style={{ padding: 0 }}
+                            icon={<PaperClipOutlined />}
+                            onClick={() => handleOpenPreview(obs.attachment_file, `Adjunto de Observación - ${dayjs(obs.created_at).format('DD/MM/YYYY')}`)}
+                          >
+                            Ver Documento Adjunto
+                          </Button>
+                        </div>
+                      )}
                     </Timeline.Item>
                   ))}
                 </Timeline>
@@ -1082,16 +1200,33 @@ export default function ServicesPage() {
             </div>
 
             <div style={{ background: '#fafafa', padding: 12, borderRadius: 8, border: '1px solid #f0f0f0', marginTop: 10 }}>
-              <div style={{ display: 'flex', gap: 12, marginBottom: 8, alignItems: 'center' }}>
-                <Text type="secondary" style={{ fontSize: 13 }}>Fecha de la observación:</Text>
-                <DatePicker
-                  showTime
-                  format="DD/MM/YYYY HH:mm"
-                  value={observationDate}
-                  onChange={(date) => setObservationDate(date)}
-                  style={{ width: 200, borderRadius: 6 }}
-                  placeholder="Seleccione fecha/hora"
-                />
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <Text type="secondary" style={{ fontSize: 13 }}>Fecha de la observación:</Text>
+                  <DatePicker
+                    showTime
+                    format="DD/MM/YYYY HH:mm"
+                    value={observationDate}
+                    onChange={(date) => setObservationDate(date)}
+                    style={{ width: 200, borderRadius: 6 }}
+                    placeholder="Seleccione fecha/hora"
+                  />
+                </div>
+                <div>
+                  <Upload
+                    beforeUpload={(file) => {
+                      setObservationFileList([file]);
+                      return false;
+                    }}
+                    onRemove={() => setObservationFileList([])}
+                    fileList={observationFileList}
+                    maxCount={1}
+                  >
+                    <Button size="small" icon={<UploadOutlined />}>
+                      {observationFileList.length > 0 ? 'Cambiar Adjunto' : 'Adjuntar Archivo'}
+                    </Button>
+                  </Upload>
+                </div>
               </div>
               <div style={{ display: 'flex', gap: 12 }}>
                 <TextArea

@@ -28,6 +28,11 @@ async def lifespan(app: FastAPI):
     # Crear tablas si no existen
     Base.metadata.create_all(bind=engine)
 
+    # Asegurar que la columna attachment_file existe en service_observations
+    from sqlalchemy import text
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE service_observations ADD COLUMN IF NOT EXISTS attachment_file VARCHAR(300);"))
+
     # Crear directorios de subida
     os.makedirs("uploads/documents", exist_ok=True)
     os.makedirs("uploads/equipment_manuals", exist_ok=True)
