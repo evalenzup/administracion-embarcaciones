@@ -48,6 +48,8 @@ class AccountTransaction(Base):
     description = Column(Text, nullable=True)
     reference = Column(String(100), nullable=True)  # Folio, UUID, etc.
     origin_dest_account = Column(String(150), nullable=True)  # Texto libre para cuenta de origen/destino externa
+    status = Column(String(50), default="completado", nullable=False) # completado o comprometido
+    service_request_id = Column(Integer, ForeignKey("service_requests.id", ondelete="SET NULL"), nullable=True)
     transaction_date = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), index=True)
 
     # Vínculo con caja chica (opcionales)

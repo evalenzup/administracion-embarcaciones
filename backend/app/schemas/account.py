@@ -39,6 +39,8 @@ class AccountTransactionUpdate(BaseModel):
 class AccountTransactionResponse(AccountTransactionBase):
     id: int
     account_id: int
+    status: str = "completado"
+    service_request_id: int | None = None
     petty_cash_invoice_id: int | None = None
     petty_cash_reimbursement_id: int | None = None
     transfer_transaction_id: int | None = None

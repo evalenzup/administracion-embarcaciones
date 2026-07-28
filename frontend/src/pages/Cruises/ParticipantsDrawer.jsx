@@ -185,7 +185,7 @@ function ParticipantsDrawer({ cruise, open, onClose, inline = false }) {
 
   const maxCrew = cruise?.vessel?.max_crew;
   const maxPassengers = cruise?.vessel?.max_passengers;
-  const crewOverLimit = typeof maxCrew === 'number' && crew.length > maxCrew;
+  const crewUnderLimit = typeof maxCrew === 'number' && crew.length < maxCrew;
   const passengersOverLimit = typeof maxPassengers === 'number' && participants.length > maxPassengers;
   const totalMax = (typeof maxCrew === 'number' && typeof maxPassengers === 'number')
     ? (maxCrew + maxPassengers)
@@ -211,11 +211,11 @@ function ParticipantsDrawer({ cruise, open, onClose, inline = false }) {
               <br /><Text type="secondary" style={{ fontSize: 11 }}>Total a Bordo</Text>
             </div>
             <div>
-              <Text style={{ fontSize: 22, fontWeight: 700, color: crewOverLimit ? '#f5222d' : '#52c41a' }}>
+              <Text style={{ fontSize: 22, fontWeight: 700, color: crewUnderLimit ? '#faad14' : '#52c41a' }}>
                 {crew.length}
-                {typeof maxCrew === 'number' && <span style={{ fontSize: 14, fontWeight: 400, color: '#8c8c8c' }}> / {maxCrew}</span>}
+                {typeof maxCrew === 'number' && <span style={{ fontSize: 14, fontWeight: 400, color: '#8c8c8c' }}> (Mín: {maxCrew})</span>}
               </Text>
-              <br /><Text type="secondary" style={{ fontSize: 11 }}>Tripulación {crewOverLimit && <Tooltip title="Capacidad de tripulación excedida">⚠️</Tooltip>}</Text>
+              <br /><Text type="secondary" style={{ fontSize: 11 }}>Tripulación {crewUnderLimit && <Tooltip title="Por debajo del mínimo requerido">⚠️</Tooltip>}</Text>
             </div>
             <div>
               <Text style={{ fontSize: 22, fontWeight: 700, color: passengersOverLimit ? '#f5222d' : '#1677ff' }}>
@@ -233,11 +233,11 @@ function ParticipantsDrawer({ cruise, open, onClose, inline = false }) {
           </div>
         )}
 
-        {/* Alertas de capacidad excedida */}
-        {crewOverLimit && (
+        {/* Alertas */}
+        {crewUnderLimit && (
           <Alert
-            message="Capacidad de Tripulación Excedida"
-            description={`La embarcación tiene una capacidad máxima de ${maxCrew} tripulantes. Actualmente hay ${crew.length} asignados.`}
+            message="Tripulación Mínima no Alcanzada"
+            description={`La embarcación requiere un mínimo de ${maxCrew} tripulantes para navegar de forma segura. Actualmente hay ${crew.length} asignados.`}
             type="warning"
             showIcon
             style={{ marginBottom: 16, borderRadius: 8 }}

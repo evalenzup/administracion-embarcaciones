@@ -80,9 +80,22 @@ class ServiceRequestResponse(ServiceRequestBase):
     created_at: datetime
     updated_at: datetime
     
+    currency: str = "MXN"
+    exchange_rate: float | None = None
+    tentative_exchange_rate: float | None = None
+    account_id: int | None = None
+    account_name: str | None = None
+    
     history: list[ServiceStageHistoryResponse] = []
     observations: list[ServiceObservationResponse] = []
     stage_durations: dict[str, str] = {}  # Calculado dinámicamente
     provider: ProviderResponse | None = None
 
     model_config = {"from_attributes": True}
+
+
+class ServiceRequestBudgetAccountUpdate(BaseModel):
+    currency: str = "MXN"
+    tentative_exchange_rate: float | None = None
+    exchange_rate: float | None = None
+    account_id: int | None = None

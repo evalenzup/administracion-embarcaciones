@@ -29,6 +29,8 @@ from app.models.account import Account, AccountTransaction, TransactionType
 from app.models.service_request import ServiceRequest, ServiceStageHistory, ServiceObservation
 from app.models.provider import Provider
 from app.models.project import Project
+from app.models.tide import TideStation, TidePrediction
+from app.models.ema import EmaStation, EmaMeasurement
 
 __all__ = [
     "Permission", "Role", "role_permissions", "User", "UserRole",
@@ -64,5 +66,7 @@ __all__ = [
     "Account",
     "AccountTransaction",
     "TransactionType",
+    "TideStation", "TidePrediction",
+    "EmaStation", "EmaMeasurement",
 ]
 

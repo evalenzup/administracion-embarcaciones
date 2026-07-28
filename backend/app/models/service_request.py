@@ -34,12 +34,18 @@ class ServiceRequest(Base):
     provider_id = Column(Integer, ForeignKey("providers.id", ondelete="SET NULL"), nullable=True)
     created_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     
+    currency = Column(String(10), default="MXN", nullable=False)
+    exchange_rate = Column(Float, nullable=True)
+    tentative_exchange_rate = Column(Float, nullable=True)
+    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True)
+    
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     # Relaciones
     provider = relationship("Provider", back_populates="services")
     created_by = relationship("User", lazy="selectin", foreign_keys=[created_by_id])
+    account = relationship("Account", lazy="select")
     history = relationship("ServiceStageHistory", back_populates="service_request", cascade="all, delete-orphan", order_by="ServiceStageHistory.entered_at.asc()")
     observations = relationship("ServiceObservation", back_populates="service_request", cascade="all, delete-orphan", order_by="ServiceObservation.created_at.asc()")
 

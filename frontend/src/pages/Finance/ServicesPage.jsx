@@ -130,6 +130,7 @@ export default function ServicesPage() {
   const [budgetFileList, setBudgetFileList] = useState([]);
   const [providers, setProviders] = useState([]);
   const [isNewProvider, setIsNewProvider] = useState(false);
+  const [accounts, setAccounts] = useState([]);
 
   // Modal de Transición de Etapa
   const [transitionModalOpen, setTransitionModalOpen] = useState(false);
@@ -149,6 +150,11 @@ export default function ServicesPage() {
   const [editingHistoryItem, setEditingHistoryItem] = useState(null);
   const [savingHistoryEdit, setSavingHistoryEdit] = useState(false);
   const [historyEditForm] = Form.useForm();
+
+  // Modal de edición de cuenta, moneda y TC (retroactivo)
+  const [budgetAccountModalOpen, setBudgetAccountModalOpen] = useState(false);
+  const [savingBudgetAccount, setSavingBudgetAccount] = useState(false);
+  const [budgetAccountForm] = Form.useForm();
 
   // Modal de Vista Previa de Documentos
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
@@ -262,7 +268,7 @@ export default function ServicesPage() {
       const res = await apiClient.put(
         `/services/${selectedService.id}/history/${editingHistoryItem.id}`,
         {
-          entered_at: values.entered_at.format('YYYY-MM-DDTHH:mm:ss'),
+          entered_at: values.entered_at.toISOString(),
           notes: values.notes?.trim() || null,
         }
       );
@@ -304,6 +310,41 @@ export default function ServicesPage() {
       console.error(err);
     } finally {
       setSavingHistoryEdit(false);
+    }
+  };
+
+  const handleOpenBudgetAccountModal = () => {
+    if (!selectedService) return;
+    budgetAccountForm.resetFields();
+    budgetAccountForm.setFieldsValue({
+      currency: selectedService.currency || 'MXN',
+      tentative_exchange_rate: selectedService.tentative_exchange_rate,
+      exchange_rate: selectedService.exchange_rate,
+      account_id: selectedService.account_id,
+    });
+    setBudgetAccountModalOpen(true);
+  };
+
+  const handleSaveBudgetAccount = async () => {
+    try {
+      const values = await budgetAccountForm.validateFields();
+      setSavingBudgetAccount(true);
+
+      const res = await apiClient.put(`/services/${selectedService.id}/budget-account`, values);
+
+      message.success('Información financiera y de cuenta actualizada con éxito.');
+      setBudgetAccountModalOpen(false);
+
+      // Refrescar vistas
+      setSelectedService(res.data);
+      loadServiceDetail(selectedService.id);
+      loadServices();
+    } catch (err) {
+      const errorMsg = err.response?.data?.detail || 'Error al actualizar la información financiera.';
+      message.error(errorMsg);
+      console.error(err);
+    } finally {
+      setSavingBudgetAccount(false);
     }
   };
 
@@ -372,9 +413,20 @@ export default function ServicesPage() {
     }
   };
 
+  const loadAccountsList = async () => {
+    try {
+      const res = await apiClient.get('/accounts');
+      const filtered = res.data.filter(acc => !acc.name.toLowerCase().includes('fondo fijo') && !acc.name.toLowerCase().includes('caja chica') && acc.is_active);
+      setAccounts(filtered);
+    } catch (err) {
+      console.error('Error al cargar cuentas:', err);
+    }
+  };
+
   useEffect(() => {
     loadServices();
     loadProvidersList();
+    loadAccountsList();
   }, [statusFilter]);
 
   // Buscar con debounce básico al presionar enter o buscar manualmente
@@ -421,8 +473,15 @@ export default function ServicesPage() {
       formData.append('description', values.description);
       formData.append('episa_folio', values.episa_folio);
       formData.append('budget_amount', values.budget_amount);
+      formData.append('currency', values.currency || 'MXN');
+      if (values.tentative_exchange_rate) {
+        formData.append('tentative_exchange_rate', values.tentative_exchange_rate);
+      }
+      if (values.account_id) {
+        formData.append('account_id', values.account_id);
+      }
       if (values.date) {
-        formData.append('date', values.date.format('YYYY-MM-DDTHH:mm:ss'));
+        formData.append('date', values.date.toISOString());
       }
 
       if (budgetFileList.length > 0) {
@@ -472,7 +531,7 @@ export default function ServicesPage() {
         formData.append('notes', values.notes);
       }
       if (values.date) {
-        formData.append('date', values.date.format('YYYY-MM-DDTHH:mm:ss'));
+        formData.append('date', values.date.toISOString());
       }
 
       if (transitionTarget === 'aprobado_hacienda') {
@@ -608,11 +667,15 @@ export default function ServicesPage() {
       title: 'Monto Presupuesto',
       dataIndex: 'budget_amount',
       key: 'budget_amount',
-      render: (amount) => (
-        <Text strong>
-          {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(amount)}
-        </Text>
-      ),
+      render: (amount, record) => {
+        const currency = record.currency || 'MXN';
+        const formattedAmount = new Intl.NumberFormat('es-MX', { style: 'currency', currency: currency }).format(amount);
+        return (
+          <Text strong>
+            {formattedAmount} {currency}
+          </Text>
+        );
+      },
     },
     {
       title: 'Estado',
@@ -948,9 +1011,44 @@ export default function ServicesPage() {
               </Descriptions.Item>
               <Descriptions.Item label="Monto Presupuesto">
                 <Text strong style={{ color: '#3f8600' }}>
-                  {new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(selectedService.budget_amount)}
+                  {new Intl.NumberFormat('es-MX', { style: 'currency', currency: selectedService.currency || 'MXN' }).format(selectedService.budget_amount)} {selectedService.currency || 'MXN'}
                 </Text>
               </Descriptions.Item>
+              <Descriptions.Item label="Cuenta Afectada">
+                <Space>
+                  <Text strong>{selectedService.account_name || 'Ninguna'}</Text>
+                  {hasPermission('services', 'edit') && (
+                    <Tooltip title="Editar Cuenta / Moneda / TC">
+                      <Button
+                        type="text"
+                        size="small"
+                        style={{ padding: 0, height: 'auto' }}
+                        icon={<EditOutlined style={{ color: '#1890ff', fontSize: 13 }} />}
+                        onClick={handleOpenBudgetAccountModal}
+                      />
+                    </Tooltip>
+                  )}
+                </Space>
+              </Descriptions.Item>
+              {selectedService.currency === 'USD' && (
+                <>
+                  <Descriptions.Item label="TC Tentativo">
+                    {selectedService.tentative_exchange_rate ? `${selectedService.tentative_exchange_rate} MXN` : '-'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="TC Real (Pago)">
+                    {selectedService.exchange_rate ? `${selectedService.exchange_rate} MXN` : '-'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Monto en MXN">
+                    <Text type="secondary" strong>
+                      {selectedService.status === 'pagado' && selectedService.exchange_rate
+                        ? new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(selectedService.budget_amount * selectedService.exchange_rate)
+                        : selectedService.tentative_exchange_rate
+                          ? new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(selectedService.budget_amount * selectedService.tentative_exchange_rate) + ' (Tentativo)'
+                          : '-'}
+                    </Text>
+                  </Descriptions.Item>
+                </>
+              )}
               <Descriptions.Item label="Registrado Por">
                 {selectedService.created_by_name}
               </Descriptions.Item>
@@ -1313,7 +1411,7 @@ export default function ServicesPage() {
         width={600}
         destroyOnClose
       >
-        <Form form={createForm} layout="vertical" initialValues={{ budget_amount: 0, date: dayjs() }}>
+        <Form form={createForm} layout="vertical" initialValues={{ budget_amount: 0, date: dayjs(), currency: 'MXN' }}>
           <Row gutter={16}>
             <Col span={24}>
               <Form.Item
@@ -1378,17 +1476,14 @@ export default function ServicesPage() {
             </Col>
             <Col span={8}>
               <Form.Item
-                name="budget_amount"
-                label="Monto Presupuestado (MXN)"
-                rules={[{ required: true, message: 'El monto presupuestado es obligatorio.' }]}
+                name="currency"
+                label="Moneda"
+                rules={[{ required: true }]}
               >
-                <InputNumber
-                  min={0.01}
-                  precision={2}
-                  style={{ width: '100%' }}
-                  formatter={(value) => `$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                  parser={(value) => value.replace(/\$\s?|(,*)/g, '')}
-                />
+                <Select placeholder="Seleccione moneda">
+                  <Option value="MXN">Pesos (MXN)</Option>
+                  <Option value="USD">Dólares (USD)</Option>
+                </Select>
               </Form.Item>
             </Col>
             <Col span={8}>
@@ -1404,6 +1499,63 @@ export default function ServicesPage() {
                 />
               </Form.Item>
             </Col>
+            
+            <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => prevValues.currency !== currentValues.currency}>
+              {({ getFieldValue }) => {
+                const currency = getFieldValue('currency') || 'MXN';
+                const isUsd = currency === 'USD';
+                return (
+                  <>
+                    <Col span={isUsd ? 8 : 12}>
+                      <Form.Item
+                        name="budget_amount"
+                        label={`Monto Presupuestado (${currency})`}
+                        rules={[{ required: true, message: 'El monto presupuestado es obligatorio.' }]}
+                      >
+                        <InputNumber
+                          min={0.01}
+                          precision={2}
+                          style={{ width: '100%' }}
+                          formatter={(value) => `$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                          parser={(value) => value.replace(/\$\s?|(,*)/g, '')}
+                        />
+                      </Form.Item>
+                    </Col>
+                    {isUsd && (
+                      <Col span={8}>
+                        <Form.Item
+                          name="tentative_exchange_rate"
+                          label="TC Tentativo"
+                          rules={[{ required: true, message: 'El tipo de cambio tentativo es obligatorio en USD.' }]}
+                        >
+                          <InputNumber
+                            min={0.01}
+                            precision={4}
+                            style={{ width: '100%' }}
+                            placeholder="Ej. 18.50"
+                          />
+                        </Form.Item>
+                      </Col>
+                    )}
+                    <Col span={isUsd ? 8 : 12}>
+                      <Form.Item
+                        name="account_id"
+                        label="Cuenta a Afectar (Pre-cargo)"
+                        rules={[{ required: true, message: 'Seleccione la cuenta para comprometer fondos.' }]}
+                      >
+                        <Select placeholder="Seleccione cuenta bancaria">
+                          {accounts.map(acc => (
+                            <Option key={acc.id} value={acc.id}>
+                              {acc.account_number ? `(${acc.account_number}) ` : ''}{acc.name}
+                            </Option>
+                          ))}
+                        </Select>
+                      </Form.Item>
+                    </Col>
+                  </>
+                );
+              }}
+            </Form.Item>
             <Col span={24}>
               <Form.Item
                 name="description"
@@ -1544,6 +1696,30 @@ export default function ServicesPage() {
 
           {transitionTarget === 'pagado' && (
             <Row gutter={16}>
+              {selectedService && selectedService.currency === 'USD' && (
+                <Col span={24}>
+                  <div style={{ background: '#e6f7ff', border: '1px solid #91d5ff', padding: '10px 14px', borderRadius: 6, marginBottom: 16 }}>
+                    <Text strong style={{ color: '#0050b3' }}>Moneda extranjera detectada: </Text>
+                    <Text>
+                      Esta solicitud está cotizada en <strong>USD</strong>. Ingrese el tipo de cambio real (TC) pagado para calcular el cargo final en pesos.
+                      <br />
+                      Monto en dólares: <strong>${selectedService.budget_amount} USD</strong>
+                    </Text>
+                  </div>
+                  <Form.Item
+                    name="exchange_rate"
+                    label="Tipo de Cambio Final (real)"
+                    rules={[{ required: true, message: 'El tipo de cambio final es obligatorio para pagos en USD.' }]}
+                  >
+                    <InputNumber
+                      min={0.01}
+                      precision={4}
+                      style={{ width: '100%' }}
+                      placeholder="Ej. 18.5230"
+                    />
+                  </Form.Item>
+                </Col>
+              )}
               <Col span={24}>
                 <Form.Item label="Comprobante de Pago Electrónico (Opcional)">
                   <Upload
@@ -1771,6 +1947,85 @@ export default function ServicesPage() {
               </Form.Item>
             </>
           )}
+        </Form>
+      </Modal>
+
+      {/* Modal para Editar Cuenta y Moneda (Retroactivo) */}
+      <Modal
+        title="Editar Información Financiera y Asignación de Cuenta"
+        visible={budgetAccountModalOpen}
+        onCancel={() => setBudgetAccountModalOpen(false)}
+        onOk={handleSaveBudgetAccount}
+        confirmLoading={savingBudgetAccount}
+        okText="Actualizar"
+        cancelText="Cancelar"
+        width={500}
+        destroyOnClose
+      >
+        <Form form={budgetAccountForm} layout="vertical">
+          <Form.Item
+            name="account_id"
+            label="Cuenta a Afectar"
+            rules={[{ required: true, message: 'Seleccione una cuenta bancaria.' }]}
+          >
+            <Select placeholder="Seleccione la cuenta para el movimiento">
+              {accounts.map(acc => (
+                <Option key={acc.id} value={acc.id}>
+                  {acc.account_number ? `(${acc.account_number}) ` : ''}{acc.name}
+                </Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          <Form.Item
+            name="currency"
+            label="Moneda"
+            rules={[{ required: true }]}
+          >
+            <Select placeholder="Seleccione moneda">
+              <Option value="MXN">Pesos (MXN)</Option>
+              <Option value="USD">Dólares (USD)</Option>
+            </Select>
+          </Form.Item>
+
+          <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => prevValues.currency !== currentValues.currency}>
+            {({ getFieldValue }) => {
+              const isUsd = getFieldValue('currency') === 'USD';
+              if (!isUsd) return null;
+              
+              const isPaid = selectedService && selectedService.status === 'pagado';
+              return (
+                <>
+                  <Form.Item
+                    name="tentative_exchange_rate"
+                    label="TC Tentativo"
+                    rules={[{ required: true, message: 'El tipo de cambio tentativo es obligatorio en USD.' }]}
+                  >
+                    <InputNumber
+                      min={0.01}
+                      precision={4}
+                      style={{ width: '100%' }}
+                      placeholder="Ej. 18.50"
+                    />
+                  </Form.Item>
+                  {isPaid && (
+                    <Form.Item
+                      name="exchange_rate"
+                      label="TC Final (Pago)"
+                      rules={[{ required: true, message: 'El tipo de cambio final es obligatorio en USD si ya fue pagado.' }]}
+                    >
+                      <InputNumber
+                        min={0.01}
+                        precision={4}
+                        style={{ width: '100%' }}
+                        placeholder="Ej. 18.5230"
+                      />
+                    </Form.Item>
+                  )}
+                </>
+              );
+            }}
+          </Form.Item>
         </Form>
       </Modal>
 

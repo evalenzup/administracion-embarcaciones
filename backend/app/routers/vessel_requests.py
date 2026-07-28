@@ -3,11 +3,12 @@ SIAE — Router de Solicitudes de Embarcación.
 """
 
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import extract
 
 from app.dependencies import get_db, require_permission
+from app.services.email import send_vessel_request_notification, send_new_vessel_request_admin_notification
 from app.models.user import User
 from app.models.vessel import Vessel
 from app.models.vessel_request import VesselRequest, RequestStatus
@@ -76,6 +77,7 @@ async def get_request(
 async def create_request(
     data: VesselRequestCreate,
     request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("vessel_requests", "create")),
 ):
@@ -101,6 +103,24 @@ async def create_request(
     db.add(req)
     db.commit()
     db.refresh(req)
+
+    # Enviar notificación por correo a los administradores del DEO de forma asíncrona
+    vessel = db.query(Vessel).filter(Vessel.id == req.vessel_id).first()
+    vessel_name = vessel.name if vessel else "Embarcación asignada"
+    
+    dep_str = req.departure_date.strftime("%d/%m/%Y")
+    ret_str = req.return_date.strftime("%d/%m/%Y")
+    
+    send_new_vessel_request_admin_notification(
+        background_tasks=background_tasks,
+        applicant_name=current_user.name or current_user.username,
+        project_name=req.project_name,
+        vessel_name=vessel_name,
+        departure_date=dep_str,
+        return_date=ret_str,
+        scientists_count=req.scientists_count,
+        crew_count=req.crew_count
+    )
 
     log_action(
         db=db, user_id=current_user.id, username=current_user.username,
@@ -172,6 +192,7 @@ async def review_request(
     request_id: int,
     data: VesselRequestReview,
     request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("vessel_requests", "edit")),
 ):
@@ -261,6 +282,34 @@ async def review_request(
 
     db.commit()
     db.refresh(req)
+
+    # Enviar notificación por correo al investigador de forma asíncrona
+    applicant = db.query(User).filter(User.id == req.applicant_id).first()
+    if applicant and applicant.email:
+        vessel = db.query(Vessel).filter(Vessel.id == req.vessel_id).first()
+        vessel_name = vessel.name if vessel else "Embarcación asignada"
+        
+        c_num = None
+        if req.status == RequestStatus.APROBADA:
+            c_plan = db.query(CruisePlan).filter(CruisePlan.vessel_request_id == req.id).first()
+            if c_plan:
+                c_num = c_plan.cruise_number
+
+        dep_str = req.departure_date.strftime("%d/%m/%Y")
+        ret_str = req.return_date.strftime("%d/%m/%Y")
+
+        send_vessel_request_notification(
+            background_tasks=background_tasks,
+            to_email=applicant.email,
+            user_name=applicant.name or applicant.username,
+            project_name=req.project_name,
+            vessel_name=vessel_name,
+            departure_date=dep_str,
+            return_date=ret_str,
+            status=req.status.value,
+            cruise_number=c_num,
+            admin_notes=req.admin_notes
+        )
 
     action_name = "approved" if data.status == RequestStatus.APROBADA else "rejected"
     log_action(

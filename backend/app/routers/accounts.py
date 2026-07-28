@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app.database import get_db
-from app.dependencies import require_permission
+from app.dependencies import require_permission, get_current_user
 from app.models.user import User
 from app.models.account import Account, AccountTransaction, TransactionType
 from app.models.audit_log import AuditLog
@@ -46,9 +46,23 @@ def log_action(db: Session, user_id: int, username: str, action: str, entity_id:
 @router.get("", response_model=List[AccountResponse])
 async def list_accounts(
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission("accounts", "view")),
+    current_user: User = Depends(get_current_user),
 ):
     """Listar todas las cuentas con su saldo calculado al corriente."""
+    has_access = (
+        current_user.has_permission("accounts", "view") or
+        current_user.has_permission("services", "view") or
+        current_user.has_permission("services", "create") or
+        current_user.has_permission("services", "edit") or
+        current_user.has_permission("petty_cash", "view") or
+        current_user.has_permission("petty_cash", "create")
+    )
+    if not has_access:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permiso para listar las cuentas."
+        )
+
     accounts = db.query(Account).order_by(Account.name).all()
     
     for account in accounts:
@@ -215,6 +229,8 @@ async def list_transactions(
             "transaction_date": tx.transaction_date,
             "petty_cash_invoice_id": tx.petty_cash_invoice_id,
             "petty_cash_reimbursement_id": tx.petty_cash_reimbursement_id,
+            "status": tx.status,
+            "service_request_id": tx.service_request_id,
             "created_by_id": tx.created_by_id,
             "created_by_name": tx.created_by.full_name if tx.created_by else "Sistema",
             "running_balance": round(running_balance, 2),

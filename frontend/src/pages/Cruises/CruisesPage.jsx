@@ -1679,10 +1679,6 @@ function CruisesPage() {
       const selectedVesselId = values.vessel_id || editingCruise?.vessel_id;
       const selectedVessel = vessels.find(v => v.id === selectedVesselId);
       if (selectedVessel) {
-        if (values.crew_count && selectedVessel.max_crew !== null && values.crew_count > selectedVessel.max_crew) {
-          message.error(`La tripulación autorizada (${values.crew_count}) excede la capacidad máxima de la embarcación (${selectedVessel.max_crew} personas).`);
-          return;
-        }
         if (values.scientists_count && selectedVessel.max_passengers !== null && values.scientists_count > selectedVessel.max_passengers) {
           message.error(`El número de investigadores autorizados (${values.scientists_count}) excede la capacidad máxima de la embarcación (${selectedVessel.max_passengers} personas).`);
           return;
@@ -3256,7 +3252,7 @@ function CruisesPage() {
                 <Form.Item
                   name="crew_count"
                   label="Tripulantes"
-                  extra={selectedVesselObj && selectedVesselObj.max_crew !== null ? `Capacidad máxima: ${selectedVesselObj.max_crew}` : undefined}
+                  extra={selectedVesselObj && selectedVesselObj.max_crew !== null ? `Tripulación mínima requerida: ${selectedVesselObj.max_crew}` : undefined}
                 >
                   <InputNumber style={{ width: '100%' }} min={0} />
                 </Form.Item>

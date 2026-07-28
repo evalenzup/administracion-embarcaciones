@@ -31,6 +31,7 @@ services:
       - ./backend/app:/app/app
       - ./backend/alembic:/app/alembic
       - siae_uploads:/app/uploads
+      - siae_weather_data:/app/weather_data
     depends_on:
       db:
         condition: service_healthy
@@ -58,3 +59,5 @@ volumes:
     name: siae_pgdata
   siae_uploads:
     name: siae_uploads
+  siae_weather_data:
+    name: siae_weather_data

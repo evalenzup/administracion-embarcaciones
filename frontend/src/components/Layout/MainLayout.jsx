@@ -30,6 +30,7 @@ import {
   WalletOutlined,
   BankOutlined,
   AppstoreOutlined,
+  CloudOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -91,6 +92,11 @@ const menuConfig = [
         icon: <CompassOutlined />,
         label: 'Cruceros',
         permission: { module: 'cruises', action: 'view' },
+      },
+      {
+        key: '/weather',
+        icon: <CloudOutlined />,
+        label: 'Meteorología',
       },
       {
         key: '/billing',
@@ -252,6 +258,7 @@ const breadcrumbMap = {
   '/inventory': 'Inventario',
   '/logbooks': 'Bitácoras',
   '/cruises': 'Cruceros',
+  '/weather': 'Meteorología',
   '/participants': 'Participantes de Crucero',
   '/personnel': 'Personal DEO',
   '/admin/users': 'Usuarios',

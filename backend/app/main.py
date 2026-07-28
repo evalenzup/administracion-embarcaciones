@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 from app.database import engine, Base, SessionLocal
 from app.routers import auth, users, roles, vessels, audit, documents, maintenance, inventory, logbooks, cruises, personnel, equipment
-from app.routers import cruise_participants, participant_profiles, vessel_requests, ports, fuel_logs, vessel_rates, cruise_billings, petty_cash, accounts, services, providers, projects
+from app.routers import cruise_participants, participant_profiles, vessel_requests, ports, fuel_logs, vessel_rates, cruise_billings, petty_cash, accounts, services, providers, projects, weather
 
 
 # Importar modelos para que SQLAlchemy los registre
@@ -32,6 +32,12 @@ async def lifespan(app: FastAPI):
     from sqlalchemy import text
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE service_observations ADD COLUMN IF NOT EXISTS attachment_file VARCHAR(300);"))
+        conn.execute(text("ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS currency VARCHAR(10) DEFAULT 'MXN' NOT NULL;"))
+        conn.execute(text("ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS exchange_rate DOUBLE PRECISION;"))
+        conn.execute(text("ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS tentative_exchange_rate DOUBLE PRECISION;"))
+        conn.execute(text("ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS account_id INTEGER REFERENCES accounts(id) ON DELETE SET NULL;"))
+        conn.execute(text("ALTER TABLE account_transactions ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'completado' NOT NULL;"))
+        conn.execute(text("ALTER TABLE account_transactions ADD COLUMN IF NOT EXISTS service_request_id INTEGER REFERENCES service_requests(id) ON DELETE SET NULL;"))
 
     # Crear directorios de subida
     os.makedirs("uploads/documents", exist_ok=True)
@@ -43,6 +49,7 @@ async def lifespan(app: FastAPI):
     os.makedirs("uploads/petty_cash/pdf", exist_ok=True)
     os.makedirs("uploads/petty_cash/scans", exist_ok=True)
     os.makedirs("uploads/services", exist_ok=True)
+    os.makedirs("uploads/weather_archive", exist_ok=True)
 
     # Ejecutar seed
     from app.services.seed import seed_database
@@ -55,7 +62,24 @@ async def lifespan(app: FastAPI):
     finally:
         db.close()
 
+    # Iniciar scheduler del módulo de meteorología (descarga GFS/WW3 cada hora)
+    import asyncio
+    from app.services.weather_scheduler import (
+        run_pipeline_if_new_run,
+        run_tide_ingest,
+        run_smn_ingest,
+        shutdown_scheduler,
+        start_scheduler,
+    )
+    start_scheduler()
+    # Disparar la primera descarga/ingesta en segundo plano para no bloquear el arranque
+    asyncio.create_task(run_pipeline_if_new_run())
+    asyncio.create_task(run_tide_ingest())
+    asyncio.create_task(run_smn_ingest())
+
     yield
+
+    shutdown_scheduler()
 
 
 app = FastAPI(
@@ -107,6 +131,7 @@ app.include_router(services.router)
 app.include_router(providers.router)
 app.include_router(projects.router)
 app.include_router(audit.router)
+app.include_router(weather.router)
 
 
 # ── Health check ──────────────────────────────────────────────

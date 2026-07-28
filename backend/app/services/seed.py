@@ -437,6 +437,40 @@ def seed_database(db: Session) -> None:
         print(f"⚠️ Error al crear proyectos de prueba: {ex}")
         db.rollback()
 
+    # ── 10. Crear estaciones EMA por defecto desde JSON si no existen ──
+    try:
+        from app.models.ema import EmaStation
+        import json
+        import os
+        
+        existing_emas = {s.name for s in db.query(EmaStation).all()}
+        json_path = "/app/app/parsed_emas.json"
+        
+        if os.path.exists(json_path):
+            with open(json_path, 'r', encoding='utf-8') as f:
+                emas_data = json.load(f)
+                
+            emas_created = 0
+            for item in emas_data:
+                if item["name"] not in existing_emas:
+                    ema = EmaStation(
+                        name=item["name"],
+                        state=item["state"],
+                        latitude=item["latitude"],
+                        longitude=item["longitude"],
+                        altitude=item["altitude"],
+                        installation_date=item["installation_date"],
+                        smn_name=item["smn_name"]
+                    )
+                    db.add(ema)
+                    emas_created += 1
+            if emas_created > 0:
+                db.flush()
+                print(f"  -> Creadas {emas_created} estaciones EMA desde parsed_emas.json")
+    except Exception as ex:
+        print(f"⚠️ Error al sembrar estaciones EMA: {ex}")
+        db.rollback()
+
     db.commit()
     print(f"✅ Sincronización de seed completada.")
 

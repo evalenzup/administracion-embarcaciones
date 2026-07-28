@@ -35,6 +35,7 @@ import AccountsPage from './pages/Finance/AccountsPage';
 import ServicesPage from './pages/Finance/ServicesPage';
 import ProvidersPage from './pages/Finance/ProvidersPage';
 import ProjectsPage from './pages/Projects/ProjectsPage';
+import WeatherPage from './pages/Weather/WeatherPage';
 
 /**
  * Ruta protegida: redirige a login si no está autenticado.
@@ -107,6 +108,7 @@ function AppRoutes() {
         <Route path="/inventory" element={<InventoryPage />} />
         <Route path="/logbooks" element={<LogbooksPage />} />
         <Route path="/cruises" element={<CruisesPage />} />
+        <Route path="/weather" element={<WeatherPage />} />
         <Route path="/requests" element={<VesselRequestsPage />} />
         <Route path="/participants" element={<ParticipantsPage />} />
         <Route path="/personnel" element={<PersonnelPage />} />

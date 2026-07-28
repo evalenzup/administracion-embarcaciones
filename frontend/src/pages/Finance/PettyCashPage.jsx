@@ -231,7 +231,7 @@ function PettyCashTrendChart({ history, totalAssigned }) {
           const x = getX(index);
           const barWidth = graphWidth / (history.length - 1);
           const xStart = x - barWidth / 2;
-          
+
           return (
             <rect
               key={index}
@@ -490,7 +490,7 @@ export default function PettyCashPage() {
     start_date: undefined,
     end_date: undefined
   });
-  
+
   const [reimbursements, setReimbursements] = useState([]);
   const [reimbursementsTotal, setReimbursementsTotal] = useState(0);
   const [reimbursementsParams, setReimbursementsParams] = useState({ skip: 0, limit: 10 });
@@ -538,7 +538,7 @@ export default function PettyCashPage() {
   const [pendingInvoices, setPendingInvoices] = useState([]);
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState([]);
   const [reimbNotes, setReimbNotes] = useState('');
-  
+
   // Modal Escaneo Reposición
   const [scanModalOpen, setScanModalOpen] = useState(false);
   const [selectedReimbForScan, setSelectedReimbForScan] = useState(null);
@@ -609,7 +609,7 @@ export default function PettyCashPage() {
       const res = await apiClient.get('/petty-cash/cash-counts', { params: countsParams });
       setCounts(res.data.items);
       setCountsTotal(res.data.total);
-      
+
       const latestRes = await apiClient.get('/petty-cash/cash-counts/latest').catch(() => null);
       if (latestRes) setLatestCount(latestRes.data);
     } catch (err) {
@@ -850,6 +850,33 @@ export default function PettyCashPage() {
     }
   };
 
+  // Descargar el archivo XML de una factura
+  const handleDownloadXml = async (filePath) => {
+    if (!filePath) return;
+    try {
+      message.loading({ content: "Descargando archivo XML...", key: "xmlDownload" });
+      const base = apiClient.defaults.baseURL || '';
+      const host = base.replace(/\/api\/v1\/?$/, '');
+      const url = filePath.startsWith('http') ? filePath : `${host}${filePath}`;
+
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      const filename = filePath.split('/').pop() || 'factura.xml';
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+      message.success({ content: "XML descargado con éxito.", key: "xmlDownload", duration: 2 });
+    } catch (err) {
+      message.error({ content: "Error al descargar el archivo XML.", key: "xmlDownload", duration: 3 });
+      console.error(err);
+    }
+  };
+
   // Descargar ZIP con todas las facturas y comprobantes del paquete de reposición
   const handleDownloadZip = async (reimbId, folio) => {
     try {
@@ -884,10 +911,10 @@ export default function PettyCashPage() {
       const res = await apiClient.post('/petty-cash/invoices/validate-xml', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      
+
       // Validar si el monto del XML coincide relativamente con el del gasto manual
       const amountDiff = Math.abs(res.data.total - selectedInvoiceForLink.total);
-      
+
       if (amountDiff > 5.0) {
         res.data.is_valid = false;
         res.data.errors.push(`El total de la factura XML ($${res.data.total.toFixed(2)}) no coincide con el gasto manual ($${selectedInvoiceForLink.total.toFixed(2)}). Margen de tolerancia máx: $5.00`);
@@ -1006,7 +1033,7 @@ export default function PettyCashPage() {
   const getReimbursementValidation = () => {
     if (!selectedInvoiceIds.length) return { valid: false, reason: "Selecciona al menos un gasto." };
     if (selectedInvoiceIds.length > 15) return { valid: false, reason: "No se pueden incluir más de 15 gastos por reposición." };
-    
+
     const selectedInvoices = pendingInvoices.filter(i => selectedInvoiceIds.includes(i.id));
     const total = selectedInvoices.reduce((sum, i) => sum + i.total, 0);
     return { valid: true, total };
@@ -1174,7 +1201,7 @@ export default function PettyCashPage() {
 
   return (
     <div style={{ padding: '24px', minHeight: 'calc(100vh - 64px)', background: '#f5f7fa' }}>
-      
+
       {/* HEADER DE FINANZAS */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <div>
@@ -1184,27 +1211,27 @@ export default function PettyCashPage() {
           </Title>
           <Text type="secondary">Módulo de Caja Chica. Acceso exclusivo para la Administración del DEO.</Text>
         </div>
-        
+
         <Space>
           {activeTab === 'invoices' && (
             <Space>
-              <Button 
-                type="primary" 
-                icon={<FileAddOutlined />} 
+              <Button
+                type="primary"
+                icon={<FileAddOutlined />}
                 onClick={() => setInvoiceModalOpen(true)}
                 style={{ borderRadius: 6, fontWeight: 600, height: 40 }}
               >
                 Cargar XML
               </Button>
-              <Button 
-                icon={<PlusOutlined />} 
+              <Button
+                icon={<PlusOutlined />}
                 onClick={() => setManualModalOpen(true)}
                 style={{ borderRadius: 6, fontWeight: 600, height: 40 }}
               >
                 Registrar Gasto Sin Factura
               </Button>
-              <Button 
-                icon={<UploadOutlined style={{ transform: 'rotate(180deg)' }} />} 
+              <Button
+                icon={<UploadOutlined style={{ transform: 'rotate(180deg)' }} />}
                 onClick={handleExportCSV}
                 style={{ borderRadius: 6, fontWeight: 600, height: 40 }}
               >
@@ -1213,17 +1240,17 @@ export default function PettyCashPage() {
             </Space>
           )}
           {activeTab === 'reimbursements' && (
-            <Button 
-              type="primary" 
-              icon={<PlusOutlined />} 
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
               onClick={openNewReimbursementModal}
               style={{ borderRadius: 6, fontWeight: 600, height: 40 }}
             >
               Nueva Reposición
             </Button>
           )}
-          <Button 
-            icon={<SyncOutlined spin={loading} />} 
+          <Button
+            icon={<SyncOutlined spin={loading} />}
             onClick={() => {
               fetchSummary();
               if (activeTab === 'invoices') fetchInvoices();
@@ -1244,7 +1271,7 @@ export default function PettyCashPage() {
         size="large"
         style={{ marginBottom: 24 }}
         items={[
-          
+
           // ── TAB 1: DASHBOARD ──
           {
             key: 'dashboard',
@@ -1264,14 +1291,14 @@ export default function PettyCashPage() {
                 {/* TARJETAS DE KPIS */}
                 <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
                   <Col xs={24} sm={12} md={8} lg={5}>
-                    <Card 
-                      bordered={false} 
+                    <Card
+                      bordered={false}
                       style={{ borderLeft: '4px solid #1890ff', borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}
                       extra={
                         <Tooltip title="Configurar monto del fondo">
-                          <Button 
-                            type="text" 
-                            size="small" 
+                          <Button
+                            type="text"
+                            size="small"
                             icon={<EditOutlined style={{ color: '#1890ff' }} />}
                             onClick={() => setSettingsModalOpen(true)}
                           />
@@ -1368,22 +1395,22 @@ export default function PettyCashPage() {
                                   <stop offset="100%" stopColor="#1890ff" stopOpacity="0.9" />
                                 </linearGradient>
                               </defs>
-                              
+
                               <line x1="40" y1="180" x2="95%" y2="180" stroke="#ddd" strokeWidth="1" />
                               <line x1="40" y1="130" x2="95%" y2="130" stroke="#eee" strokeWidth="1" strokeDasharray="4 4" />
                               <line x1="40" y1="80" x2="95%" y2="80" stroke="#eee" strokeWidth="1" strokeDasharray="4 4" />
                               <line x1="40" y1="30" x2="95%" y2="30" stroke="#eee" strokeWidth="1" strokeDasharray="4 4" />
-                              
+
                               {(() => {
                                 const maxAmount = Math.max(...summary.expenses_by_category.map(c => c.amount), 1);
                                 const barWidth = 35;
                                 const spacing = 35;
-                                
+
                                 return summary.expenses_by_category.map((cat, idx) => {
                                   const barHeight = (cat.amount / maxAmount) * 140;
                                   const x = 60 + idx * (barWidth + spacing);
                                   const y = 180 - barHeight;
-                                  
+
                                   return (
                                     <g key={cat.name}>
                                       <Tooltip title={`${cat.name}: $${cat.amount.toFixed(2)} MXN`}>
@@ -1398,7 +1425,7 @@ export default function PettyCashPage() {
                                         />
                                       </Tooltip>
                                       <text
-                                        x={x + barWidth/2}
+                                        x={x + barWidth / 2}
                                         y="195"
                                         textAnchor="middle"
                                         fontSize="9"
@@ -1408,7 +1435,7 @@ export default function PettyCashPage() {
                                         {cat.name.length > 8 ? `${cat.name.substring(0, 7)}.` : cat.name}
                                       </text>
                                       <text
-                                        x={x + barWidth/2}
+                                        x={x + barWidth / 2}
                                         y={y - 5}
                                         textAnchor="middle"
                                         fontSize="9"
@@ -1423,7 +1450,7 @@ export default function PettyCashPage() {
                               })()}
                             </svg>
                           </div>
-                          
+
                           <div style={{ maxHeight: 200, overflowY: 'auto' }}>
                             {summary.expenses_by_category.map(cat => (
                               <div key={cat.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
@@ -1440,12 +1467,12 @@ export default function PettyCashPage() {
                       )}
                     </Card>
                   </Col>
-                  
+
                   {/* HISTORIAL Y ARQUEOS */}
                   <Col xs={24} lg={10}>
                     <Card title={<span style={{ fontWeight: 700 }}><HistoryOutlined /> Actividad y Estado de Caja Chica</span>} bordered={false} style={{ borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.05)', height: '100%' }}>
                       <Title level={5} style={{ margin: '0 0 16px 0', fontWeight: 600 }}>Últimos Gastos Registrados</Title>
-                      
+
                       {summary.recent_invoices.length === 0 ? (
                         <div style={{ padding: '20px 0', textAlign: 'center', color: '#999' }}>
                           Sin gastos registrados
@@ -1473,16 +1500,16 @@ export default function PettyCashPage() {
                           }))}
                         />
                       )}
-                      
+
                       <Divider style={{ margin: '16px 0' }} />
                       <Title level={5} style={{ margin: '0 0 16px 0', fontWeight: 600 }}>Últimos Arqueos de Caja</Title>
-                      
+
                       {summary.recent_counts.length === 0 ? (
-                        <Alert 
-                          message="Sin arqueos guardados" 
-                          description="Se recomienda realizar arqueos periódicamente para asegurar que el dinero en físico coincida con el cálculo del sistema." 
-                          type="warning" 
-                          showIcon 
+                        <Alert
+                          message="Sin arqueos guardados"
+                          description="Se recomienda realizar arqueos periódicamente para asegurar que el dinero en físico coincida con el cálculo del sistema."
+                          type="warning"
+                          showIcon
                         />
                       ) : (
                         <div>
@@ -1513,18 +1540,18 @@ export default function PettyCashPage() {
                 {/* GRÁFICOS HISTÓRICOS Y DE TENDENCIA */}
                 <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
                   <Col xs={24} lg={12}>
-                    <Card 
+                    <Card
                       title={<span style={{ fontWeight: 700 }}><HistoryOutlined style={{ color: '#1890ff', marginRight: 8 }} />Tendencia de Saldo y Gasto (Últimos 30 días)</span>}
-                      bordered={false} 
+                      bordered={false}
                       style={{ borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.05)', height: '100%' }}
                     >
                       <PettyCashTrendChart history={summary.daily_history || []} totalAssigned={summary.total_assigned} />
                     </Card>
                   </Col>
                   <Col xs={24} lg={12}>
-                    <Card 
+                    <Card
                       title={<span style={{ fontWeight: 700 }}><PieChartOutlined style={{ color: '#52c41a', marginRight: 8 }} />Gastos por Categoría de Cada Mes (Últimos 6 meses)</span>}
-                      bordered={false} 
+                      bordered={false}
                       style={{ borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.05)', height: '100%' }}
                     >
                       <PettyCashMonthlyCategoryChart data={summary.monthly_category_expenses || []} />
@@ -1739,20 +1766,20 @@ export default function PettyCashPage() {
                         if (rec.is_manual || !rec.uuid) {
                           return <span style={{ color: '#aaa', fontSize: 11 }}>N/A (Manual)</span>;
                         }
-                        
+
                         const status = rec.sat_status || 'Sin Verificar';
-                        
+
                         let color = 'default';
                         if (status === 'Vigente') color = 'success';
                         else if (status === 'Cancelado') color = 'error';
                         else if (status === 'No Encontrado') color = 'warning';
                         else if (status === 'Error de Conexión') color = 'orange';
                         else if (status === 'Expresión no válida') color = 'orange';
-                        
-                        const dateText = rec.sat_verified_at 
+
+                        const dateText = rec.sat_verified_at
                           ? `Verificado: ${dayjs(rec.sat_verified_at).format('DD/MM/YYYY HH:mm')}`
                           : 'No verificado recientemente';
-                          
+
                         return (
                           <Tooltip title={dateText}>
                             <Tag color={color} style={{ fontWeight: 600 }}>
@@ -1770,21 +1797,20 @@ export default function PettyCashPage() {
                         <Space>
                           {rec.xml_filename ? (
                             <Tooltip title="Descargar XML">
-                              <Button 
-                                type="text" 
-                                icon={<FileTextOutlined style={{ color: '#1890ff' }} />} 
-                                href={rec.xml_filename}
-                                target="_blank"
+                              <Button
+                                type="text"
+                                icon={<FileTextOutlined style={{ color: '#1890ff' }} />}
+                                onClick={() => handleDownloadXml(rec.xml_filename)}
                               />
                             </Tooltip>
                           ) : (
                             rec.is_manual && (
                               <Tooltip title="Vincular factura XML">
-                                <Button 
-                                  type="primary" 
+                                <Button
+                                  type="primary"
                                   size="small"
                                   ghost
-                                  icon={<FileAddOutlined />} 
+                                  icon={<FileAddOutlined />}
                                   onClick={() => {
                                     setSelectedInvoiceForLink(rec);
                                     setLinkModalOpen(true);
@@ -1797,14 +1823,14 @@ export default function PettyCashPage() {
                           )}
                           {rec.pdf_filename ? (
                             <Tooltip title="Previsualizar PDF">
-                              <Button 
-                                type="text" 
-                                icon={<FilePdfOutlined style={{ color: '#ff4d4f' }} />} 
+                              <Button
+                                type="text"
+                                icon={<FilePdfOutlined style={{ color: '#ff4d4f' }} />}
                                 onClick={() => {
                                   const base = apiClient.defaults.baseURL || '';
                                   const host = base.replace(/\/api\/v1\/?$/, '');
-                                  const url = rec.pdf_filename.startsWith('http') 
-                                    ? rec.pdf_filename 
+                                  const url = rec.pdf_filename.startsWith('http')
+                                    ? rec.pdf_filename
                                     : `${host}${rec.pdf_filename}`;
                                   setPdfPreviewUrl(url);
                                   setPdfPreviewOpen(true);
@@ -1824,10 +1850,10 @@ export default function PettyCashPage() {
                       render: (_, rec) => (
                         <Space>
                           <Tooltip title={rec.status === 'pendiente' ? "Editar gasto/factura" : "Editar clasificación/descripción (gasto en reposición)"}>
-                            <Button 
-                              type="text" 
-                              icon={<EditOutlined style={{ color: '#1890ff' }} />} 
-                              onClick={() => handleEditInvoiceOpen(rec)} 
+                            <Button
+                              type="text"
+                              icon={<EditOutlined style={{ color: '#1890ff' }} />}
+                              onClick={() => handleEditInvoiceOpen(rec)}
                             />
                           </Tooltip>
                           {rec.status === 'pendiente' ? (
@@ -1946,10 +1972,10 @@ export default function PettyCashPage() {
                       title: 'Firma de Recibido',
                       key: 'scan',
                       render: (_, rec) => rec.scan_filename ? (
-                        <Button 
-                          type="primary" 
-                          size="small" 
-                          ghost 
+                        <Button
+                          type="primary"
+                          size="small"
+                          ghost
                           icon={<FilePdfOutlined />}
                           href={rec.scan_filename}
                           target="_blank"
@@ -1957,9 +1983,9 @@ export default function PettyCashPage() {
                           Ver PDF
                         </Button>
                       ) : (
-                        <Button 
-                          size="small" 
-                          icon={<UploadOutlined />} 
+                        <Button
+                          size="small"
+                          icon={<UploadOutlined />}
                           onClick={() => {
                             setSelectedReimbForScan(rec);
                             setScanModalOpen(true);
@@ -1976,16 +2002,16 @@ export default function PettyCashPage() {
                       render: (_, rec) => (
                         <Space>
                           <Tooltip title="Descargar paquete de comprobantes (ZIP)">
-                            <Button 
-                              type="text" 
-                              icon={<InboxOutlined style={{ color: '#722ed1' }} />} 
-                              onClick={() => handleDownloadZip(rec.id, rec.folio)} 
+                            <Button
+                              type="text"
+                              icon={<InboxOutlined style={{ color: '#722ed1' }} />}
+                              onClick={() => handleDownloadZip(rec.id, rec.folio)}
                             />
                           </Tooltip>
                           {rec.status === 'en_proceso' && (
-                            <Button 
-                              type="primary" 
-                              size="small" 
+                            <Button
+                              type="primary"
+                              size="small"
                               onClick={() => handleUpdateReimbStatus(rec.id, 'aprobado')}
                             >
                               Aprobar
@@ -2089,8 +2115,8 @@ export default function PettyCashPage() {
                         <Divider style={{ margin: '8px 0' }} />
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                           <Text strong>Diferencia:</Text>
-                          <Text 
-                            strong 
+                          <Text
+                            strong
                             style={{ color: arqueoDiff === 0 ? '#52c41a' : arqueoDiff > 0 ? '#1890ff' : '#f5222d' }}
                           >
                             {arqueoDiff === 0 ? 'Sin diferencia ($0.00)' : `${arqueoDiff > 0 ? '+' : ''}$${arqueoDiff.toFixed(2)} MXN`}
@@ -2099,10 +2125,10 @@ export default function PettyCashPage() {
                       </Card>
 
                       <Form.Item wrapperCol={{ offset: 8, span: 16 }} style={{ margin: 0 }}>
-                        <Button 
-                          type="primary" 
-                          htmlType="submit" 
-                          icon={<CheckCircleOutlined />} 
+                        <Button
+                          type="primary"
+                          htmlType="submit"
+                          icon={<CheckCircleOutlined />}
                           disabled={arqueoTotal === 0}
                           style={{ borderRadius: 6, fontWeight: 600, width: '100%', height: 40 }}
                         >
@@ -2139,7 +2165,7 @@ export default function PettyCashPage() {
                                   {record.bills_50 > 0 && <div><strong>${(record.bills_50 * 50).toFixed(2)}</strong></div>}
                                   {record.bills_20 > 0 && <div>$20 × {record.bills_20}</div>}
                                   {record.bills_20 > 0 && <div><strong>${(record.bills_20 * 20).toFixed(2)}</strong></div>}
-                                  
+
                                   {record.coins_10 > 0 && <div>$10 × {record.coins_10}</div>}
                                   {record.coins_10 > 0 && <div><strong>${(record.coins_10 * 10).toFixed(2)}</strong></div>}
                                   {record.coins_5 > 0 && <div>$5 × {record.coins_5}</div>}
@@ -2148,12 +2174,12 @@ export default function PettyCashPage() {
                                   {record.coins_2 > 0 && <div><strong>${(record.coins_2 * 2).toFixed(2)}</strong></div>}
                                   {record.coins_1 > 0 && <div>$1 × {record.coins_1}</div>}
                                   {record.coins_1 > 0 && <div><strong>${(record.coins_1 * 1).toFixed(2)}</strong></div>}
-                                  
+
                                   <div style={{ borderTop: '1px solid #ddd', paddingTop: 8 }}><strong>Total Físico:</strong></div>
                                   <div style={{ borderTop: '1px solid #ddd', paddingTop: 8 }}><strong>${record.total_counted.toFixed(2)}</strong></div>
                                 </div>
                               </Col>
-                              
+
                               <Col xs={24} md={14}>
                                 <Title level={5} style={{ fontSize: 13, color: '#555', marginBottom: 12 }}>🧾 Gastos/Facturas Pendientes al Momento:</Title>
                                 {record.invoices_details === undefined || record.invoices_details === null ? (
@@ -2236,14 +2262,14 @@ export default function PettyCashPage() {
             key: 'categories',
             label: <span><BarsOutlined /> Categorías</span>,
             children: (
-              <Card 
-                title={<span style={{ fontWeight: 700 }}>Catálogo de Categorías Generales (Finanzas)</span>} 
-                bordered={false} 
+              <Card
+                title={<span style={{ fontWeight: 700 }}>Catálogo de Categorías Generales (Finanzas)</span>}
+                bordered={false}
                 style={{ borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}
                 extra={
-                  <Button 
-                    type="primary" 
-                    icon={<PlusOutlined />} 
+                  <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
                     onClick={() => {
                       setEditingCategory(null);
                       categoryForm.resetFields();
@@ -2297,15 +2323,15 @@ export default function PettyCashPage() {
                       key: 'actions',
                       render: (_, rec) => (
                         <Space>
-                          <Button 
-                            type="text" 
-                            icon={<EditOutlined />} 
+                          <Button
+                            type="text"
+                            icon={<EditOutlined />}
                             onClick={() => {
                               setEditingCategory(rec);
                               categoryForm.setFieldsValue(rec);
                               setSelectedEmoji(rec.icon || "📦");
                               setCategoryModalOpen(true);
-                            }} 
+                            }}
                           />
                           {rec.is_active && (
                             <Popconfirm
@@ -2367,9 +2393,9 @@ export default function PettyCashPage() {
                 ) : (
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <div style={{
-                      flex: 1, 
-                      padding: '8px 12px', 
-                      background: '#e6f7ff', 
+                      flex: 1,
+                      padding: '8px 12px',
+                      background: '#e6f7ff',
                       border: '1px dashed #91d5ff',
                       borderRadius: 6,
                       fontSize: 13,
@@ -2380,10 +2406,10 @@ export default function PettyCashPage() {
                       <FileTextOutlined style={{ marginRight: 8, color: '#1890ff' }} />
                       {xmlFileList[0].name}
                     </div>
-                    <Button 
-                      danger 
+                    <Button
+                      danger
                       type="primary"
-                      icon={<DeleteOutlined />} 
+                      icon={<DeleteOutlined />}
                       onClick={() => {
                         setXmlFileList([]);
                         setXmlValidation(null);
@@ -2411,9 +2437,9 @@ export default function PettyCashPage() {
                 ) : (
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <div style={{
-                      flex: 1, 
-                      padding: '8px 12px', 
-                      background: '#fff0f6', 
+                      flex: 1,
+                      padding: '8px 12px',
+                      background: '#fff0f6',
                       border: '1px dashed #ffadd2',
                       borderRadius: 6,
                       fontSize: 13,
@@ -2424,10 +2450,10 @@ export default function PettyCashPage() {
                       <FilePdfOutlined style={{ marginRight: 8, color: '#eb2f96' }} />
                       {pdfFileList[0].name}
                     </div>
-                    <Button 
-                      danger 
+                    <Button
+                      danger
                       type="primary"
-                      icon={<DeleteOutlined />} 
+                      icon={<DeleteOutlined />}
                       onClick={() => setPdfFileList([])}
                       style={{ height: 38, width: 40 }}
                     />
@@ -2445,22 +2471,22 @@ export default function PettyCashPage() {
           )}
 
           {xmlValidation && (
-            <Card 
-              size="small" 
+            <Card
+              size="small"
               title={<span style={{ fontWeight: 600 }}>Filtro de Reglas de Caja Chica (SAT / CICESE)</span>}
               style={{ marginBottom: 16, border: xmlValidation.is_valid ? '1px solid #b7eb8f' : '1px solid #ffccc7' }}
               headStyle={{ background: xmlValidation.is_valid ? '#f6ffed' : '#fff2f0' }}
             >
               {xmlValidation.is_valid ? (
-                <Alert 
-                  message="Validación Fiscal Aprobada" 
-                  description="Los datos del receptor coinciden y el monto se encuentra bajo el límite de $5,000.00 MXN." 
-                  type="success" 
-                  showIcon 
+                <Alert
+                  message="Validación Fiscal Aprobada"
+                  description="Los datos del receptor coinciden y el monto se encuentra bajo el límite de $5,000.00 MXN."
+                  type="success"
+                  showIcon
                   style={{ marginBottom: 16 }}
                 />
               ) : (
-                <Alert 
+                <Alert
                   message={
                     xmlValidation.errors?.some(err => err.includes("ya está registrada") || err.includes("ya registrada"))
                       ? "Factura ya registrada (Duplicada)"
@@ -2471,8 +2497,8 @@ export default function PettyCashPage() {
                       {xmlValidation.errors.map((err, idx) => <li key={idx}>{err}</li>)}
                     </ul>
                   }
-                  type="error" 
-                  showIcon 
+                  type="error"
+                  showIcon
                   style={{ marginBottom: 16 }}
                 />
               )}
@@ -2490,8 +2516,8 @@ export default function PettyCashPage() {
             </Card>
           )}
 
-          <Form.Item 
-            label="Clasificación de Categoría" 
+          <Form.Item
+            label="Clasificación de Categoría"
             name="category_id"
             rules={[{ required: true, message: 'Selecciona una categoría de gasto.' }]}
           >
@@ -2504,8 +2530,8 @@ export default function PettyCashPage() {
             </Select>
           </Form.Item>
 
-          <Form.Item 
-            label="Descripción del Gasto" 
+          <Form.Item
+            label="Descripción del Gasto"
             name="description"
             rules={[{ required: true, message: 'Ingresa una descripción del propósito del gasto.' }]}
           >
@@ -2515,9 +2541,9 @@ export default function PettyCashPage() {
           <Form.Item style={{ margin: 0, textAlign: 'right' }}>
             <Space>
               <Button onClick={() => setInvoiceModalOpen(false)}>Cancelar</Button>
-              <Button 
-                type="primary" 
-                htmlType="submit" 
+              <Button
+                type="primary"
+                htmlType="submit"
                 loading={loading}
                 disabled={!xmlValidation || !xmlValidation.is_valid}
                 style={{ borderRadius: 6 }}
@@ -2533,8 +2559,8 @@ export default function PettyCashPage() {
       <Modal
         title={
           <strong>
-            {selectedInvoiceForEdit?.is_manual 
-              ? "Editar Gasto Manual (Sin XML)" 
+            {selectedInvoiceForEdit?.is_manual
+              ? "Editar Gasto Manual (Sin XML)"
               : "Editar Gasto/Factura (XML)"}
           </strong>
         }
@@ -2555,7 +2581,7 @@ export default function PettyCashPage() {
             onFinish={handleUpdateInvoice}
           >
             {selectedInvoiceForEdit.status !== 'pendiente' && (
-              <Alert 
+              <Alert
                 message="Gasto en Reposición Activa"
                 description="Este gasto ya forma parte de un paquete de reposición. Los montos y datos fiscales no son editables para mantener la consistencia del paquete. Solo puedes reclasificar la categoría o modificar la descripción."
                 type="warning"
@@ -2564,7 +2590,7 @@ export default function PettyCashPage() {
               />
             )}
             {!selectedInvoiceForEdit.is_manual && selectedInvoiceForEdit.status === 'pendiente' && (
-              <Alert 
+              <Alert
                 message="Factura Formal SAT"
                 description="Los datos fiscales (Fecha, Proveedor, RFC y Total) se leyeron del XML oficial y no son editables. Solo puedes reclasificar la categoría o modificar la descripción."
                 type="info"
@@ -2575,28 +2601,28 @@ export default function PettyCashPage() {
 
             <Row gutter={16}>
               <Col span={12}>
-                <Form.Item 
-                  label="Fecha de Gasto" 
-                  name="fecha_emision" 
+                <Form.Item
+                  label="Fecha de Gasto"
+                  name="fecha_emision"
                   rules={[{ required: true, message: 'Ingresa la fecha.' }]}
                 >
-                  <DatePicker 
-                    style={{ width: '100%' }} 
-                    disabled={!selectedInvoiceForEdit.is_manual || selectedInvoiceForEdit.status !== 'pendiente'} 
+                  <DatePicker
+                    style={{ width: '100%' }}
+                    disabled={!selectedInvoiceForEdit.is_manual || selectedInvoiceForEdit.status !== 'pendiente'}
                   />
                 </Form.Item>
               </Col>
               <Col span={12}>
-                <Form.Item 
-                  label="Monto Total (Max $5,000)" 
-                  name="total" 
+                <Form.Item
+                  label="Monto Total (Max $5,000)"
+                  name="total"
                   rules={[{ required: true, message: 'Ingresa el monto total.' }]}
                 >
-                  <InputNumber 
-                    min={0.01} 
-                    max={5000.00} 
-                    precision={2} 
-                    style={{ width: '100%' }} 
+                  <InputNumber
+                    min={0.01}
+                    max={5000.00}
+                    precision={2}
+                    style={{ width: '100%' }}
                     disabled={!selectedInvoiceForEdit.is_manual || selectedInvoiceForEdit.status !== 'pendiente'}
                   />
                 </Form.Item>
@@ -2605,34 +2631,34 @@ export default function PettyCashPage() {
 
             <Row gutter={16}>
               <Col span={12}>
-                <Form.Item 
-                  label="RFC del Proveedor" 
-                  name="emisor_rfc" 
+                <Form.Item
+                  label="RFC del Proveedor"
+                  name="emisor_rfc"
                   rules={[{ required: true, message: 'Ingresa el RFC del proveedor.' }]}
                 >
-                  <Input 
-                    placeholder="RFC de 12 o 13 caracteres" 
-                    maxLength={13} 
-                    disabled={!selectedInvoiceForEdit.is_manual || selectedInvoiceForEdit.status !== 'pendiente'} 
+                  <Input
+                    placeholder="RFC de 12 o 13 caracteres"
+                    maxLength={13}
+                    disabled={!selectedInvoiceForEdit.is_manual || selectedInvoiceForEdit.status !== 'pendiente'}
                   />
                 </Form.Item>
               </Col>
               <Col span={12}>
-                <Form.Item 
-                  label="Nombre del Proveedor" 
-                  name="emisor_nombre" 
+                <Form.Item
+                  label="Nombre del Proveedor"
+                  name="emisor_nombre"
                   rules={[{ required: true, message: 'Ingresa el nombre del proveedor.' }]}
                 >
-                  <Input 
-                    placeholder="Razón Social o Nombre" 
-                    disabled={!selectedInvoiceForEdit.is_manual || selectedInvoiceForEdit.status !== 'pendiente'} 
+                  <Input
+                    placeholder="Razón Social o Nombre"
+                    disabled={!selectedInvoiceForEdit.is_manual || selectedInvoiceForEdit.status !== 'pendiente'}
                   />
                 </Form.Item>
               </Col>
             </Row>
 
-            <Form.Item 
-              label="Clasificación de Categoría" 
+            <Form.Item
+              label="Clasificación de Categoría"
               name="category_id"
               rules={[{ required: true, message: 'Selecciona una categoría de gasto.' }]}
             >
@@ -2645,8 +2671,8 @@ export default function PettyCashPage() {
               </Select>
             </Form.Item>
 
-            <Form.Item 
-              label="Descripción del Gasto" 
+            <Form.Item
+              label="Descripción del Gasto"
               name="description"
               rules={[{ required: true, message: 'Ingresa una descripción del propósito del gasto.' }]}
             >
@@ -2662,9 +2688,9 @@ export default function PettyCashPage() {
                 }}>
                   Cancelar
                 </Button>
-                <Button 
-                  type="primary" 
-                  htmlType="submit" 
+                <Button
+                  type="primary"
+                  htmlType="submit"
                   loading={loading}
                   style={{ borderRadius: 6 }}
                 >
@@ -2691,9 +2717,9 @@ export default function PettyCashPage() {
           }}>
             Cerrar
           </Button>,
-          <Button 
-            key="download" 
-            icon={<DownloadOutlined />} 
+          <Button
+            key="download"
+            icon={<DownloadOutlined />}
             onClick={handleDownloadPdf}
           >
             Descargar PDF
@@ -2708,10 +2734,10 @@ export default function PettyCashPage() {
       >
         {pdfPreviewUrl ? (
           <div style={{ height: '65vh', background: '#f0f2f5', borderRadius: 8, overflow: 'hidden' }}>
-            <iframe 
-              src={`${pdfPreviewUrl}#toolbar=0`} 
-              width="100%" 
-              height="100%" 
+            <iframe
+              src={`${pdfPreviewUrl}#toolbar=0`}
+              width="100%"
+              height="100%"
               style={{ border: 'none' }}
               title="PDF Preview"
             />
@@ -2743,18 +2769,18 @@ export default function PettyCashPage() {
         >
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item 
-                label="Fecha de Gasto" 
-                name="fecha_emision" 
+              <Form.Item
+                label="Fecha de Gasto"
+                name="fecha_emision"
                 rules={[{ required: true, message: 'Ingresa la fecha.' }]}
               >
                 <DatePicker style={{ width: '100%' }} />
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item 
-                label="Monto Total (Max $5,000)" 
-                name="total" 
+              <Form.Item
+                label="Monto Total (Max $5,000)"
+                name="total"
                 rules={[{ required: true, message: 'Ingresa el monto total.' }]}
               >
                 <InputNumber min={0.01} max={5000.00} precision={2} style={{ width: '100%' }} />
@@ -2762,17 +2788,17 @@ export default function PettyCashPage() {
             </Col>
           </Row>
 
-          <Form.Item 
-            label="Nombre del Proveedor" 
-            name="emisor_nombre" 
+          <Form.Item
+            label="Nombre del Proveedor"
+            name="emisor_nombre"
             rules={[{ required: true, message: 'Ingresa el nombre del proveedor.' }]}
           >
             <Input placeholder="Ej: Materiales Ensenada S.A." />
           </Form.Item>
 
-          <Form.Item 
-            label="RFC del Proveedor" 
-            name="emisor_rfc" 
+          <Form.Item
+            label="RFC del Proveedor"
+            name="emisor_rfc"
             rules={[
               { required: true, message: 'Ingresa el RFC.' },
               { min: 12, max: 13, message: 'El RFC debe tener 12 o 13 caracteres.' }
@@ -2781,8 +2807,8 @@ export default function PettyCashPage() {
             <Input placeholder="Ej: MEN950101XYZ" style={{ textTransform: 'uppercase' }} />
           </Form.Item>
 
-          <Form.Item 
-            label="Categoría del Gasto" 
+          <Form.Item
+            label="Categoría del Gasto"
             name="category_id"
             rules={[{ required: true, message: 'Selecciona una categoría.' }]}
           >
@@ -2795,9 +2821,9 @@ export default function PettyCashPage() {
             </Select>
           </Form.Item>
 
-          <Form.Item 
-            label="Descripción del Gasto (Justificación)" 
-            name="description" 
+          <Form.Item
+            label="Descripción del Gasto (Justificación)"
+            name="description"
             rules={[{ required: true, message: 'Escribe una justificación corta.' }]}
           >
             <TextArea rows={2} placeholder="Ej: Pago de pipa de agua para las oficinas del DEO" />
@@ -2854,9 +2880,9 @@ export default function PettyCashPage() {
                 ) : (
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <div style={{
-                      flex: 1, 
-                      padding: '8px 12px', 
-                      background: '#e6f7ff', 
+                      flex: 1,
+                      padding: '8px 12px',
+                      background: '#e6f7ff',
                       border: '1px dashed #91d5ff',
                       borderRadius: 6,
                       fontSize: 13,
@@ -2867,10 +2893,10 @@ export default function PettyCashPage() {
                       <FileTextOutlined style={{ marginRight: 8, color: '#1890ff' }} />
                       {linkXmlFileList[0].name}
                     </div>
-                    <Button 
-                      danger 
+                    <Button
+                      danger
                       type="primary"
-                      icon={<DeleteOutlined />} 
+                      icon={<DeleteOutlined />}
                       onClick={() => {
                         setLinkXmlFileList([]);
                         setLinkValidation(null);
@@ -2898,9 +2924,9 @@ export default function PettyCashPage() {
                 ) : (
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <div style={{
-                      flex: 1, 
-                      padding: '8px 12px', 
-                      background: '#fff0f6', 
+                      flex: 1,
+                      padding: '8px 12px',
+                      background: '#fff0f6',
                       border: '1px dashed #ffadd2',
                       borderRadius: 6,
                       fontSize: 13,
@@ -2911,10 +2937,10 @@ export default function PettyCashPage() {
                       <FilePdfOutlined style={{ marginRight: 8, color: '#eb2f96' }} />
                       {linkPdfFileList[0].name}
                     </div>
-                    <Button 
-                      danger 
+                    <Button
+                      danger
                       type="primary"
-                      icon={<DeleteOutlined />} 
+                      icon={<DeleteOutlined />}
                       onClick={() => setLinkPdfFileList([])}
                       style={{ height: 38, width: 40 }}
                     />
@@ -2931,21 +2957,21 @@ export default function PettyCashPage() {
           )}
 
           {linkValidation && (
-            <Card 
-              size="small" 
+            <Card
+              size="small"
               style={{ marginBottom: 16, border: linkValidation.is_valid ? '1px solid #b7eb8f' : '1px solid #ffccc7' }}
               headStyle={{ background: linkValidation.is_valid ? '#f6ffed' : '#fff2f0' }}
             >
               {linkValidation.is_valid ? (
-                <Alert 
-                  message="Factura Coincide" 
-                  description="Los datos fiscales de la factura son válidos y corresponden al gasto manual." 
-                  type="success" 
-                  showIcon 
+                <Alert
+                  message="Factura Coincide"
+                  description="Los datos fiscales de la factura son válidos y corresponden al gasto manual."
+                  type="success"
+                  showIcon
                   style={{ marginBottom: 12 }}
                 />
               ) : (
-                <Alert 
+                <Alert
                   message={
                     linkValidation.errors?.some(err => err.includes("ya está registrada") || err.includes("ya registrada"))
                       ? "Factura ya registrada (Duplicada)"
@@ -2956,8 +2982,8 @@ export default function PettyCashPage() {
                       {linkValidation.errors.map((err, idx) => <li key={idx}>{err}</li>)}
                     </ul>
                   }
-                  type="error" 
-                  showIcon 
+                  type="error"
+                  showIcon
                   style={{ marginBottom: 12 }}
                 />
               )}
@@ -2967,8 +2993,8 @@ export default function PettyCashPage() {
           <Form.Item style={{ margin: 0, textAlign: 'right' }}>
             <Space>
               <Button onClick={() => setLinkModalOpen(false)}>Cancelar</Button>
-              <Button 
-                type="primary" 
+              <Button
+                type="primary"
                 disabled={!linkValidation || !linkValidation.is_valid}
                 onClick={handleLinkXmlSave}
                 loading={loading}
@@ -2991,11 +3017,11 @@ export default function PettyCashPage() {
       >
         <Paragraph>Modifica el saldo total asignado institucionalmente para el fondo fijo del DEO.</Paragraph>
         <Form.Item label="Monto Asignado ($ MXN)">
-          <InputNumber 
-            min={1} 
-            max={200000} 
-            value={newAssignedBalance} 
-            onChange={setNewAssignedBalance} 
+          <InputNumber
+            min={1}
+            max={200000}
+            value={newAssignedBalance}
+            onChange={setNewAssignedBalance}
             style={{ width: '100%' }}
           />
         </Form.Item>
@@ -3054,8 +3080,8 @@ export default function PettyCashPage() {
                     <Col span={12}>
                       <Card size="small" style={{ background: '#fafafa' }}>
                         <div>Gastos Seleccionados: <strong>{selectedInvoiceIds.length} / 15</strong></div>
-                        <Progress 
-                          percent={Math.min((selectedInvoiceIds.length / 15) * 100, 100)} 
+                        <Progress
+                          percent={Math.min((selectedInvoiceIds.length / 15) * 100, 100)}
                           status={selectedInvoiceIds.length > 15 ? "exception" : "normal"}
                           showInfo={false}
                           style={{ margin: '8px 0' }}
@@ -3087,19 +3113,19 @@ export default function PettyCashPage() {
 
             <Form layout="vertical">
               <Form.Item label="Notas y Justificación del Paquete">
-                <TextArea 
-                  rows={2} 
+                <TextArea
+                  rows={2}
                   value={reimbNotes}
                   onChange={(e) => setReimbNotes(e.target.value)}
-                  placeholder="Comentarios adicionales" 
+                  placeholder="Comentarios adicionales"
                 />
               </Form.Item>
 
               <Form.Item style={{ margin: 0, textAlign: 'right' }}>
                 <Space>
                   <Button onClick={() => setReimbModalOpen(false)}>Cancelar</Button>
-                  <Button 
-                    type="primary" 
+                  <Button
+                    type="primary"
                     onClick={handleCreateReimbursement}
                     disabled={!getReimbursementValidation().valid}
                     style={{ borderRadius: 6 }}
@@ -3148,8 +3174,8 @@ export default function PettyCashPage() {
           <Form.Item style={{ margin: 0, textAlign: 'right' }}>
             <Space>
               <Button onClick={() => setScanModalOpen(false)}>Cancelar</Button>
-              <Button 
-                type="primary" 
+              <Button
+                type="primary"
                 htmlType="submit"
                 disabled={!scanFileList.length}
                 style={{ borderRadius: 6 }}
@@ -3178,16 +3204,16 @@ export default function PettyCashPage() {
           layout="vertical"
           onFinish={handleSaveCategory}
         >
-          <Form.Item 
-            label="Nombre de Categoría" 
+          <Form.Item
+            label="Nombre de Categoría"
             name="name"
             rules={[{ required: true, message: 'Ingresa el nombre de la categoría.' }]}
           >
             <Input placeholder="Ej: Herramientas menores" />
           </Form.Item>
 
-          <Form.Item 
-            label="Grupo" 
+          <Form.Item
+            label="Grupo"
             name="group"
             rules={[{ required: true, message: 'Selecciona el grupo agrupador.' }]}
           >
@@ -3200,14 +3226,14 @@ export default function PettyCashPage() {
 
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item 
-                label="Ícono (Emoji)" 
-                name="icon" 
+              <Form.Item
+                label="Ícono (Emoji)"
+                name="icon"
                 rules={[{ required: true, message: 'Selecciona o escribe un ícono.' }]}
                 initialValue="📦"
               >
-                <Input 
-                  placeholder="Ej: 🔧, ⛽, 💻" 
+                <Input
+                  placeholder="Ej: 🔧, ⛽, 💻"
                   onChange={(e) => setSelectedEmoji(e.target.value)}
                   addonBefore={
                     <Popover
@@ -3227,19 +3253,19 @@ export default function PettyCashPage() {
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item 
-                label="Color de la Categoría" 
-                name="color" 
+              <Form.Item
+                label="Color de la Categoría"
+                name="color"
                 initialValue="#7f8c8d"
                 getValueFromEvent={(color) => color ? (typeof color === 'string' ? color : color.toHexString()) : '#7f8c8d'}
               >
-                <ColorPicker 
-                  showText 
+                <ColorPicker
+                  showText
                   presets={[
                     {
                       label: 'Colores Premium',
                       colors: [
-                        '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', 
+                        '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
                         '#ec4899', '#14b8a6', '#6366f1', '#f97316', '#06b6d4',
                         '#475569', '#f43f5e'
                       ]

@@ -63,7 +63,7 @@ function CruiseParticipantFormModal({
   const isEditing = !!assignment;
 
   const isCrew = roleGroup === 'tripulacion';
-  const hasCrewLimit = typeof maxCrew === 'number';
+  const hasCrewLimit = false; // La tripulación no tiene límite máximo, maxCrew es el mínimo operativo.
   const hasPassengersLimit = typeof maxPassengers === 'number';
 
   const limitVal = isCrew ? maxCrew : maxPassengers;

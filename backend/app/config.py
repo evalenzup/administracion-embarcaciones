@@ -33,6 +33,16 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "/app/uploads"
     MAX_UPLOAD_SIZE_MB: int = 50
 
+    # ── SMTP / Correo ──
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = ""
+    SMTP_FROM_NAME: str = "SIAE — DEO CICESE"
+    SMTP_TLS: bool = True
+    SMTP_SSL: bool = False
+
     class Config:
         env_file = ".env"
         case_sensitive = True

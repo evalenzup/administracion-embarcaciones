@@ -20,6 +20,7 @@ from app.schemas.service import (
     ServiceObservationResponse,
     ServiceObservationCreate,
     ServiceStageHistoryUpdate,
+    ServiceRequestBudgetAccountUpdate,
 )
 from app.services.audit import log_action
 from app.utils.xml_parser import parse_and_validate_cfdi
@@ -121,6 +122,11 @@ def map_service_response(req: ServiceRequest) -> dict:
         "invoice_pdf_file": req.invoice_pdf_file,
         "conformity_letter_file": req.conformity_letter_file,
         "payment_receipt_file": req.payment_receipt_file,
+        "currency": req.currency,
+        "exchange_rate": req.exchange_rate,
+        "tentative_exchange_rate": req.tentative_exchange_rate,
+        "account_id": req.account_id,
+        "account_name": req.account.name if req.account else None,
         "created_by_id": req.created_by_id,
         "created_by_name": req.created_by.full_name if req.created_by else "Sistema",
         "created_at": req.created_at,
@@ -165,6 +171,9 @@ async def create_service(
     description: str = Form(...),
     episa_folio: str = Form(...),
     budget_amount: float = Form(...),
+    currency: str = Form("MXN"),
+    tentative_exchange_rate: Optional[float] = Form(None),
+    account_id: Optional[int] = Form(None),
     provider_name: Optional[str] = Form(None),
     provider_id: Optional[int] = Form(None),
     date: Optional[datetime] = Form(None),
@@ -178,12 +187,23 @@ async def create_service(
     year_start = datetime(current_year, 1, 1)
     year_end = datetime(current_year, 12, 31, 23, 59, 59)
 
-    count = db.query(ServiceRequest).filter(
+    existing_folios = db.query(ServiceRequest.internal_folio).filter(
         ServiceRequest.created_at >= year_start,
         ServiceRequest.created_at <= year_end
-    ).count()
+    ).all()
 
-    internal_folio = f"SRV-{current_year}-{count + 1:04d}"
+    max_num = 0
+    for row in existing_folios:
+        folio_str = row[0]
+        if folio_str and folio_str.startswith(f"SRV-{current_year}-"):
+            try:
+                num = int(folio_str.split("-")[-1])
+                if num > max_num:
+                    max_num = num
+            except ValueError:
+                pass
+
+    internal_folio = f"SRV-{current_year}-{max_num + 1:04d}"
 
     if provider_id:
         provider = db.query(Provider).filter(Provider.id == provider_id).first()
@@ -203,12 +223,39 @@ async def create_service(
         status="solicitado",
         episa_folio=episa_folio,
         budget_amount=budget_amount,
+        currency=currency,
+        tentative_exchange_rate=tentative_exchange_rate,
+        account_id=account_id,
         created_by_id=current_user.id,
         created_at=event_date,
         updated_at=event_date
     )
     db.add(srv)
     db.flush()
+
+    # Crear pre-cargo de dinero comprometido si se seleccionó una cuenta
+    if account_id:
+        pre_amount = budget_amount
+        if currency == "USD":
+            if not tentative_exchange_rate:
+                raise HTTPException(status_code=400, detail="Se requiere ingresar el tipo de cambio tentativo para cotizaciones en USD.")
+            pre_amount = budget_amount * tentative_exchange_rate
+
+        from app.models.account import AccountTransaction, TransactionType
+        committed_tx = AccountTransaction(
+            account_id=account_id,
+            type=TransactionType.CARGO,
+            amount=pre_amount,
+            concept=f"Comprometido: {internal_folio}",
+            description=f"Presupuesto apartado para la solicitud de servicio {internal_folio} - {provider_name or ''}",
+            reference=episa_folio,
+            status="comprometido",
+            service_request_id=srv.id,
+            transaction_date=event_date,
+            created_by_id=current_user.id
+        )
+        db.add(committed_tx)
+        db.flush()
 
     # Guardar archivo de presupuesto si existe
     if budget_file:
@@ -274,6 +321,7 @@ async def update_stage(
     pdf_file: Optional[UploadFile] = File(None),
     conformity_file: Optional[UploadFile] = File(None),
     payment_file: Optional[UploadFile] = File(None),
+    exchange_rate: Optional[float] = Form(None),
     date: Optional[datetime] = Form(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("services", "edit")),
@@ -384,6 +432,78 @@ async def update_stage(
         entered_at=event_date
     )
     db.add(history)
+
+    # Ajustar transacciones financieras de cuentas según transición
+    from app.models.account import AccountTransaction, TransactionType
+    
+    if status == "pagado":
+        if srv.currency == "USD":
+            if not exchange_rate:
+                raise HTTPException(status_code=400, detail="Se requiere ingresar el tipo de cambio real para realizar el pago en USD.")
+            srv.exchange_rate = exchange_rate
+        else:
+            srv.exchange_rate = 1.0
+
+        tx_amount = srv.budget_amount * srv.exchange_rate if srv.currency == "USD" else srv.budget_amount
+
+        # Buscar pre-cargo comprometido para completarlo
+        tx = db.query(AccountTransaction).filter(
+            AccountTransaction.service_request_id == srv.id
+        ).first()
+
+        if tx:
+            tx.status = "completado"
+            tx.amount = tx_amount
+            tx.concept = f"Pago de Servicio: {srv.internal_folio}"
+            tx.transaction_date = event_date
+        elif srv.account_id:
+            new_tx = AccountTransaction(
+                account_id=srv.account_id,
+                type=TransactionType.CARGO,
+                amount=tx_amount,
+                concept=f"Pago de Servicio: {srv.internal_folio}",
+                description=f"Pago de la solicitud de servicio {srv.internal_folio} - {srv.provider_name or ''}",
+                reference=srv.episa_folio,
+                status="completado",
+                service_request_id=srv.id,
+                transaction_date=event_date,
+                created_by_id=current_user.id
+            )
+            db.add(new_tx)
+
+    elif status == "cancelado":
+        # Liberar fondos
+        db.query(AccountTransaction).filter(AccountTransaction.service_request_id == srv.id).delete()
+
+    else:
+        # Revertir a pre-cargo comprometido
+        tx = db.query(AccountTransaction).filter(
+            AccountTransaction.service_request_id == srv.id
+        ).first()
+
+        tx_amount = srv.budget_amount * (srv.tentative_exchange_rate or 1.0) if srv.currency == "USD" else srv.budget_amount
+
+        if tx:
+            tx.status = "comprometido"
+            tx.amount = tx_amount
+            tx.concept = f"Comprometido: {srv.internal_folio}"
+            tx.transaction_date = event_date
+        elif srv.account_id:
+            new_tx = AccountTransaction(
+                account_id=srv.account_id,
+                type=TransactionType.CARGO,
+                amount=tx_amount,
+                concept=f"Comprometido: {srv.internal_folio}",
+                description=f"Presupuesto apartado para la solicitud de servicio {srv.internal_folio} - {srv.provider_name or ''}",
+                reference=srv.episa_folio,
+                status="comprometido",
+                service_request_id=srv.id,
+                transaction_date=event_date,
+                created_by_id=current_user.id
+            )
+            db.add(new_tx)
+        
+        srv.exchange_rate = None
     
     db.commit()
     db.refresh(srv)
@@ -635,6 +755,8 @@ async def delete_service(
         raise HTTPException(status_code=404, detail="Solicitud de servicio no encontrada.")
 
     folio = srv.internal_folio
+    from app.models.account import AccountTransaction
+    db.query(AccountTransaction).filter(AccountTransaction.service_request_id == id).delete()
     db.delete(srv)
     db.commit()
 
@@ -651,3 +773,94 @@ async def delete_service(
     )
 
     return {"status": "ok", "message": f"Solicitud '{folio}' eliminada correctamente."}
+
+
+@router.put("/{id}/budget-account", response_model=ServiceRequestResponse)
+async def update_budget_account(
+    id: int,
+    data: ServiceRequestBudgetAccountUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("services", "edit")),
+):
+    """Actualizar retroactivamente o editar la cuenta bancaria, moneda y tipo de cambio de la solicitud."""
+    srv = db.query(ServiceRequest).filter(ServiceRequest.id == id).first()
+    if not srv:
+        raise HTTPException(status_code=404, detail="Solicitud de servicio no encontrada.")
+
+    old_currency = srv.currency
+    old_account_id = srv.account_id
+
+    srv.currency = data.currency
+    srv.tentative_exchange_rate = data.tentative_exchange_rate
+    if data.exchange_rate is not None:
+        srv.exchange_rate = data.exchange_rate
+    srv.account_id = data.account_id
+    db.flush()
+
+    # Sincronizar transacciones en cuenta
+    from app.models.account import AccountTransaction, TransactionType
+
+    # 1. Eliminar transacciones antiguas si la cuenta cambió o se quitó la cuenta
+    if old_account_id and old_account_id != data.account_id:
+        db.query(AccountTransaction).filter(
+            AccountTransaction.service_request_id == id,
+            AccountTransaction.account_id == old_account_id
+        ).delete()
+
+    # Si se canceló la solicitud, no debe haber transacciones
+    if srv.status == "cancelado":
+        db.query(AccountTransaction).filter(AccountTransaction.service_request_id == id).delete()
+    elif data.account_id:
+        # 2. Buscar si ya existe una transacción para la nueva cuenta
+        tx = db.query(AccountTransaction).filter(
+            AccountTransaction.service_request_id == id,
+            AccountTransaction.account_id == data.account_id
+        ).first()
+
+        # Determinar el estado y monto
+        if srv.status == "pagado":
+            tx_status = "completado"
+            tc = data.exchange_rate or srv.exchange_rate or data.tentative_exchange_rate or 1.0
+            tx_amount = srv.budget_amount * tc if data.currency == "USD" else srv.budget_amount
+            tx_concept = f"Pago de Servicio: {srv.internal_folio}"
+        else:
+            tx_status = "comprometido"
+            tc = data.tentative_exchange_rate or 1.0
+            tx_amount = srv.budget_amount * tc if data.currency == "USD" else srv.budget_amount
+            tx_concept = f"Comprometido: {srv.internal_folio}"
+
+        if tx:
+            tx.status = tx_status
+            tx.amount = tx_amount
+            tx.concept = tx_concept
+        else:
+            new_tx = AccountTransaction(
+                account_id=data.account_id,
+                type=TransactionType.CARGO,
+                amount=tx_amount,
+                concept=tx_concept,
+                description=f"Movimiento financiero de la solicitud de servicio {srv.internal_folio} - {srv.provider_name or ''}",
+                reference=srv.episa_folio,
+                status=tx_status,
+                service_request_id=srv.id,
+                created_by_id=current_user.id
+            )
+            db.add(new_tx)
+
+    db.commit()
+    db.refresh(srv)
+
+    log_action(
+        db=db,
+        user_id=current_user.id,
+        username=current_user.username,
+        action="update",
+        module="services",
+        entity_type="ServiceRequest",
+        entity_id=id,
+        description=f"Actualizó asignación de cuenta/moneda en solicitud '{srv.internal_folio}'",
+        ip_address=request.client.host if request and request.client else None
+    )
+
+    return map_service_response(srv)

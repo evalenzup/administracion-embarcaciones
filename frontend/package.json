@@ -19,7 +19,9 @@
     "dayjs": "^1.11.13",
     "@react-pdf/renderer": "^3.4.4",
     "leaflet": "^1.9.4",
-    "react-leaflet": "^4.2.1"
+    "react-leaflet": "^4.2.1",
+    "leaflet-velocity": "^1.4.0",
+    "recharts": "^2.12.7"
   },
   "devDependencies": {
     "@types/react": "^18.3.5",

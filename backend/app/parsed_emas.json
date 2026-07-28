@@ -1,0 +1,1694 @@
+[
+  {
+    "name": "CALVILLO",
+    "state": "AGUASCALIENTES",
+    "latitude": 21.849444,
+    "longitude": -102.712222,
+    "altitude": 1618.0,
+    "installation_date": "2004-11-15 00:00:00",
+    "smn_name": "CALVILLO"
+  },
+  {
+    "name": "PRESA 50 ANIV.",
+    "state": "AGUASCALIENTES",
+    "latitude": 22.189306,
+    "longitude": -102.464972,
+    "altitude": 2063.397,
+    "installation_date": "2012-12-05 00:00:00",
+    "smn_name": "PRESA 50 ANIV."
+  },
+  {
+    "name": "SIERRA FRIA",
+    "state": "AGUASCALIENTES",
+    "latitude": 22.269778,
+    "longitude": -102.608778,
+    "altitude": 2976.307,
+    "installation_date": "2012-12-08 00:00:00",
+    "smn_name": "SIERRA FRIA"
+  },
+  {
+    "name": "BAHÍA DE LOS ANGELES",
+    "state": "BAJA CALIFORNIA",
+    "latitude": 28.896389,
+    "longitude": -113.560278,
+    "altitude": 10.0,
+    "installation_date": "2000-04-06 00:00:00",
+    "smn_name": "BAHÍA DE LOS ANGELES"
+  },
+  {
+    "name": "CATAVIÑA",
+    "state": "BAJA CALIFORNIA",
+    "latitude": 29.727222,
+    "longitude": -114.719167,
+    "altitude": 514.0,
+    "installation_date": "2004-11-10 00:00:00",
+    "smn_name": "CATAVIÑA"
+  },
+  {
+    "name": "CONSTITUCION DE 1857",
+    "state": "BAJA CALIFORNIA",
+    "latitude": 32.042167,
+    "longitude": -115.921722,
+    "altitude": 1576.313,
+    "installation_date": "2012-12-14 00:00:00",
+    "smn_name": "CONSTITUCION DE 1857"
+  },
+  {
+    "name": "LA RUMOROSA",
+    "state": "BAJA CALIFORNIA",
+    "latitude": 32.272222,
+    "longitude": -116.205556,
+    "altitude": 1262.0,
+    "installation_date": "2004-11-06 00:00:00",
+    "smn_name": "LA RUMOROSA"
+  },
+  {
+    "name": "MEXICALI",
+    "state": "BAJA CALIFORNIA",
+    "latitude": 32.666667,
+    "longitude": -115.457778,
+    "altitude": 14.0,
+    "installation_date": "2000-03-26 00:00:00",
+    "smn_name": "MEXICALI"
+  },
+  {
+    "name": "PLAYAS ROSARITO",
+    "state": "BAJA CALIFORNIA",
+    "latitude": 32.377722,
+    "longitude": -117.071444,
+    "altitude": 36.9,
+    "installation_date": "2015-05-19 00:00:00",
+    "smn_name": "PLAYAS ROSARITO"
+  },
+  {
+    "name": "PRESA ABELARDO L. RODRÍGUEZ (TIJUANA)",
+    "state": "BAJA CALIFORNIA",
+    "latitude": 32.447222,
+    "longitude": -116.908333,
+    "altitude": 156.0,
+    "installation_date": "1999-05-07 00:00:00",
+    "smn_name": "PRESA ABELARDO L RODRÍGUEZ TIJUANA"
+  },
+  {
+    "name": "PRESA EMILIO LÓPEZ ZAMORA (ENSENADA)",
+    "state": "BAJA CALIFORNIA",
+    "latitude": 31.891389,
+    "longitude": -116.603333,
+    "altitude": 32.0,
+    "installation_date": "1999-07-02 00:00:00",
+    "smn_name": "PRESA EMILIO LÓPEZ ZAMORA ENSENADA"
+  },
+  {
+    "name": "SAN QUINTÍN",
+    "state": "BAJA CALIFORNIA",
+    "latitude": 30.531667,
+    "longitude": -115.8375,
+    "altitude": 32.0,
+    "installation_date": "2000-04-01 00:00:00",
+    "smn_name": "SAN QUINTÍN"
+  },
+  {
+    "name": "TECATE",
+    "state": "BAJA CALIFORNIA",
+    "latitude": 32.568556,
+    "longitude": -116.661583,
+    "altitude": 583.7,
+    "installation_date": "2015-05-20 00:00:00",
+    "smn_name": "TECATE"
+  },
+  {
+    "name": "BAHIA DE LORETO",
+    "state": "BAJA CALIFORNIA SUR",
+    "latitude": 26.00975,
+    "longitude": -111.353917,
+    "altitude": 25.184,
+    "installation_date": "2012-12-13 00:00:00",
+    "smn_name": "BAHIA DE LORETO"
+  },
+  {
+    "name": "CABO PULMO",
+    "state": "BAJA CALIFORNIA SUR",
+    "latitude": 23.44525,
+    "longitude": -109.424556,
+    "altitude": 25.978,
+    "installation_date": "2012-12-19 00:00:00",
+    "smn_name": "CABO PULMO"
+  },
+  {
+    "name": "CABO SAN LUCAS",
+    "state": "BAJA CALIFORNIA SUR",
+    "latitude": 22.881111,
+    "longitude": -109.926389,
+    "altitude": 224.0,
+    "installation_date": "2000-04-26 00:00:00",
+    "smn_name": "CABO SAN LUCAS"
+  },
+  {
+    "name": "GUSTAVO DÍAZ ORDAZ",
+    "state": "BAJA CALIFORNIA SUR",
+    "latitude": 27.052222,
+    "longitude": -113.035278,
+    "altitude": 83.5,
+    "installation_date": "2015-05-18 00:00:00",
+    "smn_name": "GUSTAVO DIAZ ORDAZ"
+  },
+  {
+    "name": "SAN JUANICO",
+    "state": "BAJA CALIFORNIA SUR",
+    "latitude": 26.018056,
+    "longitude": -112.478583,
+    "altitude": 36.0,
+    "installation_date": "2007-12-28 00:00:00",
+    "smn_name": "SAN JUANICO"
+  },
+  {
+    "name": "SIERRA LA LAGUNA",
+    "state": "BAJA CALIFORNIA SUR",
+    "latitude": 23.555528,
+    "longitude": -109.998694,
+    "altitude": 1949.077,
+    "installation_date": "2012-12-24 00:00:00",
+    "smn_name": "SIERRA LA LAGUNA"
+  },
+  {
+    "name": "TODOS SANTOS",
+    "state": "BAJA CALIFORNIA SUR",
+    "latitude": 23.035,
+    "longitude": -110.017222,
+    "altitude": 48.0,
+    "installation_date": "2015-04-29 00:00:00",
+    "smn_name": "TODOS SANTOS"
+  },
+  {
+    "name": "CALAKMUL I",
+    "state": "CAMPECHE",
+    "latitude": 18.365,
+    "longitude": -89.8925,
+    "altitude": 28.0,
+    "installation_date": "2002-12-16 00:00:00",
+    "smn_name": "CALAKMUL I"
+  },
+  {
+    "name": "CALAKMUL II",
+    "state": "CAMPECHE",
+    "latitude": 18.094056,
+    "longitude": -89.462,
+    "altitude": 256.241,
+    "installation_date": "2012-11-30 00:00:00",
+    "smn_name": "CALAKMUL I"
+  },
+  {
+    "name": "DZILBACHEN",
+    "state": "CAMPECHE",
+    "latitude": 19.462472,
+    "longitude": -89.0675,
+    "altitude": 169.8,
+    "installation_date": "2015-05-13 00:00:00",
+    "smn_name": "DZILBACHEN"
+  },
+  {
+    "name": "ESCARCEGA",
+    "state": "CAMPECHE",
+    "latitude": 18.608333,
+    "longitude": -90.753889,
+    "altitude": 60.0,
+    "installation_date": "2004-11-17 00:00:00",
+    "smn_name": "ESCARCEGA"
+  },
+  {
+    "name": "ISLA DEL CARMEN",
+    "state": "CAMPECHE",
+    "latitude": 18.658306,
+    "longitude": -91.765306,
+    "altitude": 11.7,
+    "installation_date": "2015-05-11 00:00:00",
+    "smn_name": "ISLA DEL CARMEN"
+  },
+  {
+    "name": "LOS PETENES",
+    "state": "CAMPECHE",
+    "latitude": 19.943444,
+    "longitude": -90.374056,
+    "altitude": 3.323,
+    "installation_date": "2012-11-29 00:00:00",
+    "smn_name": "LOS PETENES"
+  },
+  {
+    "name": "MONCLOVA",
+    "state": "CAMPECHE",
+    "latitude": 18.056944,
+    "longitude": -90.820833,
+    "altitude": 100.0,
+    "installation_date": "2007-12-27 00:00:00",
+    "smn_name": " MONCLOVA"
+  },
+  {
+    "name": "YOHALTUM",
+    "state": "CAMPECHE",
+    "latitude": 19.013806,
+    "longitude": -90.311097,
+    "altitude": 80.0,
+    "installation_date": "2007-12-26 00:00:00",
+    "smn_name": "YOHALTUM"
+  },
+  {
+    "name": "CAÑON DEL SUMIDERO",
+    "state": "CHIAPAS",
+    "latitude": 16.828222,
+    "longitude": -93.095167,
+    "altitude": 1253.923,
+    "installation_date": "2012-11-05 00:00:00",
+    "smn_name": "CAÑON DEL SUMIDERO"
+  },
+  {
+    "name": "EL TRIUNFO",
+    "state": "CHIAPAS",
+    "latitude": 15.0525,
+    "longitude": -92.068889,
+    "altitude": 1974.0,
+    "installation_date": "2012-12-31 00:00:00",
+    "smn_name": "EL TRIUNFO"
+  },
+  {
+    "name": "ESCUINTLA",
+    "state": "CHIAPAS",
+    "latitude": 15.2975,
+    "longitude": -92.676111,
+    "altitude": 42.0,
+    "installation_date": "2003-12-29 00:00:00",
+    "smn_name": "ESCUINTLA"
+  },
+  {
+    "name": "LA ENCRUCIJADA",
+    "state": "CHIAPAS",
+    "latitude": 15.068406,
+    "longitude": -92.068056,
+    "altitude": 1.0,
+    "installation_date": "2012-12-24 00:00:00",
+    "smn_name": "LA ENCRUCIJADA"
+  },
+  {
+    "name": "LAGUNAS  DE MONTEBELLO",
+    "state": "CHIAPAS",
+    "latitude": 16.001667,
+    "longitude": -91.0675,
+    "altitude": 1492.0,
+    "installation_date": "2012-12-04 00:00:00",
+    "smn_name": "LAGUNAS  DE MONTEBELLO"
+  },
+  {
+    "name": "MONTES AZULES",
+    "state": "CHIAPAS",
+    "latitude": 16.068889,
+    "longitude": -91.050278,
+    "altitude": 625.0,
+    "installation_date": "2012-12-11 00:00:00",
+    "smn_name": "MONTES AZULES"
+  },
+  {
+    "name": "PALENQUE",
+    "state": "CHIAPAS",
+    "latitude": 17.525833,
+    "longitude": -91.990278,
+    "altitude": 52.0,
+    "installation_date": "2002-12-17 00:00:00",
+    "smn_name": "PALENQUE"
+  },
+  {
+    "name": "VOLCAN TACANA",
+    "state": "CHIAPAS",
+    "latitude": 15.001389,
+    "longitude": -92.002222,
+    "altitude": 1492.0,
+    "installation_date": "2012-12-19 00:00:00",
+    "smn_name": "VOLCAN TACANA"
+  },
+  {
+    "name": "BASASEACHI",
+    "state": "CHIHUAHUA",
+    "latitude": 28.199167,
+    "longitude": -108.208889,
+    "altitude": 1973.0,
+    "installation_date": "1999-05-07 00:00:00",
+    "smn_name": "BASASEACHI"
+  },
+  {
+    "name": "CD. CUAUHTEMOC",
+    "state": "CHIHUAHUA",
+    "latitude": 28.396897,
+    "longitude": -106.839167,
+    "altitude": 2102.0,
+    "installation_date": "2007-12-27 00:00:00",
+    "smn_name": "CIUDAD CUAUHTEMOC"
+  },
+  {
+    "name": "CHINATÚ",
+    "state": "CHIHUAHUA",
+    "latitude": 26.229444,
+    "longitude": -106.770556,
+    "altitude": 1982.0,
+    "installation_date": "1999-06-04 00:00:00",
+    "smn_name": "CHINATU"
+  },
+  {
+    "name": "CHINIPAS",
+    "state": "CHIHUAHUA",
+    "latitude": 27.392778,
+    "longitude": -108.536389,
+    "altitude": 431.0,
+    "installation_date": "1999-05-24 00:00:00",
+    "smn_name": "CHINIPAS"
+  },
+  {
+    "name": "CIUDAD DELICIAS",
+    "state": "CHIHUAHUA",
+    "latitude": 28.17,
+    "longitude": -105.5,
+    "altitude": 1188.0,
+    "installation_date": "2003-12-26 00:00:00",
+    "smn_name": "CIUDAD DELICIAS"
+  },
+  {
+    "name": "CUMBRES DE  MAJALCA",
+    "state": "CHIHUAHUA",
+    "latitude": 28.803306,
+    "longitude": -106.486,
+    "altitude": 2088.841,
+    "installation_date": "2012-12-06 00:00:00",
+    "smn_name": "CUMBRES DE MAJALCA"
+  },
+  {
+    "name": "EL VERGEL",
+    "state": "CHIHUAHUA",
+    "latitude": 26.473333,
+    "longitude": -106.390278,
+    "altitude": 2800.0,
+    "installation_date": "2007-12-28 00:00:00",
+    "smn_name": "EL VERGEL"
+  },
+  {
+    "name": "GUACHOCHI",
+    "state": "CHIHUAHUA",
+    "latitude": 26.068889,
+    "longitude": -107.001111,
+    "altitude": 2397.0,
+    "installation_date": "2015-04-30 00:00:00",
+    "smn_name": "GUACHOCHI"
+  },
+  {
+    "name": "JANOS",
+    "state": "CHIHUAHUA",
+    "latitude": 30.838972,
+    "longitude": -108.42725,
+    "altitude": 1398.776,
+    "installation_date": "2012-11-30 00:00:00",
+    "smn_name": "JANOS"
+  },
+  {
+    "name": "JIMENEZ",
+    "state": "CHIHUAHUA",
+    "latitude": 27.110833,
+    "longitude": -104.906389,
+    "altitude": 1360.0,
+    "installation_date": "2004-11-18 00:00:00",
+    "smn_name": "JIMENEZ"
+  },
+  {
+    "name": "MAGUARICHI",
+    "state": "CHIHUAHUA",
+    "latitude": 27.858333,
+    "longitude": -107.994444,
+    "altitude": 1663.0,
+    "installation_date": "1999-06-10 00:00:00",
+    "smn_name": "MAGUARICHI"
+  },
+  {
+    "name": "OJINAGA",
+    "state": "CHIHUAHUA",
+    "latitude": 29.534411,
+    "longitude": -104.4687,
+    "altitude": 790.0,
+    "installation_date": "2007-12-27 00:00:00",
+    "smn_name": "OJINAGA"
+  },
+  {
+    "name": "URIQUE",
+    "state": "CHIHUAHUA",
+    "latitude": 27.215556,
+    "longitude": -107.916944,
+    "altitude": 577.0,
+    "installation_date": "1999-04-15 00:00:00",
+    "smn_name": "URIQUE"
+  },
+  {
+    "name": "VILLA AHUMADA",
+    "state": "CHIHUAHUA",
+    "latitude": 30.615644,
+    "longitude": -106.05,
+    "altitude": 1931.0,
+    "installation_date": "2007-12-26 00:00:00",
+    "smn_name": "VILLA AHUMADA"
+  },
+  {
+    "name": "CUATRO CIÉNEGAS",
+    "state": "COAHUILA",
+    "latitude": 27.002444,
+    "longitude": -102.072722,
+    "altitude": 556.0,
+    "installation_date": "2007-12-26 00:00:00",
+    "smn_name": "CUATRO CIÉNEGAS"
+  },
+  {
+    "name": "MORELOS-MUZQUIZ",
+    "state": "COAHUILA",
+    "latitude": 28.013056,
+    "longitude": -101.711389,
+    "altitude": 492.0,
+    "installation_date": "2007-12-27 00:00:00",
+    "smn_name": "MORELOS-MUZQUIZ"
+  },
+  {
+    "name": "NUEVA ROSITA",
+    "state": "COAHUILA",
+    "latitude": 27.92,
+    "longitude": -101.33,
+    "altitude": 366.0,
+    "installation_date": "2003-12-22 00:00:00",
+    "smn_name": "NUEVA ROSITA"
+  },
+  {
+    "name": "OCAMPO",
+    "state": "COAHUILA",
+    "latitude": 28.825472,
+    "longitude": -102.525111,
+    "altitude": 1662.671,
+    "installation_date": "2012-11-27 00:00:00",
+    "smn_name": "OCAMPO"
+  },
+  {
+    "name": "SANTA CECILIA",
+    "state": "COAHUILA",
+    "latitude": 28.399444,
+    "longitude": -101.213056,
+    "altitude": 595.0,
+    "installation_date": "2004-11-25 00:00:00",
+    "smn_name": "SANTA CECILIA"
+  },
+  {
+    "name": "VENUSTIANO CARRANZA",
+    "state": "COAHUILA",
+    "latitude": 27.519444,
+    "longitude": -100.95,
+    "altitude": 264.0,
+    "installation_date": "2007-12-27 00:00:00",
+    "smn_name": "VENUSTIANO CARRANZA"
+  },
+  {
+    "name": "SIERRA DE MANANTLAN  I",
+    "state": "COLIMA",
+    "latitude": 19.4635,
+    "longitude": -103.917417,
+    "altitude": 2490.869,
+    "installation_date": "2012-11-29 00:00:00",
+    "smn_name": "SIERRA DE MANANTLAN  I"
+  },
+  {
+    "name": "ECOGUARDAS",
+    "state": "CIUDAD DE MÉXICO",
+    "latitude": 19.270858,
+    "longitude": -99.19915,
+    "altitude": 2536.0,
+    "installation_date": "2007-12-17 00:00:00",
+    "smn_name": "ECOGUARDAS"
+  },
+  {
+    "name": "ENCB II",
+    "state": "CIUDAD DE MÉXICO",
+    "latitude": 19.498669,
+    "longitude": -99.145453,
+    "altitude": 2240.0,
+    "installation_date": "2007-12-19 00:00:00",
+    "smn_name": "ENCB II"
+  },
+  {
+    "name": "ESCUELA NACIONAL DE CIENCIAS BIOLÓGICAS",
+    "state": "CIUDAD DE MÉXICO",
+    "latitude": 19.453611,
+    "longitude": -99.171111,
+    "altitude": 2262.0,
+    "installation_date": "1999-04-15 00:00:00",
+    "smn_name": "ESCUELA NACIONAL DE CIENCIAS BIOLÓGICAS"
+  },
+  {
+    "name": "TEZONTLE",
+    "state": "CIUDAD DE MÉXICO",
+    "latitude": 19.385278,
+    "longitude": -99.099722,
+    "altitude": 2358.0,
+    "installation_date": "2000-02-24 00:00:00",
+    "smn_name": "TEZONTLE"
+  },
+  {
+    "name": "AGUSTIN MELGAR",
+    "state": "DURANGO",
+    "latitude": 25.263333,
+    "longitude": -104.066111,
+    "altitude": 1226.0,
+    "installation_date": "2002-12-15 00:00:00",
+    "smn_name": "AGUSTIN MELGAR"
+  },
+  {
+    "name": "LA FLOR",
+    "state": "DURANGO",
+    "latitude": 26.549972,
+    "longitude": -103.999722,
+    "altitude": 1164.0,
+    "installation_date": "2007-12-26 00:00:00",
+    "smn_name": "LA FLOR"
+  },
+  {
+    "name": "LA MICHILIA, DGO",
+    "state": "DURANGO",
+    "latitude": 23.38775,
+    "longitude": -104.247,
+    "altitude": 2464.492,
+    "installation_date": "2012-11-28 00:00:00",
+    "smn_name": "LA MICHILIA"
+  },
+  {
+    "name": "LAS VEGAS",
+    "state": "DURANGO",
+    "latitude": 24.185833,
+    "longitude": -105.466111,
+    "altitude": 2398.0,
+    "installation_date": "2002-12-13 00:00:00",
+    "smn_name": "LAS VEGAS"
+  },
+  {
+    "name": "MAPIMI, DGO",
+    "state": "DURANGO",
+    "latitude": 26.686631,
+    "longitude": -103.747419,
+    "altitude": 1157.0,
+    "installation_date": "2012-11-09 00:00:00",
+    "smn_name": "MAPIMI, DGO"
+  },
+  {
+    "name": "SAN JUAN DE GUADALUPE",
+    "state": "DURANGO",
+    "latitude": 24.6375,
+    "longitude": -102.782778,
+    "altitude": 1526.0,
+    "installation_date": "2007-12-28 00:00:00",
+    "smn_name": "SAN JUAN DE GUADALUPE"
+  },
+  {
+    "name": "VILLA OCAMPO",
+    "state": "DURANGO",
+    "latitude": 26.440667,
+    "longitude": -105.502222,
+    "altitude": 1657.0,
+    "installation_date": "2007-12-27 00:00:00",
+    "smn_name": "VILLA OCAMPO"
+  },
+  {
+    "name": "PRESA ALLENDE",
+    "state": "GUANAJUATO",
+    "latitude": 20.848333,
+    "longitude": -100.824722,
+    "altitude": 1915.0,
+    "installation_date": "2000-03-13 00:00:00",
+    "smn_name": "PRESA ALLENDE"
+  },
+  {
+    "name": "SIERRA GORDA  II",
+    "state": "GUANAJUATO",
+    "latitude": 21.320917,
+    "longitude": -99.831444,
+    "altitude": 2216.07,
+    "installation_date": "2012-11-07 00:00:00",
+    "smn_name": "SIERRA GORDA  II"
+  },
+  {
+    "name": "ATOYAC",
+    "state": "GUERRERO",
+    "latitude": 17.209583,
+    "longitude": -100.440111,
+    "altitude": 120.0,
+    "installation_date": "2007-12-27 00:00:00",
+    "smn_name": "ATOYAC"
+  },
+  {
+    "name": "CD. ALTAMIRANO",
+    "state": "GUERRERO",
+    "latitude": 18.350556,
+    "longitude": -100.658333,
+    "altitude": 251.0,
+    "installation_date": "2002-12-14 00:00:00",
+    "smn_name": "CIUDAD ALTAMIRANO"
+  },
+  {
+    "name": "EL VELADERO",
+    "state": "GUERRERO",
+    "latitude": 16.884306,
+    "longitude": -99.907444,
+    "altitude": 302.91,
+    "installation_date": "2012-11-09 00:00:00",
+    "smn_name": "EL VELADERO"
+  },
+  {
+    "name": "IGUALA",
+    "state": "GUERRERO",
+    "latitude": 18.360278,
+    "longitude": -99.524167,
+    "altitude": 780.0,
+    "installation_date": "2004-10-22 00:00:00",
+    "smn_name": "IGUALA"
+  },
+  {
+    "name": "LAS VIGAS",
+    "state": "GUERRERO",
+    "latitude": 16.068056,
+    "longitude": -99.017778,
+    "altitude": 42.0,
+    "installation_date": "2015-04-29 00:00:00",
+    "smn_name": "LAS VIGAS"
+  },
+  {
+    "name": "PETACALCO",
+    "state": "GUERRERO",
+    "latitude": 17.984444,
+    "longitude": -102.123056,
+    "altitude": 53.0,
+    "installation_date": "2002-12-12 00:00:00",
+    "smn_name": "PETACALCO"
+  },
+  {
+    "name": "TLAPA DE COMONFORT",
+    "state": "GUERRERO",
+    "latitude": 17.549611,
+    "longitude": -98.563139,
+    "altitude": 1060.0,
+    "installation_date": "2007-12-28 00:00:00",
+    "smn_name": "TLAPA DE COMONFORT"
+  },
+  {
+    "name": "ZIHUATANEJO",
+    "state": "GUERRERO",
+    "latitude": 17.645056,
+    "longitude": -101.554889,
+    "altitude": 5.0,
+    "installation_date": "2007-12-28 00:00:00",
+    "smn_name": "ZIHUATANEJO"
+  },
+  {
+    "name": "EL CHICO",
+    "state": "HIDALGO",
+    "latitude": 20.185583,
+    "longitude": -98.716278,
+    "altitude": 3004.551,
+    "installation_date": "2012-10-29 00:00:00",
+    "smn_name": "EL CHICO"
+  },
+  {
+    "name": "HUICHAPAN",
+    "state": "HIDALGO",
+    "latitude": 20.388611,
+    "longitude": -99.663889,
+    "altitude": 2080.0,
+    "installation_date": "2003-12-30 00:00:00",
+    "smn_name": "HUICHAPAN"
+  },
+  {
+    "name": "ITESA-APAN",
+    "state": "HIDALGO",
+    "latitude": 19.728583,
+    "longitude": -98.46625,
+    "altitude": 2486.0,
+    "installation_date": "2015-05-11 00:00:00",
+    "smn_name": "ITESA APAN"
+  },
+  {
+    "name": "LOS MARMOLES",
+    "state": "HIDALGO",
+    "latitude": 20.8735,
+    "longitude": -99.2204,
+    "altitude": 2577.0,
+    "installation_date": "2012-11-02 00:00:00",
+    "smn_name": "LOS MARMOLES"
+  },
+  {
+    "name": "ZACUALTIPAN",
+    "state": "HIDALGO",
+    "latitude": 20.665056,
+    "longitude": -98.672083,
+    "altitude": 2056.0,
+    "installation_date": "2007-12-15 00:00:00",
+    "smn_name": "ZACUALTIPAN"
+  },
+  {
+    "name": "ZIMAPAN",
+    "state": "HIDALGO",
+    "latitude": 20.740222,
+    "longitude": -99.390806,
+    "altitude": 1788.0,
+    "installation_date": "2007-12-14 00:00:00",
+    "smn_name": "ZIMAPAN"
+  },
+  {
+    "name": "HUEJUTLA",
+    "state": "HIDALGO",
+    "latitude": 21.154722,
+    "longitude": -98.368611,
+    "altitude": 115.0,
+    "installation_date": "2000-03-26 00:00:00",
+    "smn_name": "HUEJUTLA"
+  },
+  {
+    "name": "CHAMELA-CUIXMALA",
+    "state": "JALISCO",
+    "latitude": 19.498528,
+    "longitude": -105.044806,
+    "altitude": 84.169,
+    "installation_date": "2012-12-02 00:00:00",
+    "smn_name": "CHAMELA CUIXMALA"
+  },
+  {
+    "name": "CHAPALA",
+    "state": "JALISCO",
+    "latitude": 20.290278,
+    "longitude": -103.201667,
+    "altitude": 1493.0,
+    "installation_date": "1999-04-10 00:00:00",
+    "smn_name": "CHAPALA"
+  },
+  {
+    "name": "JOCOTEPEC",
+    "state": "JALISCO",
+    "latitude": 20.283056,
+    "longitude": -103.416389,
+    "altitude": 1506.0,
+    "installation_date": "1999-08-13 00:00:00",
+    "smn_name": "JOCOTEPEC"
+  },
+  {
+    "name": "LA PRIMAVERA",
+    "state": "JALISCO",
+    "latitude": 20.676278,
+    "longitude": -103.644083,
+    "altitude": 1468.152,
+    "installation_date": "2012-12-04 00:00:00",
+    "smn_name": "LA PRIMAVERA"
+  },
+  {
+    "name": "NEVADO DE COLIMA",
+    "state": "JALISCO",
+    "latitude": 19.592167,
+    "longitude": -103.59075,
+    "altitude": 3461.139,
+    "installation_date": "2012-12-01 00:00:00",
+    "smn_name": "NEVADO DE COLIMA"
+  },
+  {
+    "name": "RÍO TOMATLAN",
+    "state": "JALISCO",
+    "latitude": 19.998611,
+    "longitude": -105.133611,
+    "altitude": 141.0,
+    "installation_date": "2000-04-30 00:00:00",
+    "smn_name": "RÍO TOMATLAN"
+  },
+  {
+    "name": "SIERRA DE MANANTLAN II",
+    "state": "JALISCO",
+    "latitude": 19.554361,
+    "longitude": -104.148083,
+    "altitude": 2882.051,
+    "installation_date": "2012-12-20 00:00:00",
+    "smn_name": "SIERRA DE MANANTLAN II"
+  },
+  {
+    "name": "TIZAPAN",
+    "state": "JALISCO",
+    "latitude": 20.169444,
+    "longitude": -103.043889,
+    "altitude": 1503.0,
+    "installation_date": "1999-08-14 00:00:00",
+    "smn_name": "TIZAPAN"
+  },
+  {
+    "name": "TLAJOMULCO",
+    "state": "JALISCO",
+    "latitude": 20.035,
+    "longitude": -103.419306,
+    "altitude": 1566.0,
+    "installation_date": "2015-05-08 00:00:00",
+    "smn_name": "TLAJOMULCO"
+  },
+  {
+    "name": "ALTZOMONI",
+    "state": "MEXICO",
+    "latitude": 19.118806,
+    "longitude": -98.655222,
+    "altitude": 4007.275,
+    "installation_date": "2012-10-31 00:00:00",
+    "smn_name": "ALTZOMONI"
+  },
+  {
+    "name": "ATLACOMULCO",
+    "state": "MEXICO",
+    "latitude": 19.799283,
+    "longitude": -99.87735,
+    "altitude": 2570.0,
+    "installation_date": "2000-03-01 00:00:00",
+    "smn_name": "ATLACOMULCO"
+  },
+  {
+    "name": "CERRO CATEDRAL",
+    "state": "MEXICO",
+    "latitude": 19.541944,
+    "longitude": -99.519167,
+    "altitude": 3754.0,
+    "installation_date": "1999-04-01 00:00:00",
+    "smn_name": "CERRO CATEDRAL"
+  },
+  {
+    "name": "NEVADO DE TOLUCA",
+    "state": "MEXICO",
+    "latitude": 19.116667,
+    "longitude": -99.766667,
+    "altitude": 4139.0,
+    "installation_date": "2000-03-09 00:00:00",
+    "smn_name": "NEVADO DE TOLUCA"
+  },
+  {
+    "name": "PARQUE IXTA-POPO",
+    "state": "MEXICO",
+    "latitude": 19.095667,
+    "longitude": -98.643222,
+    "altitude": 3682.0,
+    "installation_date": "2007-12-18 00:00:00",
+    "smn_name": "PARQUE IXTA-POPO"
+  },
+  {
+    "name": "PRESA MADÍN",
+    "state": "MEXICO",
+    "latitude": 19.524444,
+    "longitude": -99.268056,
+    "altitude": 2364.0,
+    "installation_date": "2015-04-14 00:00:00",
+    "smn_name": "PRESA MADÍN"
+  },
+  {
+    "name": "VALLE DE BRAVO",
+    "state": "MEXICO",
+    "latitude": 19.375583,
+    "longitude": -100.084806,
+    "altitude": 2476.998,
+    "installation_date": "2012-11-06 00:00:00",
+    "smn_name": "VALLE DE BRAVO"
+  },
+  {
+    "name": "ANGAMACUTIRO",
+    "state": "MICHOACÁN",
+    "latitude": 20.125278,
+    "longitude": -101.7225,
+    "altitude": 1730.0,
+    "installation_date": "2000-05-02 00:00:00",
+    "smn_name": "ANGAMACUTIRO"
+  },
+  {
+    "name": "APATZINGAN",
+    "state": "MICHOACÁN",
+    "latitude": 19.082778,
+    "longitude": -102.371667,
+    "altitude": 282.0,
+    "installation_date": "2002-12-09 00:00:00",
+    "smn_name": "APATZINGAN"
+  },
+  {
+    "name": "MARIPOSA MONARCA  I",
+    "state": "MICHOACÁN",
+    "latitude": 19.670889,
+    "longitude": -100.27775,
+    "altitude": 3255.171,
+    "installation_date": "2012-10-31 00:00:00",
+    "smn_name": "MARIPOSA MONARCA  I"
+  },
+  {
+    "name": "MARIPOSA MONARCA  II",
+    "state": "MICHOACÁN",
+    "latitude": 19.539083,
+    "longitude": -100.290056,
+    "altitude": 2970.254,
+    "installation_date": "2012-10-31 00:00:00",
+    "smn_name": "MARIPOSA MONARCA  II"
+  },
+  {
+    "name": "PRESA ZICUIRAN",
+    "state": "MICHOACÁN",
+    "latitude": 18.92175,
+    "longitude": -101.930611,
+    "altitude": 265.357,
+    "installation_date": "2012-11-30 00:00:00",
+    "smn_name": "PRESA ZICUIRAN"
+  },
+  {
+    "name": "URUAPAN",
+    "state": "MICHOACÁN",
+    "latitude": 19.380947,
+    "longitude": -102.029136,
+    "altitude": 1606.0,
+    "installation_date": "2003-12-26 00:00:00",
+    "smn_name": "URUAPAN"
+  },
+  {
+    "name": "INSTITUTO MEXICANO DE TECNOLOGÍA DEL AGUA",
+    "state": "MORELOS",
+    "latitude": 18.882222,
+    "longitude": -99.156944,
+    "altitude": 1355.0,
+    "installation_date": "1999-04-20 00:00:00",
+    "smn_name": "INSTITUTO MEXICANO DE TECNOLOGÍA DEL AGUA"
+  },
+  {
+    "name": "LAGUNAS DE ZEMPOALA",
+    "state": "MORELOS",
+    "latitude": 19.053444,
+    "longitude": -99.312778,
+    "altitude": 2820.367,
+    "installation_date": "2012-10-26 00:00:00",
+    "smn_name": "LAGUNAS DE ZEMPOALA"
+  },
+  {
+    "name": "SIERRA DE HUAUTLA",
+    "state": "MORELOS",
+    "latitude": 18.541556,
+    "longitude": -98.936361,
+    "altitude": 1330.733,
+    "installation_date": "2012-11-09 00:00:00",
+    "smn_name": "SIERRA DE HUAUTLA"
+  },
+  {
+    "name": "TEPOZTLAN",
+    "state": "MORELOS",
+    "latitude": 18.950833,
+    "longitude": -99.078889,
+    "altitude": 1384.0,
+    "installation_date": "2004-10-21 00:00:00",
+    "smn_name": "TEPOZTLAN"
+  },
+  {
+    "name": "TRES MARIAS",
+    "state": "MORELOS",
+    "latitude": 19.050556,
+    "longitude": -99.248611,
+    "altitude": 2839.0,
+    "installation_date": "2010-12-28 00:00:00",
+    "smn_name": "TRES MARIAS"
+  },
+  {
+    "name": "ACAPONETA",
+    "state": "NAYARIT",
+    "latitude": 22.466389,
+    "longitude": -105.385278,
+    "altitude": 29.0,
+    "installation_date": "2003-12-21 00:00:00",
+    "smn_name": "ACAPONETA"
+  },
+  {
+    "name": "IXTLAN DEL RIO",
+    "state": "NAYARIT",
+    "latitude": 21.038889,
+    "longitude": -104.298056,
+    "altitude": 1163.0,
+    "installation_date": "2003-12-24 00:00:00",
+    "smn_name": "IXTLAN DEL RIO"
+  },
+  {
+    "name": "MARISMAS NACIONALES",
+    "state": "NAYARIT",
+    "latitude": 22.221083,
+    "longitude": -105.330556,
+    "altitude": 1.0,
+    "installation_date": "2012-12-08 00:00:00",
+    "smn_name": "MARISMAS NACIONALES"
+  },
+  {
+    "name": "CUMBRES DE MTY I",
+    "state": "NUEVO LEÓN",
+    "latitude": 25.559819,
+    "longitude": -100.389903,
+    "altitude": 1455.0,
+    "installation_date": "2012-11-07 00:00:00",
+    "smn_name": "CUMBRES DE MTY I"
+  },
+  {
+    "name": "CUMBRES DE MTY - EL DIENTE",
+    "state": "NUEVO LEÓN",
+    "latitude": 25.577083,
+    "longitude": -100.3085,
+    "altitude": 734.4,
+    "installation_date": "2016-02-25 00:00:00",
+    "smn_name": "CUMBRES DE MTY EL DIENTE"
+  },
+  {
+    "name": "PRESA EL CUCHILLO",
+    "state": "NUEVO LEÓN",
+    "latitude": 25.733056,
+    "longitude": -99.320833,
+    "altitude": 134.0,
+    "installation_date": "2000-04-11 00:00:00",
+    "smn_name": "PRESA EL CUCHILLO"
+  },
+  {
+    "name": "BENITO JUAREZ",
+    "state": "OAXACA",
+    "latitude": 17.164278,
+    "longitude": -96.740056,
+    "altitude": 1950.872,
+    "installation_date": "2012-11-06 00:00:00",
+    "smn_name": "BENITO JUAREZ"
+  },
+  {
+    "name": "LAGUNA CHACAHUA",
+    "state": "OAXACA",
+    "latitude": 15.966917,
+    "longitude": -97.688556,
+    "altitude": 6.648,
+    "installation_date": "2012-11-12 00:00:00",
+    "smn_name": "LAGUNA CHACAHUA"
+  },
+  {
+    "name": "MATIAS ROMERO",
+    "state": "OAXACA",
+    "latitude": 16.882778,
+    "longitude": -95.036389,
+    "altitude": 186.0,
+    "installation_date": "2002-12-15 00:00:00",
+    "smn_name": "MATIAS ROMERO"
+  },
+  {
+    "name": "MIAHUATLAN",
+    "state": "OAXACA",
+    "latitude": 16.344167,
+    "longitude": -96.579722,
+    "altitude": 1588.0,
+    "installation_date": "2010-12-29 00:00:00",
+    "smn_name": "MIAHUATLAN"
+  },
+  {
+    "name": "NOCHISTLAN",
+    "state": "OAXACA",
+    "latitude": 17.436667,
+    "longitude": -97.249167,
+    "altitude": 2040.0,
+    "installation_date": "2004-11-15 00:00:00",
+    "smn_name": "NOCHISTLAN"
+  },
+  {
+    "name": "PINOTEPA NACIONAL",
+    "state": "OAXACA",
+    "latitude": 16.349722,
+    "longitude": -98.0525,
+    "altitude": 195.0,
+    "installation_date": "2002-12-16 00:00:00",
+    "smn_name": "PINOTEPA NACIONAL"
+  },
+  {
+    "name": "PUERTO ESCONDIDO",
+    "state": "OAXACA",
+    "latitude": 15.891278,
+    "longitude": -97.074528,
+    "altitude": 91.0,
+    "installation_date": "2015-05-05 00:00:00",
+    "smn_name": "PUERTO ESCONDIDO"
+  },
+  {
+    "name": "HUAUCHINANGO",
+    "state": "PUEBLA",
+    "latitude": 20.178125,
+    "longitude": -98.066511,
+    "altitude": 2193.0,
+    "installation_date": "2007-12-21 00:00:00",
+    "smn_name": "HUAUCHINANGO"
+  },
+  {
+    "name": "LA MALINCHE II",
+    "state": "PUEBLA",
+    "latitude": 19.141,
+    "longitude": -98.03225,
+    "altitude": 2748.902,
+    "installation_date": "2012-11-02 00:00:00",
+    "smn_name": "LA MALINCHE I"
+  },
+  {
+    "name": "TEHUACAN",
+    "state": "PUEBLA",
+    "latitude": 18.314111,
+    "longitude": -97.617111,
+    "altitude": 1736.455,
+    "installation_date": "2012-11-02 00:00:00",
+    "smn_name": "TEHUACAN"
+  },
+  {
+    "name": "TEZUITLÁN",
+    "state": "PUEBLA",
+    "latitude": 19.888,
+    "longitude": -97.390667,
+    "altitude": 1578.0,
+    "installation_date": "2007-12-21 00:00:00",
+    "smn_name": "TEZUITLÁN"
+  },
+  {
+    "name": "UNIVERSIDAD TECNOLÓGICA DE TECAMACHALCO",
+    "state": "PUEBLA",
+    "latitude": 18.866389,
+    "longitude": -97.721667,
+    "altitude": 2047.0,
+    "installation_date": "1999-06-02 00:00:00",
+    "smn_name": "UNIVERSIDAD TECNOLÓGICA DE TECAMACHALCO"
+  },
+  {
+    "name": "IZUCAR DE MATAMOROS",
+    "state": "PUEBLA",
+    "latitude": 18.616667,
+    "longitude": -98.451944,
+    "altitude": 1353.0,
+    "installation_date": "2000-03-18 00:00:00",
+    "smn_name": "IZUCAR DE MATAMOROS"
+  },
+  {
+    "name": "PRESA JALPAN",
+    "state": "QUERETARO",
+    "latitude": 21.206583,
+    "longitude": -99.472139,
+    "altitude": 773.357,
+    "installation_date": "2013-01-16 00:00:00",
+    "smn_name": "PRESA JALPAN"
+  },
+  {
+    "name": "SIERRA GORDA  I",
+    "state": "QUERETARO",
+    "latitude": 21.499111,
+    "longitude": -99.169194,
+    "altitude": 1111.221,
+    "installation_date": "2012-11-05 00:00:00",
+    "smn_name": "SIERRA GORDA  I"
+  },
+  {
+    "name": "HUIMILPAN",
+    "state": "QUERÉTARO",
+    "latitude": 20.390278,
+    "longitude": -100.283611,
+    "altitude": 2280.0,
+    "installation_date": "2000-02-29 00:00:00",
+    "smn_name": "HUIMILPAN"
+  },
+  {
+    "name": "ARRECIFES XCALAK",
+    "state": "QUINTANA ROO",
+    "latitude": 18.280056,
+    "longitude": -87.835444,
+    "altitude": 2.92,
+    "installation_date": "2012-12-17 00:00:00",
+    "smn_name": "ARRECIFES XCALAK"
+  },
+  {
+    "name": "CANCÚN",
+    "state": "QUINTANA ROO",
+    "latitude": 21.029631,
+    "longitude": -86.852089,
+    "altitude": 1.0,
+    "installation_date": "2000-04-27 00:00:00",
+    "smn_name": "CANCUN"
+  },
+  {
+    "name": "COZUMEL",
+    "state": "QUINTANA ROO",
+    "latitude": 20.476944,
+    "longitude": -86.906944,
+    "altitude": 5.0,
+    "installation_date": "2002-12-12 00:00:00",
+    "smn_name": "COZUMEL"
+  },
+  {
+    "name": "JOSÉ MARIA MORELOS",
+    "state": "QUINTANA ROO",
+    "latitude": 19.752253,
+    "longitude": -88.703831,
+    "altitude": 56.0,
+    "installation_date": "2007-12-28 00:00:00",
+    "smn_name": "JOSÉ MARIA MORELOS"
+  },
+  {
+    "name": "KANTUNILKIN",
+    "state": "QUINTANA ROO",
+    "latitude": 21.001667,
+    "longitude": -87.035833,
+    "altitude": 32.4,
+    "installation_date": "2015-05-15 00:00:00",
+    "smn_name": "KANTUNILKIN"
+  },
+  {
+    "name": "LA UNION",
+    "state": "QUINTANA ROO",
+    "latitude": 17.896944,
+    "longitude": -88.878611,
+    "altitude": 11.0,
+    "installation_date": "2010-12-22 00:00:00",
+    "smn_name": "LA UNION"
+  },
+  {
+    "name": "NICOLÁS BRAVO",
+    "state": "QUINTANA ROO",
+    "latitude": 18.455278,
+    "longitude": -88.923889,
+    "altitude": 104.0,
+    "installation_date": "2007-12-27 00:00:00",
+    "smn_name": "NICOLÁS BRAVO"
+  },
+  {
+    "name": "SIAN KA'AN II",
+    "state": "QUINTANA ROO",
+    "latitude": 19.0675,
+    "longitude": -87.812667,
+    "altitude": 30.1,
+    "installation_date": "2015-05-16 00:00:00",
+    "smn_name": "SIAN KAAN II"
+  },
+  {
+    "name": "CIUDAD FERNÁNDEZ",
+    "state": "SAN LUIS POTOSI",
+    "latitude": 21.936333,
+    "longitude": -100.021722,
+    "altitude": 1009.0,
+    "installation_date": "2007-12-20 00:00:00",
+    "smn_name": "CIUDAD FERNÁNDEZ"
+  },
+  {
+    "name": "CIUDAD VALLES",
+    "state": "SAN LUIS POTOSI",
+    "latitude": 21.979722,
+    "longitude": -99.030833,
+    "altitude": 58.0,
+    "installation_date": "2004-11-17 00:00:00",
+    "smn_name": "CIUDAD VALLES"
+  },
+  {
+    "name": "GOGORRON",
+    "state": "SAN LUIS POTOSI",
+    "latitude": 21.811139,
+    "longitude": -100.940222,
+    "altitude": 1809.58,
+    "installation_date": "2012-11-13 00:00:00",
+    "smn_name": "GOGORRON"
+  },
+  {
+    "name": "MATEHUALA",
+    "state": "SAN LUIS POTOSI",
+    "latitude": 23.6475,
+    "longitude": -100.6575,
+    "altitude": 1627.0,
+    "installation_date": "2002-12-10 00:00:00",
+    "smn_name": "MATEHUALA"
+  },
+  {
+    "name": "EL FUERTE",
+    "state": "SINALOA",
+    "latitude": 26.411389,
+    "longitude": -108.6175,
+    "altitude": 82.0,
+    "installation_date": "2007-12-27 00:00:00",
+    "smn_name": "EL FUERTE"
+  },
+  {
+    "name": "OBISPO",
+    "state": "SINALOA",
+    "latitude": 24.251111,
+    "longitude": -107.188056,
+    "altitude": 4.0,
+    "installation_date": "2004-11-18 00:00:00",
+    "smn_name": "OBISPO"
+  },
+  {
+    "name": "SAN JUAN",
+    "state": "SINALOA",
+    "latitude": 25.485556,
+    "longitude": -107.843333,
+    "altitude": 112.0,
+    "installation_date": "2007-12-26 00:00:00",
+    "smn_name": "SAN JUAN"
+  },
+  {
+    "name": "ALAMOS",
+    "state": "SONORA",
+    "latitude": 27.021667,
+    "longitude": -108.937778,
+    "altitude": 409.0,
+    "installation_date": "1999-05-31 00:00:00",
+    "smn_name": "ALAMOS"
+  },
+  {
+    "name": "CABORCA",
+    "state": "SONORA",
+    "latitude": 30.774722,
+    "longitude": -112.435361,
+    "altitude": 188.0,
+    "installation_date": "2007-12-26 00:00:00",
+    "smn_name": "CABORCA"
+  },
+  {
+    "name": "EL PINACATE",
+    "state": "SONORA",
+    "latitude": 31.68,
+    "longitude": -113.304778,
+    "altitude": 99.561,
+    "installation_date": "2012-12-10 00:00:00",
+    "smn_name": "EL PINACATE"
+  },
+  {
+    "name": "HERMOSILLO - BAHIA DE KINO",
+    "state": "SONORA",
+    "latitude": 29.013333,
+    "longitude": -111.136944,
+    "altitude": 150.0,
+    "installation_date": "2003-12-29 00:00:00",
+    "smn_name": "HERMOSILLO - BAHIA DE KINO"
+  },
+  {
+    "name": "NOGALES",
+    "state": "SONORA",
+    "latitude": 31.297778,
+    "longitude": -110.913944,
+    "altitude": 1269.0,
+    "installation_date": "2007-12-27 00:00:00",
+    "smn_name": "NOGALES"
+  },
+  {
+    "name": "SAN LUIS RÍO COLORADO",
+    "state": "SONORA",
+    "latitude": 32.424,
+    "longitude": -114.797833,
+    "altitude": 39.0,
+    "installation_date": "2007-12-25 00:00:00",
+    "smn_name": "SAN LUIS RIO COLORADO"
+  },
+  {
+    "name": "SONOYTA",
+    "state": "SONORA",
+    "latitude": 31.865444,
+    "longitude": -112.847194,
+    "altitude": 369.0,
+    "installation_date": "2007-12-28 00:00:00",
+    "smn_name": "SONOYTA"
+  },
+  {
+    "name": "YECORA",
+    "state": "SONORA",
+    "latitude": 28.366667,
+    "longitude": -108.916667,
+    "altitude": 1531.0,
+    "installation_date": "2002-12-10 00:00:00",
+    "smn_name": "YECORA"
+  },
+  {
+    "name": "CAÑON  USUMACINTA",
+    "state": "TABASCO",
+    "latitude": 17.018611,
+    "longitude": -91.0175,
+    "altitude": 123.0,
+    "installation_date": "2012-11-27 00:00:00",
+    "smn_name": "CAÑON USUMACINTA"
+  },
+  {
+    "name": "PANTANOS DE CENTLA",
+    "state": "TABASCO",
+    "latitude": 18.406278,
+    "longitude": -92.646444,
+    "altitude": 2.325,
+    "installation_date": "2012-11-28 00:00:00",
+    "smn_name": "PANTANOS DE CENTLA"
+  },
+  {
+    "name": "PARAISO",
+    "state": "TABASCO",
+    "latitude": 18.423333,
+    "longitude": -93.155556,
+    "altitude": 4.0,
+    "installation_date": "2003-12-26 00:00:00",
+    "smn_name": "PARAISO"
+  },
+  {
+    "name": "BARRA DEL TORDO",
+    "state": "TAMAULIPAS",
+    "latitude": 23.051942,
+    "longitude": -97.772219,
+    "altitude": 5.0,
+    "installation_date": "2011-12-16 00:00:00",
+    "smn_name": "BARRA DEL TORDO"
+  },
+  {
+    "name": "CIUDAD MANTE",
+    "state": "TAMAULIPAS",
+    "latitude": 22.744444,
+    "longitude": -98.983056,
+    "altitude": 85.0,
+    "installation_date": "2003-12-21 00:00:00",
+    "smn_name": "CIUDAD MANTE"
+  },
+  {
+    "name": "JAUMAVE",
+    "state": "TAMAULIPAS",
+    "latitude": 23.4075,
+    "longitude": -99.375278,
+    "altitude": 750.0,
+    "installation_date": "2007-12-28 00:00:00",
+    "smn_name": "JAUMAVE"
+  },
+  {
+    "name": "MATAMOROS",
+    "state": "TAMAULIPAS",
+    "latitude": 25.885833,
+    "longitude": -97.518611,
+    "altitude": 4.0,
+    "installation_date": "2000-04-05 00:00:00",
+    "smn_name": "MATAMOROS"
+  },
+  {
+    "name": "SAN FERNANDO",
+    "state": "TAMAULIPAS",
+    "latitude": 24.842778,
+    "longitude": -98.1575,
+    "altitude": 45.0,
+    "installation_date": "2002-12-08 00:00:00",
+    "smn_name": "SAN FERNANDO"
+  },
+  {
+    "name": "VILLAGRAN",
+    "state": "TAMAULIPAS",
+    "latitude": 24.470556,
+    "longitude": -99.488611,
+    "altitude": 390.0,
+    "installation_date": "2007-12-28 00:00:00",
+    "smn_name": "VILLAGRAN"
+  },
+  {
+    "name": "HUAMANTLA",
+    "state": "TLAXCALA",
+    "latitude": 19.386111,
+    "longitude": -97.966389,
+    "altitude": 2222.0,
+    "installation_date": "2000-03-17 00:00:00",
+    "smn_name": "HUAMANTLA"
+  },
+  {
+    "name": "LA MALINCHE I",
+    "state": "TLAXCALA",
+    "latitude": 19.2975,
+    "longitude": -98.044389,
+    "altitude": 2931.664,
+    "installation_date": "2012-10-31 00:00:00",
+    "smn_name": "LA MALINCHE I"
+  },
+  {
+    "name": "ACAYUCAN",
+    "state": "VERACRUZ",
+    "latitude": 17.976917,
+    "longitude": -94.900992,
+    "altitude": 106.0,
+    "installation_date": "2007-12-20 00:00:00",
+    "smn_name": "ACAYUCAN"
+  },
+  {
+    "name": "ALVARADO",
+    "state": "VERACRUZ",
+    "latitude": 18.715,
+    "longitude": -95.6325,
+    "altitude": 113.0,
+    "installation_date": "2000-03-29 00:00:00",
+    "smn_name": "ALVARADO"
+  },
+  {
+    "name": "CD. ALEMAN",
+    "state": "VERACRUZ",
+    "latitude": 18.189722,
+    "longitude": -96.098056,
+    "altitude": 40.0,
+    "installation_date": "2000-03-28 00:00:00",
+    "smn_name": "CD. ALEMAN"
+  },
+  {
+    "name": "CITLALTEPEC",
+    "state": "VERACRUZ",
+    "latitude": 21.334444,
+    "longitude": -97.878611,
+    "altitude": 211.0,
+    "installation_date": "2006-02-22 00:00:00",
+    "smn_name": "CITLALTEPEC"
+  },
+  {
+    "name": "CÓRDOBA",
+    "state": "VERACRUZ",
+    "latitude": 18.890061,
+    "longitude": -96.923103,
+    "altitude": 852.0,
+    "installation_date": "2007-12-21 00:00:00",
+    "smn_name": "CÓRDOBA"
+  },
+  {
+    "name": "COSCOMATEPEC",
+    "state": "VERACRUZ",
+    "latitude": 19.066028,
+    "longitude": -97.040981,
+    "altitude": 1495.0,
+    "installation_date": "2013-08-21 00:00:00",
+    "smn_name": "COSCOMATEPEC"
+  },
+  {
+    "name": "LA CANGREJERA",
+    "state": "VERACRUZ",
+    "latitude": 18.105833,
+    "longitude": -94.331389,
+    "altitude": 34.0,
+    "installation_date": "2000-04-03 00:00:00",
+    "smn_name": "LA CANGREJERA"
+  },
+  {
+    "name": "LOMA GRANDE",
+    "state": "VERACRUZ",
+    "latitude": 18.925278,
+    "longitude": -97.236944,
+    "altitude": 2722.0,
+    "installation_date": "2013-10-09 00:00:00",
+    "smn_name": "LOMA GRANDE"
+  },
+  {
+    "name": "LOS TUXTLAS  I",
+    "state": "VERACRUZ",
+    "latitude": 18.584194,
+    "longitude": -95.073667,
+    "altitude": 117.245,
+    "installation_date": "2012-11-05 00:00:00",
+    "smn_name": "LOS TUXTLAS  II"
+  },
+  {
+    "name": "LOS TUXTLAS  II",
+    "state": "VERACRUZ",
+    "latitude": 18.375028,
+    "longitude": -94.931108,
+    "altitude": 915.144,
+    "installation_date": "2012-11-06 00:00:00",
+    "smn_name": "LOS TUXTLAS  II"
+  },
+  {
+    "name": "PEROTE",
+    "state": "VERACRUZ",
+    "latitude": 19.545167,
+    "longitude": -97.268389,
+    "altitude": 2410.0,
+    "installation_date": "2012-07-13 00:00:00",
+    "smn_name": "PEROTE"
+  },
+  {
+    "name": "PRESA TUXPANGO",
+    "state": "VERACRUZ",
+    "latitude": 18.845667,
+    "longitude": -97.039444,
+    "altitude": 965.294,
+    "installation_date": "2012-11-05 00:00:00",
+    "smn_name": "PRESA TUXPANGO"
+  },
+  {
+    "name": "CELESTÚN",
+    "state": "YUCATÁN",
+    "latitude": 20.858056,
+    "longitude": -90.383056,
+    "altitude": 10.0,
+    "installation_date": "2000-04-13 00:00:00",
+    "smn_name": "CELESTÚN"
+  },
+  {
+    "name": "DZILAM",
+    "state": "YUCATÁN",
+    "latitude": 21.390556,
+    "longitude": -88.904167,
+    "altitude": 2.0,
+    "installation_date": "2007-12-28 00:00:00",
+    "smn_name": "DZILAM"
+  },
+  {
+    "name": "OXKUTZCAB",
+    "state": "YUCATÁN",
+    "latitude": 20.291111,
+    "longitude": -89.394694,
+    "altitude": 28.0,
+    "installation_date": "2007-12-28 00:00:00",
+    "smn_name": "OXKUTZCAB"
+  },
+  {
+    "name": "RÍO LAGARTOS",
+    "state": "YUCATÁN",
+    "latitude": 21.571111,
+    "longitude": -88.160278,
+    "altitude": 5.0,
+    "installation_date": "2000-04-19 00:00:00",
+    "smn_name": "RÍO LAGARTOS"
+  },
+  {
+    "name": "TANTAQUIN",
+    "state": "YUCATÁN",
+    "latitude": 20.030278,
+    "longitude": -89.047222,
+    "altitude": 30.0,
+    "installation_date": "2002-12-14 00:00:00",
+    "smn_name": "TANTAQUIN"
+  },
+  {
+    "name": "TIZIMIN",
+    "state": "YUCATÁN",
+    "latitude": 21.161633,
+    "longitude": -87.988967,
+    "altitude": 19.0,
+    "installation_date": "2011-12-19 00:00:00",
+    "smn_name": "TIZIMIN"
+  },
+  {
+    "name": "LA FLORIDA",
+    "state": "ZACATECAS",
+    "latitude": 22.686111,
+    "longitude": -103.6025,
+    "altitude": 1870.0,
+    "installation_date": "2007-12-25 00:00:00",
+    "smn_name": "LA FLORIDA"
+  },
+  {
+    "name": "ZACATECAS",
+    "state": "ZACATECAS",
+    "latitude": 22.746667,
+    "longitude": -102.506111,
+    "altitude": 2270.0,
+    "installation_date": "2000-04-18 00:00:00",
+    "smn_name": "ZACATECAS"
+  }
+]
