@@ -113,7 +113,7 @@ async def create_request(
     
     send_new_vessel_request_admin_notification(
         background_tasks=background_tasks,
-        applicant_name=current_user.name or current_user.username,
+        applicant_name=current_user.full_name or current_user.username,
         project_name=req.project_name,
         vessel_name=vessel_name,
         departure_date=dep_str,
@@ -301,7 +301,7 @@ async def review_request(
         send_vessel_request_notification(
             background_tasks=background_tasks,
             to_email=applicant.email,
-            user_name=applicant.name or applicant.username,
+            user_name=applicant.full_name or applicant.username,
             project_name=req.project_name,
             vessel_name=vessel_name,
             departure_date=dep_str,
