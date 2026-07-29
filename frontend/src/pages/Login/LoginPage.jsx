@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { Form, Input, Button, Typography, Card, Space, Divider } from 'antd';
 import { UserOutlined, LockOutlined, LoginOutlined, CalendarOutlined } from '@ant-design/icons';
 import { useAuth } from '../../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 const { Title, Text } = Typography;
 
@@ -14,12 +14,14 @@ function LoginPage() {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const onFinish = async (values) => {
     setLoading(true);
     const result = await login(values.username, values.password);
     if (result.success) {
-      navigate('/');
+      const redirectUrl = searchParams.get('redirect') || '/';
+      navigate(redirectUrl, { replace: true });
     }
     setLoading(false);
   };

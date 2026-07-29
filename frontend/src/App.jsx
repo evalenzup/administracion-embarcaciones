@@ -2,7 +2,7 @@
  * SIAE — Componente raíz con rutas protegidas.
  */
 
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Spin } from 'antd';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
@@ -42,6 +42,7 @@ import WeatherPage from './pages/Weather/WeatherPage';
  */
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -52,7 +53,8 @@ function ProtectedRoute({ children }) {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    const redirectUrl = encodeURIComponent(location.pathname + location.search);
+    return <Navigate to={`/login?redirect=${redirectUrl}`} replace />;
   }
 
   return children;

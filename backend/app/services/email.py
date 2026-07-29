@@ -249,9 +249,12 @@ def send_vessel_request_notification(
                 <p>Dado que su solicitud ha sido <strong>Aprobada</strong>, el sistema ha creado automáticamente un borrador de su <strong>Plan de Crucero</strong>. Ya puede ingresar a la plataforma para definir waypoints, registrar participantes y descargar su plan generado.</p>
         """
 
+    target_url = "http://158.97.12.24:3010/cruises" if is_approved else "http://158.97.12.24:3010/requests"
+    btn_text = "Configurar Plan de Crucero" if is_approved else "Ver mi Solicitud"
+
     html_content += f"""
                 <div class="btn-container">
-                    <a href="http://158.97.12.24:3010/" class="btn">Ingresar al Portal SIAE</a>
+                    <a href="{target_url}" class="btn">{btn_text}</a>
                 </div>
             </div>
             <div class="footer">
@@ -424,7 +427,7 @@ def send_new_vessel_request_admin_notification(
                 <p>Por favor, ingrese a la sección de administración de SIAE para revisar, asignar el plan de crucero y aprobar o rechazar la solicitud.</p>
 
                 <div class="btn-container">
-                    <a href="http://158.97.12.24:3010/" class="btn">Revisar Solicitudes</a>
+                    <a href="http://158.97.12.24:3010/requests" class="btn">Revisar Solicitud</a>
                 </div>
             </div>
             <div class="footer">
