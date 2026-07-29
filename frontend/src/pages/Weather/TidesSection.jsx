@@ -177,9 +177,20 @@ function TidesSection({ stations, stationCode, onStationChange }) {
       ) : (
         <Row gutter={16}>
           <Col xs={24} lg={16}>
+            <div style={{
+              background: '#f5f5f5',
+              padding: '6px 12px',
+              borderRadius: 6,
+              marginBottom: 10,
+              fontSize: 11.5,
+              borderLeft: '4px solid #1677ff',
+              color: '#555'
+            }}>
+              ⚠️ <strong>Nivel de referencia:</strong> Alturas expresadas en metros con respecto a la <strong>Bajamar Media Inferior (BMI)</strong>, según la predicción astronómica del CICESE.
+            </div>
             <ResponsiveContainer width="100%" height={260}>
               <AreaChart data={series} margin={{ top: 8, right: 8, left: -15, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
                 <XAxis
                   dataKey="t"
                   type="number"
@@ -188,7 +199,12 @@ function TidesSection({ stations, stationCode, onStationChange }) {
                   tickFormatter={(t) => dayjs(t).format('DD/MM HH:mm')}
                   tick={{ fontSize: 10 }}
                 />
-                <YAxis tick={{ fontSize: 10 }} unit=" m" />
+                <YAxis
+                  tick={{ fontSize: 10 }}
+                  unit=" m"
+                  ticks={[-0.5, 0.0, 0.5, 1.0, 1.5, 2.0, 2.5]}
+                  domain={[-0.5, 2.5]}
+                />
                 <Tooltip
                   labelFormatter={(t) => dayjs(t).format('DD/MM/YYYY HH:mm')}
                   formatter={(v) => [`${v} m`, 'Marea']}

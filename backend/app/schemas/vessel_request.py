@@ -48,7 +48,7 @@ class VesselRequestReview(BaseModel):
 class UserBasicInRequest(BaseModel):
     id: int
     username: str
-    full_name: str
+    full_name: str | None = None
 
     model_config = {"from_attributes": True}
 
