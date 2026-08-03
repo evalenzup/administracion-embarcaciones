@@ -47,8 +47,9 @@ function PublicSchedulePage() {
   const getListData = (value) => {
     const dayStr = value.format('YYYY-MM-DD');
     return filteredCruises.filter(c => {
+      if (!c.departure_date) return false;
       const dep = dayjs(c.departure_date).format('YYYY-MM-DD');
-      const ret = dayjs(c.return_date).format('YYYY-MM-DD');
+      const ret = c.return_date ? dayjs(c.return_date).format('YYYY-MM-DD') : dep;
       return dayStr >= dep && dayStr <= ret;
     }).map(c => {
       let type = 'success';
@@ -91,8 +92,9 @@ function PublicSchedulePage() {
     const results = vessels.map(v => {
       const overlaps = cruises.filter(c => {
         if (c.vessel_id !== v.id) return false;
+        if (!c.departure_date) return false;
         const dep = dayjs(c.departure_date).format('YYYY-MM-DD');
-        const ret = dayjs(c.return_date).format('YYYY-MM-DD');
+        const ret = c.return_date ? dayjs(c.return_date).format('YYYY-MM-DD') : dep;
         return (startStr <= ret) && (endStr >= dep);
       });
       return {
