@@ -33,7 +33,7 @@ router = APIRouter(prefix="/api/v1/weather", tags=["Meteorología"])
 
 
 @router.get("/status", response_model=WeatherStatusResponse)
-async def get_status(current_user: User = Depends(get_current_user)):
+async def get_status():
     """Estado de la corrida meteorológica activa (viento/oleaje GFS-WW3)."""
     manifest = weather_processor.get_latest_manifest()
     if manifest is None:
@@ -64,7 +64,6 @@ async def get_status(current_user: User = Depends(get_current_user)):
 @router.get("/wind")
 async def get_wind(
     hour: int = Query(..., description="Hora de pronóstico (0, 3, 6, ...)"),
-    current_user: User = Depends(get_current_user),
 ):
     """Malla de viento (formato leaflet-velocity) de la corrida más reciente para la hora dada."""
     manifest = weather_processor.get_latest_manifest()
@@ -80,7 +79,6 @@ async def get_wind(
 @router.get("/waves")
 async def get_waves(
     hour: int = Query(..., description="Hora de pronóstico (0, 3, 6, ...)"),
-    current_user: User = Depends(get_current_user),
 ):
     """Malla de oleaje (altura, periodo, dirección) de la corrida más reciente para la hora dada."""
     manifest = weather_processor.get_latest_manifest()
@@ -96,7 +94,6 @@ async def get_waves(
 @router.get("/wind-image")
 async def get_wind_image(
     hour: int = Query(..., description="Hora de pronóstico (0, 3, 6, ...)"),
-    current_user: User = Depends(get_current_user),
 ):
     """
     PNG de velocidad de viento sobremuestreado (paleta estilo Windy, sin
@@ -118,7 +115,6 @@ async def get_wind_image(
 @router.get("/waves-velocity")
 async def get_waves_velocity(
     hour: int = Query(..., description="Hora de pronóstico (0, 3, 6, ...)"),
-    current_user: User = Depends(get_current_user),
 ):
     """
     Campo U/V sintético (formato leaflet-velocity) para animar partículas en
@@ -137,7 +133,6 @@ async def get_waves_velocity(
 @router.get("/waves-image")
 async def get_waves_image(
     hour: int = Query(..., description="Hora de pronóstico (0, 3, 6, ...)"),
-    current_user: User = Depends(get_current_user),
 ):
     """
     PNG de altura de ola sobremuestreado (~2.7 km/píxel) y enmascarado por
@@ -160,7 +155,6 @@ async def get_waves_image(
 async def get_point_forecast(
     lat: float = Query(..., ge=-90, le=90),
     lon: float = Query(..., ge=-180, le=180),
-    current_user: User = Depends(get_current_user),
 ):
     """Serie temporal de pronóstico (viento, ráfaga, oleaje) interpolada en un punto."""
     forecast = weather_query.get_point_forecast(lat, lon)
@@ -205,7 +199,6 @@ def _get_station(db: Session, code: str) -> TideStation:
 @router.get("/tides/stations", response_model=list[TideStationResponse])
 async def list_tide_stations(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ):
     """Estaciones mareográficas con predicciones ingeridas."""
     return db.query(TideStation).order_by(TideStation.name).all()
@@ -217,7 +210,6 @@ async def get_tide_series(
     start: datetime = Query(..., description="Inicio (ISO, UTC si no trae zona)"),
     end: datetime = Query(..., description="Fin (ISO)"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ):
     """Serie horaria de altura de marea (m sobre Bajamar Media Inferior)."""
     st = _get_station(db, station)
@@ -248,7 +240,6 @@ async def get_tide_windows(
     start: datetime = Query(...),
     end: datetime = Query(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ):
     """
     Ventanas de operación: intervalos donde la marea ≥ min_height_m.
@@ -321,7 +312,6 @@ async def refresh_tides(
 @router.get("/smn/stations", response_model=list[EmaStationResponse])
 async def list_ema_stations(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ):
     """Obtiene el listado completo de estaciones automáticas del SMN."""
     return db.query(EmaStation).order_by(EmaStation.state, EmaStation.name).all()
@@ -332,7 +322,6 @@ async def get_ema_history(
     id: int,
     range: str = Query("24h", description="Rango de tiempo: 24h, 1w, 30d, 90d"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ):
     """Obtiene el historial de mediciones de una estación del SMN para un rango de tiempo dado."""
     station = db.query(EmaStation).filter(EmaStation.id == id).first()

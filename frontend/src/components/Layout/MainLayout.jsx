@@ -4,7 +4,7 @@
  */
 
 import { useState } from 'react';
-import { Layout, Menu, Avatar, Dropdown, Space, Typography, Breadcrumb, Modal, Form, Input, message } from 'antd';
+import { Layout, Menu, Avatar, Dropdown, Space, Typography, Breadcrumb, Modal, Form, Input, message, Button } from 'antd';
 import {
   DashboardOutlined,
   FileTextOutlined,
@@ -277,7 +277,7 @@ const breadcrumbMap = {
 
 function MainLayout() {
   const [collapsed, setCollapsed] = useState(false);
-  const { user, logout, hasPermission } = useAuth();
+  const { user, isAuthenticated, logout, hasPermission } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -317,6 +317,9 @@ function MainLayout() {
       if (item.type === 'group') {
         const filteredChildren = (item.children || [])
           .filter((child) => {
+            if (!isAuthenticated) {
+              return child.key === '/agenda' || child.key === '/weather';
+            }
             if (!child.permission) return true;
             return hasPermission(child.permission.module, child.permission.action);
           })
@@ -336,6 +339,9 @@ function MainLayout() {
         return null;
       }
 
+      if (!isAuthenticated && item.key !== '/agenda' && item.key !== '/weather') {
+        return null;
+      }
       if (item.permission && !hasPermission(item.permission.module, item.permission.action)) {
         return null;
       }
@@ -456,22 +462,40 @@ function MainLayout() {
               />
             </Space>
 
-            <Dropdown
-              menu={{ items: userMenuItems, onClick: handleUserMenu }}
-              placement="bottomRight"
-              arrow
-            >
-              <Space style={{ cursor: 'pointer' }}>
-                <Avatar
-                  style={{ backgroundColor: '#1B4F72' }}
-                  icon={<UserOutlined />}
-                  size="small"
-                />
-                <Text strong style={{ fontSize: 13 }}>
-                  {user?.full_name || 'Usuario'}
-                </Text>
-              </Space>
-            </Dropdown>
+            {isAuthenticated ? (
+              <Dropdown
+                menu={{ items: userMenuItems, onClick: handleUserMenu }}
+                placement="bottomRight"
+                arrow
+              >
+                <Space style={{ cursor: 'pointer' }}>
+                  <Avatar
+                    style={{ backgroundColor: '#1B4F72' }}
+                    icon={<UserOutlined />}
+                    size="small"
+                  />
+                  <Text strong style={{ fontSize: 13 }}>
+                    {user?.full_name || 'Usuario'}
+                  </Text>
+                </Space>
+              </Dropdown>
+            ) : (
+              <Button
+                type="primary"
+                onClick={() => navigate(`/login?redirect=${encodeURIComponent(location.pathname + location.search)}`)}
+                style={{
+                  background: 'linear-gradient(135deg, #1B4F72, #2C74B3)',
+                  border: 'none',
+                  borderRadius: 8,
+                  fontWeight: 500,
+                  fontSize: 13,
+                  height: 36,
+                  boxShadow: '0 4px 12px rgba(27,79,114,0.3)',
+                }}
+              >
+                Iniciar Sesión
+              </Button>
+            )}
           </Space>
         </Header>
 

@@ -93,7 +93,12 @@ function AppRoutes() {
           </PublicRoute>
         }
       />
-      <Route path="/agenda" element={<PublicSchedulePage />} />
+
+      {/* Rutas públicas dentro del Layout */}
+      <Route element={<MainLayout />}>
+        <Route path="/agenda" element={<PublicSchedulePage />} />
+        <Route path="/weather" element={<WeatherPage />} />
+      </Route>
 
       {/* Rutas protegidas con layout */}
       <Route
@@ -110,7 +115,6 @@ function AppRoutes() {
         <Route path="/inventory" element={<InventoryPage />} />
         <Route path="/logbooks" element={<LogbooksPage />} />
         <Route path="/cruises" element={<CruisesPage />} />
-        <Route path="/weather" element={<WeatherPage />} />
         <Route path="/requests" element={<VesselRequestsPage />} />
         <Route path="/participants" element={<ParticipantsPage />} />
         <Route path="/personnel" element={<PersonnelPage />} />
