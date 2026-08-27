@@ -2,7 +2,7 @@
 SIAE — Modelo VesselRequest (Solicitud de Embarcación).
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Enum as SAEnum
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Enum as SAEnum, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -11,6 +11,7 @@ import enum
 
 class RequestStatus(str, enum.Enum):
     """Estados de la solicitud de embarcación."""
+    BORRADOR = "borrador"
     PENDIENTE = "pendiente"
     APROBADA = "aprobada"
     RECHAZADA = "rechazada"
@@ -37,12 +38,22 @@ class VesselRequest(Base):
     departure_date = Column(DateTime, nullable=False)
     return_date = Column(DateTime, nullable=False)
 
+    # Puertos
+    departure_port_id = Column(Integer, ForeignKey("ports.id", ondelete="SET NULL"), nullable=True)
+    return_port_id = Column(Integer, ForeignKey("ports.id", ondelete="SET NULL"), nullable=True)
+
     # Cantidad de personas
     scientists_count = Column(Integer, nullable=True, default=0)
     crew_count = Column(Integer, nullable=True, default=0)
 
     # Estado
     status = Column(SAEnum(RequestStatus), nullable=False, default=RequestStatus.PENDIENTE)
+
+    # Configuración y desglose diario (JSON)
+    daily_itineraries = Column(JSON, nullable=True)
+    scientists_list = Column(JSON, nullable=True)
+    equipments_list = Column(JSON, nullable=True)
+    waypoints_list = Column(JSON, nullable=True)
 
     # Aprobación / Rechazo
     approved_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
@@ -58,6 +69,8 @@ class VesselRequest(Base):
     approved_by = relationship("User", foreign_keys=[approved_by_id], lazy="selectin")
     vessel = relationship("Vessel", backref="vessel_requests", lazy="selectin")
     project = relationship("Project", back_populates="vessel_requests", lazy="selectin")
+    departure_port = relationship("Port", foreign_keys=[departure_port_id], lazy="selectin")
+    return_port = relationship("Port", foreign_keys=[return_port_id], lazy="selectin")
 
     def __repr__(self):
         return f"<VesselRequest {self.project_name} ({self.status.value})>"

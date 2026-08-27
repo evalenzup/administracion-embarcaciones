@@ -2510,7 +2510,7 @@ export default function PettyCashPage() {
                 <Col span={8}><strong>Subtotal:</strong> ${xmlValidation.subtotal?.toFixed(2)}</Col>
                 <Col span={8}><strong>IVA:</strong> ${xmlValidation.iva?.toFixed(2)}</Col>
                 <Col span={8}><strong>Método:</strong> {xmlValidation.metodo_pago} (PUE req.)</Col>
-                <Col span={8}><strong>Forma Pago:</strong> {xmlValidation.forma_pago} (01/03 req.)</Col>
+                <Col span={8}><strong>Forma Pago:</strong> {xmlValidation.forma_pago} (01/03/04/28 req.)</Col>
                 <Col span={8}><strong>Uso CFDI:</strong> {xmlValidation.uso_cfdi} (G03 req.)</Col>
               </Row>
             </Card>

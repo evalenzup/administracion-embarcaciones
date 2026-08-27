@@ -17,7 +17,7 @@ CICESE_CP = "22860"
 MAX_INVOICE_TOTAL = 5000.00
 VALID_METODO_PAGO = "PUE"
 VALID_USO_CFDI = "G03"
-VALID_FORMAS_PAGO = ["01", "03"] # 01: Efectivo, 03: Transferencia
+VALID_FORMAS_PAGO = ["01", "03", "04", "28"]  # 01: Efectivo, 03: Transferencia, 04: Tarjeta de Crédito, 28: Tarjeta de Débito
 
 
 def parse_and_validate_cfdi(xml_content: bytes) -> dict:
@@ -264,9 +264,9 @@ def parse_and_validate_cfdi(xml_content: bytes) -> dict:
     if uso_cfdi != VALID_USO_CFDI:
         errors.append(f"Uso de CFDI no válido. Se requiere '{VALID_USO_CFDI}' (Gastos en general), se recibió '{uso_cfdi}'")
 
-    # Regla 6: Forma de Pago = 01 (Efectivo) o 03 (Transferencia)
+    # Regla 6: Forma de Pago = 01 (Efectivo), 03 (Transferencia), 04 (Tarjeta de Crédito) o 28 (Tarjeta de Débito)
     if forma_pago not in VALID_FORMAS_PAGO:
-        errors.append(f"Forma de pago no permitida para el Fondo Fijo. Se requiere '01' (Efectivo) o '03' (Transferencia), se recibió '{forma_pago}'")
+        errors.append(f"Forma de pago no permitida para el Fondo Fijo. Se requiere '01' (Efectivo), '03' (Transferencia), '04' (Tarjeta de Crédito) o '28' (Tarjeta de Débito), se recibió '{forma_pago}'")
 
     # Regla 7: Total <= $5,000.00 MXN
     if total > MAX_INVOICE_TOTAL:

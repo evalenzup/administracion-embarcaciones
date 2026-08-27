@@ -30,6 +30,7 @@ const ROLE_MAP = {
   investigador:   { label: 'Investigador',      color: '#27AE60' },
   asistente:      { label: 'Asistente',         color: '#16A085' },
   administrativo: { label: 'Administrativo',    color: '#7F8C8D' },
+  jefe_departamento: { label: 'Jefe de Departamento', color: '#78281F' },
   otro:           { label: 'Otro',              color: '#95A5A6' },
 };
 
@@ -477,7 +478,15 @@ function PersonnelPage() {
       setModalOpen(false);
       fetchPeople(); fetchSummary();
     } catch (err) {
-      if (err.response?.data?.detail) message.error(err.response.data.detail);
+      console.error(err);
+      if (err.response?.data?.detail) {
+        const detail = err.response.data.detail;
+        message.error(typeof detail === 'string' ? detail : JSON.stringify(detail));
+      } else if (err.message) {
+        message.error(err.message);
+      } else {
+        message.error('Error al guardar los cambios de la persona.');
+      }
     } finally { setSaving(false); }
   };
 

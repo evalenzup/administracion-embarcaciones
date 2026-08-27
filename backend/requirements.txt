@@ -30,3 +30,4 @@ numpy>=1.26
 apscheduler==3.10.4
 global-land-mask==1.0.0
 pillow==10.4.0
+pypdf==4.2.0

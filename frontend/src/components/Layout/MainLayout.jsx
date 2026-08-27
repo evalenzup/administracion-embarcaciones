@@ -31,6 +31,7 @@ import {
   BankOutlined,
   AppstoreOutlined,
   CloudOutlined,
+  SendOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -127,6 +128,18 @@ const menuConfig = [
         icon: <WalletOutlined />,
         label: 'Fondo Fijo',
         permission: { module: 'petty_cash', action: 'view' },
+      },
+      {
+        key: '/finance/reserva-comprobar',
+        icon: <HistoryOutlined />,
+        label: 'Gastos a Reserva',
+        permission: { module: 'gastos_reserva_comprobar', action: 'view' },
+      },
+      {
+        key: '/finance/viaticos',
+        icon: <CompassOutlined />,
+        label: 'Viáticos',
+        permission: { module: 'viaticos', action: 'view' },
       },
       {
         key: '/finance/services',
@@ -270,6 +283,8 @@ const breadcrumbMap = {
   '/projects': 'Catálogo de Proyectos',
   '/finance/accounts': 'Estados de Cuenta',
   '/finance/petty-cash': 'Fondo Fijo (Caja Chica)',
+  '/finance/reserva-comprobar': 'Gastos a Reserva de Comprobar',
+  '/finance/viaticos': 'Viáticos',
   '/finance/services': 'Servicios',
   '/finance/providers': 'Catálogo de Proveedores',
   '/help': 'Ayuda y Manuales',
@@ -284,6 +299,10 @@ function MainLayout() {
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
   const [changePasswordForm] = Form.useForm();
+
+  const [telegramModalOpen, setTelegramModalOpen] = useState(false);
+  const [telegramToken, setTelegramToken] = useState('');
+  const [telegramBotUsername, setTelegramBotUsername] = useState('');
 
   const handleChangePassword = async () => {
     try {
@@ -361,6 +380,11 @@ function MainLayout() {
       label: 'Mi Perfil',
     },
     {
+      key: 'vincular-telegram',
+      icon: <SendOutlined style={{ color: '#1890ff' }} />,
+      label: 'Vincular Telegram',
+    },
+    {
       key: 'change-password',
       icon: <KeyOutlined />,
       label: 'Cambiar Contraseña',
@@ -374,12 +398,30 @@ function MainLayout() {
     },
   ];
 
+  const handleLinkTelegram = async () => {
+    try {
+      const response = await apiClient.post('/auth/telegram-token');
+      const { link_token, bot_username } = response.data;
+      if (!bot_username || bot_username === "YOUR_TELEGRAM_BOT_USERNAME") {
+        message.warning('El Bot de Telegram no está configurado por el administrador aún.');
+        return;
+      }
+      setTelegramToken(link_token);
+      setTelegramBotUsername(bot_username);
+      setTelegramModalOpen(true);
+    } catch (error) {
+      message.error('Error al generar el token de vinculación.');
+    }
+  };
+
   const handleUserMenu = ({ key }) => {
     if (key === 'logout') {
       logout();
       navigate('/login');
     } else if (key === 'change-password') {
       setChangePasswordOpen(true);
+    } else if (key === 'vincular-telegram') {
+      handleLinkTelegram();
     } else if (key === 'my-profile') {
       navigate('/participants?self=true');
     }
@@ -557,6 +599,68 @@ function MainLayout() {
             <Input.Password placeholder="Confirmar contraseña" />
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* Modal de Vinculación de Telegram */}
+      <Modal
+        title={
+          <Space>
+            <SendOutlined style={{ color: '#1890ff' }} />
+            <span>Vincular Bot de Telegram (Trámites DEO)</span>
+          </Space>
+        }
+        open={telegramModalOpen}
+        onCancel={() => setTelegramModalOpen(false)}
+        footer={[
+          <Button key="close" onClick={() => setTelegramModalOpen(false)}>
+            Cerrar
+          </Button>,
+          <Button
+            key="open"
+            type="primary"
+            icon={<SendOutlined />}
+            onClick={() => {
+              const telegramUrl = `https://t.me/${telegramBotUsername}?start=${telegramToken}`;
+              window.open(telegramUrl, '_blank');
+            }}
+          >
+            Abrir Telegram
+          </Button>
+        ]}
+        width={500}
+        destroyOnClose
+      >
+        <div style={{ padding: '10px 0' }}>
+          <Typography.Paragraph>
+            Se ha generado tu código de vinculación de forma segura. Si el chat no se abre automáticamente en Telegram, sigue estos pasos:
+          </Typography.Paragraph>
+
+          <ol style={{ paddingLeft: 20, marginBottom: 20 }}>
+            <li>Copia el código token de vinculación de abajo.</li>
+            <li>Abre Telegram y busca al bot <strong>@{telegramBotUsername}</strong>.</li>
+            <li>Envíale el siguiente mensaje con el código:</li>
+          </ol>
+
+          <div style={{ 
+            background: '#f5f5f5', 
+            padding: '12px 16px', 
+            borderRadius: 8, 
+            border: '1px solid #d9d9d9',
+            fontFamily: 'monospace',
+            marginBottom: 20,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}>
+            <Typography.Text copyable style={{ fontSize: '13px', width: '100%' }}>
+              {`/start ${telegramToken}`}
+            </Typography.Text>
+          </div>
+
+          <Typography.Text type="secondary" style={{ fontSize: '12px', display: 'block', textAlign: 'center' }}>
+            Nota: Este código es temporal y expira por motivos de seguridad.
+          </Typography.Text>
+        </div>
       </Modal>
     </Layout>
   );

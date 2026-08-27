@@ -7,7 +7,7 @@ import {
   Table, Button, Space, Tag, Modal, Form, Input, Select, DatePicker,
   Typography, Card, message, Popconfirm, Tooltip, Row, Col, Statistic,
   InputNumber, Divider, Badge, Drawer, Tabs, Checkbox, Steps, Alert,
-  Upload, Switch,
+  Upload, Switch, Segmented, Spin,
 } from 'antd';
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined,
@@ -227,6 +227,9 @@ function GpxTrackLayer({ track, show, onCreateLogbook }) {
   const milestones = getHourlyMilestones(track, 8);
 
   const handlePolylineClick = (e) => {
+    if (e.originalEvent) {
+      L.DomEvent.stopPropagation(e.originalEvent);
+    }
     // Encontrar el punto más cercano al click
     let minDist = Infinity;
     let nearest = null;
@@ -305,6 +308,270 @@ function GpxTrackLayer({ track, show, onCreateLogbook }) {
           </div>
         </Popup>
       )}
+    </>
+  );
+}
+
+/** Convierte dirección en grados a texto descriptivo y punto cardinal */
+function getWindDirectionText(deg) {
+  if (deg == null) return '—';
+  const normalized = (deg % 360 + 360) % 360;
+  const index = Math.round(normalized / 22.5) % 16;
+  const directions = [
+    { name: 'Norte', abbr: 'N' },
+    { name: 'Norte-Noreste', abbr: 'NNE' },
+    { name: 'Noreste', abbr: 'NE' },
+    { name: 'Este-Noreste', abbr: 'ENE' },
+    { name: 'Este', abbr: 'E' },
+    { name: 'Este-Sureste', abbr: 'ESE' },
+    { name: 'Sureste', abbr: 'SE' },
+    { name: 'Sur-Sureste', abbr: 'SSE' },
+    { name: 'Sur', abbr: 'S' },
+    { name: 'Sur-Suroeste', abbr: 'SSW' },
+    { name: 'Suroeste', abbr: 'SW' },
+    { name: 'Oeste-Suroeste', abbr: 'WSW' },
+    { name: 'Oeste', abbr: 'W' },
+    { name: 'Oeste-Noroeste', abbr: 'WNW' },
+    { name: 'Noroeste', abbr: 'NW' },
+    { name: 'Norte-Noroeste', abbr: 'NNW' }
+  ];
+  return `${directions[index].name} (${directions[index].abbr})`;
+}
+
+/** Calcula estadísticas resumidas de un array de registros de telemetría */
+function calcTelemetryStats(track) {
+  if (!track || track.length < 2) return null;
+  
+  // Filtrar registros válidos con latitud/longitud
+  const validPts = track.filter(p => p.latitude != null && p.longitude != null && (p.latitude !== 0 || p.longitude !== 0));
+  if (validPts.length < 2) return null;
+
+  let totalMeters = 0;
+  for (let i = 1; i < validPts.length; i++) {
+    const p1 = L.latLng(validPts[i - 1].latitude, validPts[i - 1].longitude);
+    const p2 = L.latLng(validPts[i].latitude, validPts[i].longitude);
+    totalMeters += p1.distanceTo(p2);
+  }
+  const distanceNm = totalMeters / 1852;
+
+  const startTime = new Date(validPts[0].timestamp);
+  const endTime = new Date(validPts[validPts.length - 1].timestamp);
+  const durationMinutes = Math.round((endTime - startTime) / 60000);
+  let avgSpeedKnots = null, maxSpeedKnots = 0;
+
+  if (durationMinutes > 0) {
+    avgSpeedKnots = distanceNm / (durationMinutes / 60);
+  }
+
+  // Calcular velocidad máxima entre puntos GPS consecutivos
+  for (let i = 1; i < validPts.length; i++) {
+    const dt = (new Date(validPts[i].timestamp) - new Date(validPts[i - 1].timestamp)) / 3600000;
+    if (dt <= 0) continue;
+    const dist = L.latLng(validPts[i - 1].latitude, validPts[i - 1].longitude)
+      .distanceTo(L.latLng(validPts[i].latitude, validPts[i].longitude)) / 1852;
+    const spd = dist / dt;
+    if (spd > maxSpeedKnots && spd < 40) maxSpeedKnots = spd; // Filtrar anomalías del GPS
+  }
+
+  // Calcular estadísticas del clima/meteorología
+  let totalTemp = 0, minTemp = Infinity, maxTemp = -Infinity, countTemp = 0;
+  let totalWind = 0, maxWind = 0, countWind = 0;
+  let totalPressure = 0, minPressure = Infinity, maxPressure = -Infinity, countPressure = 0;
+  let sumCos = 0, sumSin = 0, countWindDir = 0;
+
+  for (const pt of track) {
+    if (pt.temp != null) {
+      totalTemp += pt.temp;
+      if (pt.temp < minTemp) minTemp = pt.temp;
+      if (pt.temp > maxTemp) maxTemp = pt.temp;
+      countTemp++;
+    }
+    const wind = pt.wind_speed_corr != null ? pt.wind_speed_corr : pt.wind_speed;
+    if (wind != null) {
+      const windKts = wind * 1.94384;
+      totalWind += windKts;
+      if (windKts > maxWind) maxWind = windKts;
+      countWind++;
+    }
+    const windDir = pt.wind_dir_corr != null ? pt.wind_dir_corr : pt.wind_dir;
+    if (windDir != null) {
+      const rad = windDir * Math.PI / 180;
+      sumCos += Math.cos(rad);
+      sumSin += Math.sin(rad);
+      countWindDir++;
+    }
+    if (pt.pressure != null) {
+      totalPressure += pt.pressure;
+      if (pt.pressure < minPressure) minPressure = pt.pressure;
+      if (pt.pressure > maxPressure) maxPressure = pt.pressure;
+      countPressure++;
+    }
+  }
+
+  let avgWindDir = null;
+  if (countWindDir > 0) {
+    const avgRad = Math.atan2(sumSin / countWindDir, sumCos / countWindDir);
+    avgWindDir = avgRad * 180 / Math.PI;
+    if (avgWindDir < 0) avgWindDir += 360;
+  }
+
+  return {
+    distanceNm,
+    durationMinutes,
+    startTime,
+    endTime,
+    avgSpeedKnots,
+    maxSpeedKnots,
+    avgTemp: countTemp > 0 ? totalTemp / countTemp : null,
+    minTemp: countTemp > 0 ? minTemp : null,
+    maxTemp: countTemp > 0 ? maxTemp : null,
+    avgWind: countWind > 0 ? totalWind / countWind : null,
+    maxWind: countWind > 0 ? maxWind : null,
+    avgWindDir,
+    avgPressure: countPressure > 0 ? totalPressure / countPressure : null,
+    minPressure: countPressure > 0 ? minPressure : null,
+    maxPressure: countPressure > 0 ? maxPressure : null,
+  };
+}
+
+/** Ícono circular celeste/verde azulado para marcadores de hito de telemetría */
+const makeTelemetryMilestoneIcon = (label) => L.divIcon({
+  className: '',
+  html: `<div style="width:22px;height:22px;background:#13C2C2;border:2px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;font-weight:bold;box-shadow:0 2px 4px rgba(0,0,0,0.4)">${label}</div>`,
+  iconSize: [22, 22], iconAnchor: [11, 11], popupAnchor: [0, -14],
+});
+
+/** Polyline celeste/verde azulado con hitos interactivos de telemetría */
+function TelemetryTrackLayer({ track, show }) {
+  const [clickedInfo, setClickedInfo] = useState(null);
+
+  if (!show || !track || track.length < 2) return null;
+
+  // Filtrar registros válidos
+  const validTrack = track.filter(p => p.latitude != null && p.longitude != null && (p.latitude !== 0 || p.longitude !== 0));
+  if (validTrack.length < 2) return null;
+
+  // Obtener hitos espaciados uniformemente en tiempo
+  const getTelemetryMilestones = (tList, maxMarkers = 8) => {
+    const totalMs = new Date(tList[tList.length - 1].timestamp) - new Date(tList[0].timestamp);
+    if (totalMs <= 0) return [];
+    const intervalMs = totalMs / (maxMarkers + 1);
+    const result = [];
+    let nextTarget = new Date(tList[0].timestamp).getTime() + intervalMs;
+    for (const pt of tList) {
+      const t = new Date(pt.timestamp).getTime();
+      if (t >= nextTarget) {
+        result.push({ ...pt, _label: result.length + 1 });
+        nextTarget += intervalMs;
+        if (result.length >= maxMarkers) break;
+      }
+    }
+    return result;
+  };
+
+  const milestones = getTelemetryMilestones(validTrack, 8);
+
+  const handlePolylineClick = (e) => {
+    if (e.originalEvent) {
+      L.DomEvent.stopPropagation(e.originalEvent);
+    }
+    // Encontrar el punto más cercano al click
+    let minDist = Infinity;
+    let nearest = null;
+    for (const pt of validTrack) {
+      const d = L.latLng(pt.latitude, pt.longitude).distanceTo(e.latlng);
+      if (d < minDist) { minDist = d; nearest = pt; }
+    }
+    if (nearest) setClickedInfo({ point: nearest, latlng: e.latlng });
+  };
+
+  return (
+    <>
+      <Polyline
+        positions={validTrack.map(p => [p.latitude, p.longitude])}
+        color="#13C2C2" weight={3} opacity={0.9}
+        eventHandlers={{ click: handlePolylineClick }}
+        pathOptions={{ cursor: 'crosshair' }}
+      />
+      {/* Marcadores de hito */}
+      {milestones.map((m, i) => {
+        const wind = m.wind_speed_corr != null ? m.wind_speed_corr : m.wind_speed;
+        const windKts = wind != null ? wind * 1.94384 : null;
+        const windDir = m.wind_dir_corr != null ? m.wind_dir_corr : m.wind_dir;
+        return (
+          <Marker key={`tel-ms-${i}`} position={[m.latitude, m.longitude]} icon={makeTelemetryMilestoneIcon(m._label)}>
+            <Popup>
+              <div style={{ fontSize: 12, minWidth: 160 }}>
+                <div style={{ fontWeight: 700, color: '#13C2C2', marginBottom: 4 }}>📡 Hito de Telemetría {m._label}</div>
+                <div>🕐 {new Date(m.timestamp).toLocaleString('es-MX', {
+                  day: '2-digit', month: '2-digit', year: 'numeric',
+                  hour: '2-digit', minute: '2-digit'
+                })}</div>
+                <div style={{ margin: '4px 0', borderTop: '1px solid #eee', paddingTop: 4 }}>
+                  🌡️ Temp: {m.temp != null ? `${m.temp.toFixed(1)}°C` : '—'}<br />
+                  💧 Humedad: {m.humidity != null ? `${Math.round(m.humidity)}%` : '—'}<br />
+                  📐 Presión: {m.pressure != null ? `${m.pressure.toFixed(1)} hPa` : '—'}<br />
+                  💨 Viento: {windKts != null ? `${windKts.toFixed(1)} kt` : '—'}{windDir != null ? ` (${Math.round(windDir)}°)` : ''}
+                </div>
+                <div style={{ fontSize: 10, color: '#888', borderTop: '1px solid #eee', paddingTop: 4 }}>
+                  Lat: {m.latitude.toFixed(5)}, Lon: {m.longitude.toFixed(5)}
+                </div>
+              </div>
+            </Popup>
+          </Marker>
+        );
+      })}
+      {/* Marcadores de inicio/fin */}
+      <Marker position={[validTrack[0].latitude, validTrack[0].longitude]} icon={L.divIcon({
+        className: '', iconSize: [16, 16], iconAnchor: [8, 8], popupAnchor: [0, -10],
+        html: '<div style="width:16px;height:16px;background:#52C41A;border:2px solid #fff;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,0.4)"></div>',
+      })}>
+        <Popup>
+          <div style={{ fontSize: 12 }}>
+            <strong style={{ color: '#52C41A' }}>▶ Inicio Telemetría</strong>
+            <div>🕐 {new Date(validTrack[0].timestamp).toLocaleString('es-MX', { hour: '2-digit', minute: '2-digit' })}</div>
+          </div>
+        </Popup>
+      </Marker>
+      <Marker position={[validTrack[validTrack.length - 1].latitude, validTrack[validTrack.length - 1].longitude]} icon={L.divIcon({
+        className: '', iconSize: [16, 16], iconAnchor: [8, 8], popupAnchor: [0, -10],
+        html: '<div style="width:16px;height:16px;background:#F5222D;border:2px solid #fff;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,0.4)"></div>',
+      })}>
+        <Popup>
+          <div style={{ fontSize: 12 }}>
+            <strong style={{ color: '#F5222D' }}>⏹ Fin Telemetría</strong>
+            <div>🕐 {new Date(validTrack[validTrack.length - 1].timestamp).toLocaleString('es-MX', { hour: '2-digit', minute: '2-digit' })}</div>
+          </div>
+        </Popup>
+      </Marker>
+      {/* Popup al hacer click en la línea */}
+      {clickedInfo && (() => {
+        const pt = clickedInfo.point;
+        const wind = pt.wind_speed_corr != null ? pt.wind_speed_corr : pt.wind_speed;
+        const windKts = wind != null ? wind * 1.94384 : null;
+        const windDir = pt.wind_dir_corr != null ? pt.wind_dir_corr : pt.wind_dir;
+        return (
+          <Popup position={[clickedInfo.latlng.lat, clickedInfo.latlng.lng]} onClose={() => setClickedInfo(null)}>
+            <div style={{ fontSize: 12, minWidth: 160 }}>
+              <div style={{ fontWeight: 700, color: '#13C2C2', marginBottom: 4 }}>📡 Punto de Telemetría</div>
+              <div>🕐 {new Date(pt.timestamp).toLocaleString('es-MX', {
+                day: '2-digit', month: '2-digit', year: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+              })}</div>
+              <div style={{ margin: '4px 0', borderTop: '1px solid #eee', paddingTop: 4 }}>
+                🌡️ Temp: {pt.temp != null ? `${pt.temp.toFixed(1)}°C` : '—'}<br />
+                💧 Humedad: {pt.humidity != null ? `${Math.round(pt.humidity)}%` : '—'}<br />
+                📐 Presión: {pt.pressure != null ? `${pt.pressure.toFixed(1)} hPa` : '—'}<br />
+                💨 Viento: {windKts != null ? `${windKts.toFixed(1)} kt` : '—'}{windDir != null ? ` (${Math.round(windDir)}°)` : ''}
+              </div>
+              <div style={{ fontSize: 10, color: '#888', borderTop: '1px solid #eee', paddingTop: 4 }}>
+                Lat: {pt.latitude.toFixed(5)}<br />
+                Lon: {pt.longitude.toFixed(5)}
+              </div>
+            </div>
+          </Popup>
+        );
+      })()}
     </>
   );
 }
@@ -1360,6 +1627,49 @@ function CruisesPage() {
     }
     return null;
   }, [editingCruise?.actual_track]);
+
+  // Estados y Hooks para Telemetría Real
+  const [trackSource, setTrackSource] = useState('gpx'); // 'gpx' | 'telemetry'
+  const [telemetryTrack, setTelemetryTrack] = useState([]);
+  const [telemetryLoading, setTelemetryLoading] = useState(false);
+
+  const telemetryStats = useMemo(() => {
+    return calcTelemetryStats(telemetryTrack);
+  }, [telemetryTrack]);
+
+  const fetchTelemetryTrack = useCallback(async () => {
+    if (!editingCruise?.vessel_id || !editingCruise?.departure_date || !editingCruise?.return_date) {
+      setTelemetryTrack([]);
+      return;
+    }
+    setTelemetryLoading(true);
+    try {
+      const start = dayjs(editingCruise.departure_date).toISOString();
+      const end = dayjs(editingCruise.return_date).toISOString();
+      const res = await apiClient.get(`/vessels/${editingCruise.vessel_id}/telemetry`, {
+        params: { start, end }
+      });
+      setTelemetryTrack(res.data || []);
+    } catch (err) {
+      console.error("Error al cargar telemetría del crucero:", err);
+      setTelemetryTrack([]);
+    } finally {
+      setTelemetryLoading(false);
+    }
+  }, [editingCruise?.vessel_id, editingCruise?.departure_date, editingCruise?.return_date]);
+
+  useEffect(() => {
+    if (modalOpen && trackSource === 'telemetry') {
+      fetchTelemetryTrack();
+    }
+  }, [modalOpen, trackSource, fetchTelemetryTrack]);
+
+  useEffect(() => {
+    if (!modalOpen) {
+      setTrackSource('gpx');
+      setTelemetryTrack([]);
+    }
+  }, [modalOpen]);
 
   // Estados de facturación
   const [cruiseBilling, setCruiseBilling] = useState(null);
@@ -2462,28 +2772,47 @@ function CruisesPage() {
         <Row style={{ height: 'calc(100vh - 280px)', minHeight: 480 }}>
           {/* ── Columna izquierda: Mapa ── */}
           <Col span={16} style={{ height: '100%', position: 'relative' }}>
-            {/* Barra de controles GPX */}
+            {/* Barra de controles GPX / Telemetría */}
             <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 1000, background: 'rgba(10,38,71,0.92)', padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backdropFilter: 'blur(4px)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ color: '#fff', fontWeight: 700, fontSize: 13 }}>🛸 Track GPS Real</span>
-                {editingCruise?.actual_track && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ color: '#fff', fontWeight: 700, fontSize: 13 }}>🛸 Track Real</span>
+                <Segmented
+                  size="small"
+                  value={trackSource}
+                  onChange={setTrackSource}
+                  options={[
+                    { label: '📁 Archivo GPX', value: 'gpx' },
+                    { label: '📡 Telemetría Real', value: 'telemetry' }
+                  ]}
+                  style={{ background: 'rgba(255,255,255,0.1)', color: '#fff' }}
+                />
+                {trackSource === 'gpx' && editingCruise?.actual_track && (
                   <>
                     <Tag color="orange" style={{ margin: 0, fontSize: 10 }}>{editingCruise.actual_track.length} pts</Tag>
                     <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 10 }}>{editingCruise.actual_track_filename}</Text>
                   </>
                 )}
+                {trackSource === 'telemetry' && (
+                  <>
+                    {telemetryLoading ? (
+                      <Spin size="small" style={{ marginLeft: 8 }} />
+                    ) : (
+                      <Tag color="cyan" style={{ margin: 0, fontSize: 10 }}>{telemetryTrack.length} pts</Tag>
+                    )}
+                  </>
+                )}
               </div>
               <Space size={6}>
-                {editingCruise?.actual_track && (
+                {((trackSource === 'gpx' && editingCruise?.actual_track) || (trackSource === 'telemetry' && telemetryTrack.length > 0)) && (
                   <Switch
                     size="small"
                     checked={showActualTrack}
                     onChange={setShowActualTrack}
-                    checkedChildren="🟠"
+                    checkedChildren={trackSource === 'gpx' ? '🟠' : '🟢'}
                     unCheckedChildren="—"
                   />
                 )}
-                {isAdmin && (
+                {trackSource === 'gpx' && isAdmin && (
                   <>
                     <Upload accept=".gpx" showUploadList={false} beforeUpload={handleGpxUpload}>
                       <Button
@@ -2507,18 +2836,22 @@ function CruisesPage() {
 
             {/* Mapa */}
             <div style={{ height: '100%', position: 'relative' }}>
-              {editingCruise?.waypoints?.length > 0 || editingCruise?.actual_track?.length > 0 ? (
+              {editingCruise?.waypoints?.length > 0 || editingCruise?.actual_track?.length > 0 || (trackSource === 'telemetry' && telemetryTrack.length > 0) ? (
                 <MapContainer
                   center={(() => {
                     const wps = editingCruise?.waypoints?.filter(w => w.latitude != null);
                     if (wps?.length > 0) return [wps[0].latitude, wps[0].longitude];
+                    if (trackSource === 'telemetry' && telemetryTrack?.length > 0) {
+                      const vt = telemetryTrack.find(p => p.latitude !== 0 && p.longitude !== 0);
+                      if (vt) return [vt.latitude, vt.longitude];
+                    }
                     const tr = editingCruise?.actual_track;
                     if (tr?.length > 0) return [tr[0].lat, tr[0].lon];
                     return [23.6345, -110.0];
                   })()}
                   zoom={8}
                   style={{ height: '100%', width: '100%' }}
-                  key={`report-map-${editingCruise?.id}-${editingCruise?.actual_track?.length}`}
+                  key={`report-map-${editingCruise?.id}-${editingCruise?.actual_track?.length}-${telemetryTrack?.length}-${trackSource}`}
                 >
                   <TileLayer
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -2543,14 +2876,22 @@ function CruisesPage() {
                   {/* Ruta real GPX — naranja sólida con hitos interactivos */}
                   <GpxTrackLayer
                     track={editingCruise?.actual_track}
-                    show={showActualTrack}
+                    show={showActualTrack && trackSource === 'gpx'}
                     onCreateLogbook={handleCreateLogbookAtGpxPoint}
+                  />
+                  {/* Ruta real Telemetría — celeste sólida con hitos interactivos */}
+                  <TelemetryTrackLayer
+                    track={telemetryTrack}
+                    show={showActualTrack && trackSource === 'telemetry'}
                   />
                   <MapFitter
                     waypoints={[
                       ...(editingCruise?.waypoints?.filter(w => w.latitude != null) || []),
-                      ...(showActualTrack && editingCruise?.actual_track
+                      ...(showActualTrack && trackSource === 'gpx' && editingCruise?.actual_track
                         ? editingCruise.actual_track.map(p => ({ latitude: p.lat, longitude: p.lon }))
+                        : []),
+                      ...(showActualTrack && trackSource === 'telemetry' && telemetryTrack
+                        ? telemetryTrack.filter(p => p.latitude !== 0 && p.longitude !== 0).map(p => ({ latitude: p.latitude, longitude: p.longitude }))
                         : [])
                     ]}
                     modalReady={true}
@@ -2559,13 +2900,20 @@ function CruisesPage() {
               ) : (
                 <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#999', background: '#f9f9f9' }}>
                   <div style={{ fontSize: 48, marginBottom: 12 }}>🗺️</div>
-                  <div style={{ fontSize: 14 }}>Sin waypoints ni track GPX</div>
-                  {isAdmin && <div style={{ fontSize: 11, marginTop: 6, color: '#bbb' }}>Sube un archivo .gpx con el botón de arriba</div>}
+                  <div style={{ fontSize: 14 }}>
+                    {trackSource === 'gpx' ? 'Sin waypoints ni track GPX' : 'Sin waypoints ni track de telemetría'}
+                  </div>
+                  {trackSource === 'gpx' && isAdmin && (
+                    <div style={{ fontSize: 11, marginTop: 6, color: '#bbb' }}>Sube un archivo .gpx con el botón de arriba</div>
+                  )}
+                  {trackSource === 'telemetry' && (
+                    <div style={{ fontSize: 11, marginTop: 6, color: '#bbb' }}>Asegúrate de que la embarcación tenga telemetría reportada en las fechas del crucero</div>
+                  )}
                 </div>
               )}
 
               {/* Panel de estadísticas GPX flotante */}
-              {gpxStats && showActualTrack && (
+              {trackSource === 'gpx' && gpxStats && showActualTrack && (
                 <div style={{
                   position: 'absolute',
                   top: 52,
@@ -2614,10 +2962,90 @@ function CruisesPage() {
                   )}
                 </div>
               )}
+
+              {/* Panel de estadísticas de Telemetría flotante */}
+              {trackSource === 'telemetry' && telemetryStats && showActualTrack && (
+                <div style={{
+                  position: 'absolute',
+                  top: 52,
+                  right: 12,
+                  zIndex: 1000,
+                  background: 'rgba(255, 255, 255, 0.9)',
+                  backdropFilter: 'blur(6px)',
+                  padding: '10px 14px',
+                  borderRadius: 8,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                  border: '1px solid rgba(0,0,0,0.08)',
+                  width: 260,
+                }}>
+                  <div style={{ fontWeight: 'bold', color: '#0A2647', fontSize: 12, marginBottom: 6, borderBottom: '1px solid #eee', paddingBottom: 4 }}>
+                    📊 Resumen de Ruta Real (Telemetría)
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 10px', fontSize: 10 }}>
+                    <div>
+                      <span style={{ color: '#888', display: 'block' }}>Distancia</span>
+                      <strong style={{ fontSize: 12, color: '#13C2C2' }}>{telemetryStats.distanceNm.toFixed(1)} mn</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: '#888', display: 'block' }}>Duración</span>
+                      <strong style={{ fontSize: 12, color: '#333' }}>
+                        {telemetryStats.durationMinutes ? `${Math.floor(telemetryStats.durationMinutes / 60)}h ${telemetryStats.durationMinutes % 60}m` : '—'}
+                      </strong>
+                    </div>
+                    <div>
+                      <span style={{ color: '#888', display: 'block' }}>Vel. Promedio</span>
+                      <strong style={{ fontSize: 11, color: '#333' }}>
+                        {telemetryStats.avgSpeedKnots ? `${telemetryStats.avgSpeedKnots.toFixed(1)} kt` : '—'}
+                      </strong>
+                    </div>
+                    <div>
+                      <span style={{ color: '#888', display: 'block' }}>Vel. Máxima</span>
+                      <strong style={{ fontSize: 11, color: '#333' }}>
+                        {telemetryStats.maxSpeedKnots ? `${telemetryStats.maxSpeedKnots.toFixed(1)} kt` : '—'}
+                      </strong>
+                    </div>
+                  </div>
+                  
+                  {/* Resumen meteorológico de telemetría */}
+                  <div style={{ marginTop: 8, borderTop: '1px solid #eee', paddingTop: 6 }}>
+                    <div style={{ fontWeight: 'bold', color: '#0A2647', fontSize: 10, marginBottom: 4 }}>
+                      🌡️ Meteorología Promedio
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 8px', fontSize: 9 }}>
+                      <div>
+                        <span style={{ color: '#888' }}>Temp: </span>
+                        <strong style={{ color: '#333' }}>
+                          {telemetryStats.avgTemp != null ? `${telemetryStats.avgTemp.toFixed(1)}°C` : '—'}
+                        </strong>
+                      </div>
+                      <div>
+                        <span style={{ color: '#888' }}>Presión: </span>
+                        <strong style={{ color: '#333' }}>
+                          {telemetryStats.avgPressure != null ? `${telemetryStats.avgPressure.toFixed(1)} hPa` : '—'}
+                        </strong>
+                      </div>
+                      <div style={{ gridColumn: 'span 2' }}>
+                        <span style={{ color: '#888' }}>Viento: </span>
+                        <strong style={{ color: '#333' }}>
+                          {telemetryStats.avgWind != null ? `${telemetryStats.avgWind.toFixed(1)} kt` : '—'}
+                          {telemetryStats.avgWindDir != null ? ` (${Math.round(telemetryStats.avgWindDir)}° ${getWindDirectionText(telemetryStats.avgWindDir)})` : ''}
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  {telemetryStats.startTime && (
+                    <div style={{ marginTop: 8, fontSize: 9, color: '#666', borderTop: '1px solid #eee', paddingTop: 6 }}>
+                      <div>📅 Salida: {dayjs(telemetryStats.startTime).format('DD/MM HH:mm')}</div>
+                      <div>📅 Regreso: {dayjs(telemetryStats.endTime).format('DD/MM HH:mm')}</div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Leyenda inferior */}
-            {(editingCruise?.waypoints?.length > 0 || editingCruise?.actual_track) && (
+            {(editingCruise?.waypoints?.length > 0 || (trackSource === 'gpx' && editingCruise?.actual_track) || (trackSource === 'telemetry' && telemetryTrack.length > 0)) && (
               <div style={{ position: 'absolute', bottom: 10, left: 10, zIndex: 1000, background: 'rgba(255,255,255,0.95)', padding: '6px 10px', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.12)', fontSize: 10, display: 'flex', flexDirection: 'column', gap: 3 }}>
                 {editingCruise?.waypoints?.length > 0 && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -2625,10 +3053,16 @@ function CruisesPage() {
                     <span>Ruta planificada</span>
                   </div>
                 )}
-                {editingCruise?.actual_track && (
+                {trackSource === 'gpx' && editingCruise?.actual_track && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                     <div style={{ width: 20, height: 3, background: '#FF6B00', borderRadius: 2 }} />
                     <span style={{ color: '#FF6B00', fontWeight: 600 }}>Track real (GPX)</span>
+                  </div>
+                )}
+                {trackSource === 'telemetry' && telemetryTrack.length > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <div style={{ width: 20, height: 3, background: '#13C2C2', borderRadius: 2 }} />
+                    <span style={{ color: '#13C2C2', fontWeight: 600 }}>Track real (Telemetría)</span>
                   </div>
                 )}
               </div>

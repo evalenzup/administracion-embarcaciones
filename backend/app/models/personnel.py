@@ -22,6 +22,7 @@ class PersonnelRole(str, enum.Enum):
     INVESTIGADOR     = "investigador"
     ASISTENTE        = "asistente"
     ADMINISTRATIVO   = "administrativo"
+    JEFE_DEPARTAMENTO = "jefe_departamento"
     OTRO             = "otro"
 
 

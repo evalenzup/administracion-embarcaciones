@@ -12,12 +12,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 from app.database import engine, Base, SessionLocal
 from app.routers import auth, users, roles, vessels, audit, documents, maintenance, inventory, logbooks, cruises, personnel, equipment
-from app.routers import cruise_participants, participant_profiles, vessel_requests, ports, fuel_logs, vessel_rates, cruise_billings, petty_cash, accounts, services, providers, projects, weather
+from app.routers import cruise_participants, participant_profiles, vessel_requests, ports, fuel_logs, vessel_rates, cruise_billings, petty_cash, accounts, services, providers, projects, weather, gastos_reserva_comprobar, notifications, viaticos
 
 
 # Importar modelos para que SQLAlchemy los registre
 import app.models  # noqa: F401
 import app.models.equipment  # noqa: F401
+import app.models.viatico  # noqa: F401
 
 settings = get_settings()
 
@@ -38,6 +39,7 @@ async def lifespan(app: FastAPI):
         conn.execute(text("ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS account_id INTEGER REFERENCES accounts(id) ON DELETE SET NULL;"))
         conn.execute(text("ALTER TABLE account_transactions ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'completado' NOT NULL;"))
         conn.execute(text("ALTER TABLE account_transactions ADD COLUMN IF NOT EXISTS service_request_id INTEGER REFERENCES service_requests(id) ON DELETE SET NULL;"))
+        conn.execute(text("ALTER TABLE gastos_reserva_comprobar ADD COLUMN IF NOT EXISTS comprobante_devolucion_path VARCHAR(500);"))
 
     # Crear directorios de subida
     os.makedirs("uploads/documents", exist_ok=True)
@@ -50,6 +52,13 @@ async def lifespan(app: FastAPI):
     os.makedirs("uploads/petty_cash/scans", exist_ok=True)
     os.makedirs("uploads/services", exist_ok=True)
     os.makedirs("uploads/weather_archive", exist_ok=True)
+    os.makedirs("uploads/gastos_reserva_comprobar/pdf", exist_ok=True)
+    os.makedirs("uploads/gastos_reserva_comprobar/xml", exist_ok=True)
+    os.makedirs("uploads/gastos_reserva_comprobar/reports", exist_ok=True)
+    os.makedirs("uploads/gastos_reserva_comprobar/devoluciones", exist_ok=True)
+    os.makedirs("uploads/viaticos/pdf", exist_ok=True)
+    os.makedirs("uploads/viaticos/xml", exist_ok=True)
+    os.makedirs("uploads/viaticos/solicitudes", exist_ok=True)
 
     # Ejecutar seed
     from app.services.seed import seed_database
@@ -132,6 +141,9 @@ app.include_router(providers.router)
 app.include_router(projects.router)
 app.include_router(audit.router)
 app.include_router(weather.router)
+app.include_router(gastos_reserva_comprobar.router)
+app.include_router(notifications.router)
+app.include_router(viaticos.router)
 
 
 # ── Health check ──────────────────────────────────────────────

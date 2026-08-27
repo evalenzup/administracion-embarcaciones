@@ -64,6 +64,7 @@ class Vessel(Base):
     description = Column(Text, nullable=True)
     photo_url = Column(String(500), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
+    requires_daily_navigation = Column(Boolean, default=False, nullable=False)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

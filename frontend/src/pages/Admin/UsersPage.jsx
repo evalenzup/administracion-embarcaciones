@@ -94,7 +94,8 @@ function UsersPage() {
       role_ids: [],
       password: generateRandomPassword(),
       participant_profile_id: null,
-      personnel_id: null
+      personnel_id: null,
+      telegram_id: null
     });
     setModalOpen(true);
   };
@@ -109,6 +110,7 @@ function UsersPage() {
       role_ids: user.roles.map((r) => r.id),
       participant_profile_id: user.participant_profile_id,
       personnel_id: user.personnel_id,
+      telegram_id: user.telegram_id,
     });
     setModalOpen(true);
   };
@@ -218,6 +220,12 @@ function UsersPage() {
           ))}
         </Space>
       ),
+    },
+    {
+      title: 'Vínculo Telegram',
+      dataIndex: 'telegram_id',
+      key: 'telegram_id',
+      render: (id) => id ? <Tag color="cyan">💬 {id}</Tag> : <span style={{ color: '#aaa', fontStyle: 'italic' }}>No vinculado</span>,
     },
     {
       title: 'Estado',
@@ -401,6 +409,9 @@ function UsersPage() {
                 label: `${p.full_name} (${p.institution || 'Externo'})` 
               }))}
             />
+          </Form.Item>
+          <Form.Item name="telegram_id" label="ID de Telegram (Opcional)">
+            <Input placeholder="ej: 8203998630" />
           </Form.Item>
           <Form.Item name="is_active" label="Activo" valuePropName="checked">
             <Switch />

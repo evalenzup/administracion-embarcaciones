@@ -31,6 +31,9 @@ from app.models.provider import Provider
 from app.models.project import Project
 from app.models.tide import TideStation, TidePrediction
 from app.models.ema import EmaStation, EmaMeasurement
+from app.models.gasto_reserva_comprobar import GastoReservaComprobar, GastoReservaComprobarFactura
+from app.models.vessel_telemetry import VesselTelemetry
+from app.models.viatico import Viatico, ViaticoFactura
 
 __all__ = [
     "Permission", "Role", "role_permissions", "User", "UserRole",
@@ -68,5 +71,10 @@ __all__ = [
     "TransactionType",
     "TideStation", "TidePrediction",
     "EmaStation", "EmaMeasurement",
+    "GastoReservaComprobar",
+    "GastoReservaComprobarFactura",
+    "VesselTelemetry",
+    "Viatico",
+    "ViaticoFactura",
 ]
 

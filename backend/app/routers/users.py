@@ -55,6 +55,7 @@ async def list_users(
           is_superadmin=user.is_superadmin,
           personnel_id=user.personnel_record.id if user.personnel_record else None,
           participant_profile_id=user.participant_profile_id,
+          telegram_id=user.telegram_id,
           created_at=user.created_at,
           updated_at=user.updated_at,
           roles=[{"id": r.id, "name": r.name, "description": r.description} for r in user.roles],
@@ -94,6 +95,7 @@ async def get_user(
         is_superadmin=user.is_superadmin,
         personnel_id=user.personnel_record.id if user.personnel_record else None,
         participant_profile_id=user.participant_profile_id,
+        telegram_id=user.telegram_id,
         created_at=user.created_at,
         updated_at=user.updated_at,
         roles=[{"id": r.id, "name": r.name, "description": r.description} for r in user.roles],
@@ -126,6 +128,7 @@ async def create_user(
         is_active=data.is_active,
         participant_profile_id=p_id,
         personnel_id=pers_id,
+        telegram_id=data.telegram_id,
     )
     db.add(user)
     db.flush()
@@ -158,6 +161,7 @@ async def create_user(
         is_superadmin=user.is_superadmin,
         personnel_id=user.personnel_id,
         participant_profile_id=user.participant_profile_id,
+        telegram_id=user.telegram_id,
         created_at=user.created_at,
         updated_at=user.updated_at,
         roles=[{"id": r.id, "name": r.name, "description": r.description} for r in user.roles],
@@ -191,6 +195,15 @@ async def update_user(
 
     if data.is_active is not None:
         user.is_active = data.is_active
+
+    if data.telegram_id is not None:
+        if data.telegram_id.strip() == "":
+            user.telegram_id = None
+        else:
+            existing_tel = db.query(User).filter(User.telegram_id == data.telegram_id, User.id != user_id).first()
+            if existing_tel:
+                raise HTTPException(status_code=400, detail="Esta cuenta de Telegram ya está vinculada a otro usuario de SIAE")
+            user.telegram_id = data.telegram_id
 
     # Manejar campos mutuamente excluyentes personnel_id y participant_profile_id
     exclude_unset = data.model_dump(exclude_unset=True)
@@ -244,6 +257,7 @@ async def update_user(
         is_superadmin=user.is_superadmin,
         personnel_id=user.personnel_id,
         participant_profile_id=user.participant_profile_id,
+        telegram_id=user.telegram_id,
         created_at=user.created_at,
         updated_at=user.updated_at,
         roles=[{"id": r.id, "name": r.name, "description": r.description} for r in user.roles],

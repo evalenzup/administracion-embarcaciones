@@ -5,6 +5,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Table, Button, Space, Tag, Modal, Form, Input, Select, InputNumber,
   Typography, Card, message, Popconfirm, Tooltip, Row, Col, Drawer,
@@ -13,6 +14,7 @@ import {
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined,
   ReloadOutlined, EyeOutlined, EnvironmentOutlined, TeamOutlined, UserOutlined,
+  CompassOutlined,
 } from '@ant-design/icons';
 import apiClient from '../../api/client';
 import { CanAccess } from '../../components/common/CanAccess';
@@ -52,6 +54,7 @@ const HULL_MATERIALS = ['Fibra de vidrio', 'Aluminio', 'Acero', 'Madera', 'Infla
 
 function VesselsPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [vessels, setVessels] = useState([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
@@ -580,6 +583,21 @@ function VesselsPage() {
                 <Divider orientation="left">Descripción</Divider>
                 <Paragraph>{viewingVessel.description}</Paragraph>
               </>
+            )}
+
+            {/* Botón de telemetría */}
+            {viewingVessel.is_active && (
+              <Button 
+                type="primary" 
+                icon={<CompassOutlined />} 
+                onClick={() => {
+                  setDrawerOpen(false);
+                  navigate(`/weather?vesselId=${viewingVessel.id}`);
+                }}
+                style={{ width: '100%', marginBottom: 16, backgroundColor: '#0A2647', borderColor: '#0A2647' }}
+              >
+                Ver Telemetría y Posición en Mapa
+              </Button>
             )}
 
             {/* ── Tripulación Base ── */}

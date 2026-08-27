@@ -12,7 +12,7 @@ import shutil
 import uuid
 from datetime import datetime
 
-from app.dependencies import get_db, require_permission
+from app.dependencies import get_db, require_permission, get_current_user
 from app.models.user import User
 from app.models.financial_category import FinancialCategory
 from app.models.finance_setting import FinanceSetting
@@ -274,7 +274,7 @@ async def update_settings(
 async def list_categories(
     active_only: bool = Query(True),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission("petty_cash", "view")),
+    current_user: User = Depends(get_current_user),
 ):
     """Listar todas las categorías de gasto generales de finanzas."""
     query = db.query(FinancialCategory)

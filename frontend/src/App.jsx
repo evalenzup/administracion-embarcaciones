@@ -35,6 +35,8 @@ import AccountsPage from './pages/Finance/AccountsPage';
 import ServicesPage from './pages/Finance/ServicesPage';
 import ProvidersPage from './pages/Finance/ProvidersPage';
 import ProjectsPage from './pages/Projects/ProjectsPage';
+import GastosReservaComprobarPage from './pages/Finance/GastosReservaComprobarPage';
+import ViaticosPage from './pages/Finance/ViaticosPage';
 import WeatherPage from './pages/Weather/WeatherPage';
 
 /**
@@ -124,6 +126,8 @@ function AppRoutes() {
         <Route path="/projects" element={<ProjectsPage />} />
         <Route path="/finance/accounts" element={<AccountsPage />} />
         <Route path="/finance/petty-cash" element={<PettyCashPage />} />
+        <Route path="/finance/reserva-comprobar" element={<GastosReservaComprobarPage />} />
+        <Route path="/finance/viaticos" element={<ViaticosPage />} />
         <Route path="/finance/services" element={<ServicesPage />} />
         <Route path="/finance/providers" element={<ProvidersPage />} />
         <Route path="/help" element={<HelpPage />} />

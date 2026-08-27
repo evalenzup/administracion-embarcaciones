@@ -3,16 +3,25 @@ SIAE — Router de Embarcaciones.
 CRUD completo con auditoría y filtros.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, File, UploadFile, Header
 from sqlalchemy.orm import Session
+from typing import Optional, Union, List
+import io
+import csv
+from datetime import datetime, timezone
+from fastapi.security.utils import get_authorization_scheme_param
 
+from app.config import get_settings
 from app.dependencies import get_db, require_permission
 from app.models.user import User
 from app.models.vessel import Vessel, VesselType, VesselStatus
 from app.models.vessel_crew import VesselCrew
 from app.models.personnel import Personnel
+from app.models.vessel_telemetry import VesselTelemetry
 from app.schemas.vessel import VesselCreate, VesselUpdate, VesselResponse, VesselList, VesselBasic
 from app.schemas.vessel_crew import VesselCrewCreate, VesselCrewResponse
+from app.schemas.vessel_telemetry import VesselTelemetryResponse, VesselTelemetryUploadResult, VesselLatestTelemetry
+from app.utils.security import decode_token
 from app.services.audit import log_action
 
 router = APIRouter(prefix="/api/v1/vessels", tags=["Embarcaciones"])
@@ -62,6 +71,33 @@ async def vessel_options(
     """Listar embarcaciones activas para selects (sin paginación)."""
     items = db.query(Vessel).filter(Vessel.is_active == True).order_by(Vessel.name).all()
     return items
+
+
+@router.get("/telemetry/latest", response_model=List[VesselLatestTelemetry])
+async def get_all_vessels_telemetry_latest(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("vessels", "view")),
+):
+    """Obtener el último punto de telemetría reportado por cada embarcación activa."""
+    vessels = db.query(Vessel).filter(Vessel.is_active == True).all()
+    results = []
+
+    for v in vessels:
+        latest = (
+            db.query(VesselTelemetry)
+            .filter(VesselTelemetry.vessel_id == v.id)
+            .order_by(VesselTelemetry.timestamp.desc())
+            .first()
+        )
+        results.append(
+            VesselLatestTelemetry(
+                vessel_id=v.id,
+                vessel_name=v.name,
+                vessel_type=v.vessel_type.value,
+                latest_telemetry=latest
+            )
+        )
+    return results
 
 
 @router.get("/{vessel_id}", response_model=VesselResponse)
@@ -295,4 +331,232 @@ async def remove_vessel_crew(
         ip_address=request.client.host if request.client else None,
     )
     return {"message": f"'{name}' removido de la tripulación base"}
+
+
+# ── Telemetría (Meteorología y GPS) ───────────────────────────
+
+async def get_current_user_optional_bearer_or_api_key(
+    request: Request,
+    db: Session = Depends(get_db),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    api_key: Optional[str] = Query(None),
+) -> Union[User, str]:
+    settings = get_settings()
+    provided_key = x_api_key or api_key
+    if provided_key:
+        if provided_key == settings.TELEMETRY_API_KEY:
+            return "device"
+        raise HTTPException(status_code=401, detail="API Key de telemetría inválida")
+
+    authorization = request.headers.get("Authorization")
+    if not authorization:
+        raise HTTPException(
+            status_code=401,
+            detail="Falta autenticación (X-API-Key, api_key query, o Bearer token)",
+        )
+    
+    scheme, credentials = get_authorization_scheme_param(authorization)
+    if scheme.lower() != "bearer":
+        raise HTTPException(status_code=401, detail="Esquema de autorización inválido")
+    
+    payload = decode_token(credentials)
+    if payload is None:
+        raise HTTPException(status_code=401, detail="Token inválido o expirado")
+    
+    user_id = int(payload.get("sub"))
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None or not user.is_active:
+        raise HTTPException(status_code=401, detail="Usuario inválido o inactivo")
+    
+    return user
+
+
+def parse_telemetry_csv(csv_content: str) -> List[dict]:
+    reader = csv.DictReader(io.StringIO(csv_content))
+    if reader.fieldnames:
+        reader.fieldnames = [name.strip() for name in reader.fieldnames]
+    
+    field_mapping = {
+        "timestamp_utc": "timestamp",
+        "node": "node",
+        "dir": "wind_dir",
+        "speed": "wind_speed",
+        "cdir": "wind_dir_corr",
+        "cspeed": "wind_speed_corr",
+        "pressure": "pressure",
+        "humidity": "humidity",
+        "temp": "temp",
+        "dewpoint": "dewpoint",
+        "precip_total": "precip_total",
+        "precip_int": "precip_int",
+        "lat": "latitude",
+        "lon": "longitude",
+        "gps_fix": "gps_fix",
+        "supply_v": "supply_v",
+        "status": "status"
+    }
+
+    records = []
+    for row in reader:
+        ts_str = row.get("timestamp_utc") or row.get("timestamp")
+        if not ts_str:
+            continue
+        
+        try:
+            ts_str = ts_str.strip()
+            ts = datetime.fromisoformat(ts_str)
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+
+        record = {"timestamp": ts}
+        for csv_col, model_col in field_mapping.items():
+            if csv_col in ("timestamp_utc", "timestamp"):
+                continue
+            
+            val = row.get(csv_col)
+            if val is not None:
+                val = val.strip()
+                if val == "":
+                    record[model_col] = None
+                elif model_col == "gps_fix":
+                    record[model_col] = val.lower() in ("1", "true", "yes")
+                elif model_col in ("node", "status"):
+                    record[model_col] = val
+                else:
+                    try:
+                        record[model_col] = float(val)
+                    except ValueError:
+                        record[model_col] = None
+            else:
+                record[model_col] = None
+        
+        records.append(record)
+    
+    return records
+
+
+@router.post("/{vessel_id}/telemetry", response_model=VesselTelemetryUploadResult, status_code=201)
+async def upload_vessel_telemetry(
+    vessel_id: int,
+    request: Request,
+    file: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db),
+    auth: Union[User, str] = Depends(get_current_user_optional_bearer_or_api_key),
+):
+    """
+    Subir telemetría meteorológica y de posición de una embarcación.
+    Acepta tanto carga de archivo CSV (multipart) como cuerpo de texto CSV crudo.
+    """
+    vessel = db.query(Vessel).filter(Vessel.id == vessel_id).first()
+    if not vessel:
+        raise HTTPException(status_code=404, detail="Embarcación no encontrada")
+
+    if isinstance(auth, User):
+        if not auth.has_permission("vessels", "edit"):
+            raise HTTPException(status_code=403, detail="No tienes permisos para modificar datos de la embarcación")
+
+    csv_content = ""
+    if file:
+        content_bytes = await file.read()
+        csv_content = content_bytes.decode("utf-8")
+    else:
+        content_bytes = await request.body()
+        csv_content = content_bytes.decode("utf-8")
+
+    if not csv_content.strip():
+        raise HTTPException(status_code=400, detail="Contenido de telemetría vacío")
+
+    try:
+        raw_records = parse_telemetry_csv(csv_content)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error parseando CSV: {str(e)}")
+
+    if not raw_records:
+        return VesselTelemetryUploadResult(
+            success=True,
+            message="No se encontraron registros de telemetría válidos para procesar",
+            records_received=0,
+            records_inserted=0
+        )
+
+    timestamps = [r["timestamp"] for r in raw_records]
+    min_ts, max_ts = min(timestamps), max(timestamps)
+
+    existing_rows = (
+        db.query(VesselTelemetry.timestamp)
+        .filter(
+            VesselTelemetry.vessel_id == vessel_id,
+            VesselTelemetry.timestamp >= min_ts,
+            VesselTelemetry.timestamp <= max_ts
+        )
+        .all()
+    )
+    existing_timestamps = {row.timestamp for row in existing_rows}
+
+    inserted_count = 0
+    for r in raw_records:
+        if r["timestamp"] in existing_timestamps:
+            continue
+        
+        db_record = VesselTelemetry(vessel_id=vessel_id, **r)
+        db.add(db_record)
+        inserted_count += 1
+
+    if inserted_count > 0:
+        db.commit()
+
+    return VesselTelemetryUploadResult(
+        success=True,
+        message=f"Se procesaron {len(raw_records)} registros, {inserted_count} nuevos insertados.",
+        records_received=len(raw_records),
+        records_inserted=inserted_count
+    )
+
+
+@router.get("/{vessel_id}/telemetry", response_model=List[VesselTelemetryResponse])
+async def get_vessel_telemetry(
+    vessel_id: int,
+    start: Optional[datetime] = Query(None, description="Fecha de inicio (ISO, UTC)"),
+    end: Optional[datetime] = Query(None, description="Fecha de fin (ISO, UTC)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("vessels", "view")),
+):
+    """Obtener el historial de telemetría de una embarcación en un rango de fechas."""
+    vessel = db.query(Vessel).filter(Vessel.id == vessel_id).first()
+    if not vessel:
+        raise HTTPException(status_code=404, detail="Embarcación no encontrada")
+
+    query = db.query(VesselTelemetry).filter(VesselTelemetry.vessel_id == vessel_id)
+
+    if start:
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=timezone.utc)
+        query = query.filter(VesselTelemetry.timestamp >= start)
+    if end:
+        if end.tzinfo is None:
+            end = end.replace(tzinfo=timezone.utc)
+        query = query.filter(VesselTelemetry.timestamp <= end)
+
+    return query.order_by(VesselTelemetry.timestamp.asc()).all()
+
+
+@router.get("/{vessel_id}/telemetry/latest", response_model=Optional[VesselTelemetryResponse])
+async def get_vessel_telemetry_latest(
+    vessel_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("vessels", "view")),
+):
+    """Obtener la lectura de telemetría más reciente de una embarcación."""
+    vessel = db.query(Vessel).filter(Vessel.id == vessel_id).first()
+    if not vessel:
+        raise HTTPException(status_code=404, detail="Embarcación no encontrada")
+
+    return (
+        db.query(VesselTelemetry)
+        .filter(VesselTelemetry.vessel_id == vessel_id)
+        .order_by(VesselTelemetry.timestamp.desc())
+        .first()
+    )
 

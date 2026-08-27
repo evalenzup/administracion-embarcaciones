@@ -29,6 +29,14 @@ class Settings(BaseSettings):
     SUPERADMIN_PASSWORD: str = "admin123"
     SUPERADMIN_EMAIL: str = "admin@cicese.mx"
 
+    # ── Telemetry ──
+    TELEMETRY_API_KEY: str = "siae_telemetry_secret_key_2026"
+
+    # ── Bot de Telegram ──
+    BOT_API_KEY: str = "siae_bot_secret_key_2026"
+    TELEGRAM_BOT_USERNAME: str = "siae_deo_bot"
+    TELEGRAM_BOT_TOKEN: str = ""
+
     # ── Uploads ──
     UPLOAD_DIR: str = "/app/uploads"
     MAX_UPLOAD_SIZE_MB: int = 50

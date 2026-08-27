@@ -116,6 +116,17 @@ PERMISSIONS = [
     ("projects", "create", "Crear proyectos"),
     ("projects", "edit",   "Editar proyectos"),
     ("projects", "delete", "Eliminar proyectos"),
+    # Gastos a Reserva de Comprobar (GRC)
+    ("gastos_reserva_comprobar", "view",   "Ver gastos a reserva de comprobar"),
+    ("gastos_reserva_comprobar", "create", "Crear gastos a reserva de comprobar"),
+    ("gastos_reserva_comprobar", "edit",   "Editar gastos a reserva de comprobar"),
+    ("gastos_reserva_comprobar", "delete", "Eliminar gastos a reserva de comprobar"),
+    ("gastos_reserva_comprobar", "approve", "Aprobar gastos a reserva de comprobar"),
+    # Viáticos
+    ("viaticos", "view",   "Ver comisiones de viáticos"),
+    ("viaticos", "create", "Crear comisiones de viáticos"),
+    ("viaticos", "edit",   "Editar comisiones de viáticos"),
+    ("viaticos", "delete", "Eliminar comisiones de viáticos"),
 ]
 
 
@@ -142,6 +153,7 @@ ROLES = {
             "fuel_logs:view", "fuel_logs:create", "fuel_logs:edit",
             "billing:view", "billing:create", "billing:edit",
             "projects:view", "projects:create", "projects:edit", "projects:delete",
+            "gastos_reserva_comprobar:view",
         ],
     },
     "Jefe de Máquinas": {
@@ -211,6 +223,7 @@ ROLES = {
             "fuel_logs:view",
             "billing:view",
             "projects:view",
+            "gastos_reserva_comprobar:view", "gastos_reserva_comprobar:create", "gastos_reserva_comprobar:edit", "gastos_reserva_comprobar:delete",
         ],
     },
 }
@@ -383,6 +396,13 @@ def seed_database(db: Session) -> None:
         ("Compras Generales (Papelería, Oficina)", "otros", "📝", "#BDC3C7"),
         ("Materiales de Limpieza", "otros", "🧽", "#16A085"),
         ("Otros Gastos", "otros", "📦", "#7F8C8D"),
+        # Viáticos
+        ("Alimentos", "viaticos", "🍔", "#2ECC71"),
+        ("Hospedaje", "viaticos", "🏨", "#9B59B6"),
+        ("Transporte", "viaticos", "🚗", "#3498DB"),
+        ("Gasolina", "viaticos", "⛽", "#E74C3C"),
+        ("Avión", "viaticos", "✈️", "#E67E22"),
+        ("Paquete Hospedaje + Comida", "viaticos", "🏨", "#9B59B6"),
     ]
     for name, group, icon, color in default_financial_categories:
         if name not in existing_financial_cats:

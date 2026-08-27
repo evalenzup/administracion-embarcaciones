@@ -50,6 +50,7 @@ class UserCreate(BaseModel):
     role_ids: list[int] = Field(default_factory=list)
     participant_profile_id: int | None = None
     personnel_id: int | None = None
+    telegram_id: str | None = None
 
 
 class UserUpdate(BaseModel):
@@ -60,6 +61,7 @@ class UserUpdate(BaseModel):
     role_ids: list[int] | None = None
     participant_profile_id: int | None = None
     personnel_id: int | None = None
+    telegram_id: str | None = None
 
 
 class UserResponse(BaseModel):
@@ -72,6 +74,7 @@ class UserResponse(BaseModel):
     is_superadmin: bool
     personnel_id: int | None = None
     participant_profile_id: int | None = None
+    telegram_id: str | None = None
     created_at: datetime
     updated_at: datetime
     roles: list[RoleBasic] = []
@@ -97,3 +100,23 @@ class UserList(BaseModel):
     """Lista paginada de usuarios."""
     total: int
     items: list[UserResponse]
+
+
+# ── Telegram Link Schemas ─────────────────────────────────────
+
+class TelegramLinkTokenResponse(BaseModel):
+    """Respuesta con token temporal para vincular Telegram."""
+    link_token: str
+    bot_username: str
+
+
+class TelegramLinkRequest(BaseModel):
+    """Solicitud de vinculación de cuenta enviada por el bot."""
+    token: str
+    telegram_id: str
+
+
+class TelegramLinkResponse(BaseModel):
+    """Respuesta de confirmación de vinculación."""
+    username: str
+    full_name: str

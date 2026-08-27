@@ -20,10 +20,18 @@ class VesselRequestBase(BaseModel):
     return_date: datetime
     scientists_count: int | None = 0
     crew_count: int | None = 0
+    departure_port_id: int | None = None
+    return_port_id: int | None = None
+    
+    # Nuevos campos JSON
+    daily_itineraries: list | None = None
+    scientists_list: list | None = None
+    equipments_list: list | None = None
+    waypoints_list: list | None = None
 
 
 class VesselRequestCreate(VesselRequestBase):
-    pass
+    status: RequestStatus | None = None
 
 
 class VesselRequestUpdate(BaseModel):
@@ -38,6 +46,14 @@ class VesselRequestUpdate(BaseModel):
     return_date: datetime | None = None
     scientists_count: int | None = None
     crew_count: int | None = None
+    departure_port_id: int | None = None
+    return_port_id: int | None = None
+    status: RequestStatus | None = None
+    
+    daily_itineraries: list | None = None
+    scientists_list: list | None = None
+    equipments_list: list | None = None
+    waypoints_list: list | None = None
 
 
 class VesselRequestReview(BaseModel):
@@ -60,6 +76,13 @@ class VesselBasicInRequest(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class PortBasicInRequest(BaseModel):
+    id: int
+    name: str
+
+    model_config = {"from_attributes": True}
+
+
 class VesselRequestResponse(VesselRequestBase):
     id: int
     applicant_id: int
@@ -74,6 +97,8 @@ class VesselRequestResponse(VesselRequestBase):
     applicant: UserBasicInRequest | None = None
     approved_by: UserBasicInRequest | None = None
     vessel: VesselBasicInRequest | None = None
+    departure_port: PortBasicInRequest | None = None
+    return_port: PortBasicInRequest | None = None
 
     model_config = {"from_attributes": True}
 

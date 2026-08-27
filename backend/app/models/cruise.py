@@ -72,6 +72,7 @@ class CruisePlan(Base):
     trip_report = Column(Text, nullable=True)   # Observaciones/resumen de la salida
 
     is_active = Column(Boolean, default=True, nullable=False)
+    daily_itineraries = Column(JSON, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

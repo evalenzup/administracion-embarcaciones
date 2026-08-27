@@ -12,7 +12,7 @@ from app.services.email import send_vessel_request_notification, send_new_vessel
 from app.models.user import User
 from app.models.vessel import Vessel
 from app.models.vessel_request import VesselRequest, RequestStatus
-from app.models.cruise import CruisePlan, CruiseStatus
+from app.models.cruise import CruisePlan, CruiseStatus, CruiseEquipmentChecklist, CruiseWaypoint
 from app.models.vessel_crew import VesselCrew
 from app.models.participant_profile import ParticipantProfile
 from app.models.cruise_participant import CruiseParticipant, ParticipantRole
@@ -34,7 +34,7 @@ async def list_requests(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("vessel_requests", "view")),
 ):
-    """Listar solicitudes. Los administradores ven todas; los investigadores solo las propias."""
+    """Listar solicitudes. Los administradores ven todas excepto borradores ajenos; los investigadores solo las propias."""
     query = db.query(VesselRequest)
 
     # Verificar si es administrador
@@ -42,6 +42,12 @@ async def list_requests(
 
     if not is_admin:
         query = query.filter(VesselRequest.applicant_id == current_user.id)
+    else:
+        # Los administradores ven todas excepto borradores de otros usuarios
+        query = query.filter(
+            (VesselRequest.status != RequestStatus.BORRADOR) |
+            (VesselRequest.applicant_id == current_user.id)
+        )
 
     if status:
         query = query.filter(VesselRequest.status == status)
@@ -81,7 +87,7 @@ async def create_request(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("vessel_requests", "create")),
 ):
-    """Crear una solicitud de embarcación."""
+    """Crear una solicitud de embarcación (como Borrador o Pendiente)."""
     if not db.query(Vessel).filter(Vessel.id == data.vessel_id).first():
         raise HTTPException(status_code=404, detail="Embarcación no encontrada")
 
@@ -95,37 +101,40 @@ async def create_request(
         if project:
             req_data["project_name"] = project.name
 
+    status = data.status or RequestStatus.PENDIENTE
+
     req = VesselRequest(
         applicant_id=current_user.id,
-        status=RequestStatus.PENDIENTE,
+        status=status,
         **req_data
     )
     db.add(req)
     db.commit()
     db.refresh(req)
 
-    # Enviar notificación por correo a los administradores del DEO de forma asíncrona
-    vessel = db.query(Vessel).filter(Vessel.id == req.vessel_id).first()
-    vessel_name = vessel.name if vessel else "Embarcación asignada"
-    
-    dep_str = req.departure_date.strftime("%d/%m/%Y")
-    ret_str = req.return_date.strftime("%d/%m/%Y")
-    
-    send_new_vessel_request_admin_notification(
-        background_tasks=background_tasks,
-        applicant_name=current_user.full_name or current_user.username,
-        project_name=req.project_name,
-        vessel_name=vessel_name,
-        departure_date=dep_str,
-        return_date=ret_str,
-        scientists_count=req.scientists_count,
-        crew_count=req.crew_count
-    )
+    # Solo enviar notificaciones por correo si la solicitud se envía formalmente (no si es borrador)
+    if req.status == RequestStatus.PENDIENTE:
+        vessel = db.query(Vessel).filter(Vessel.id == req.vessel_id).first()
+        vessel_name = vessel.name if vessel else "Embarcación asignada"
+        
+        dep_str = req.departure_date.strftime("%d/%m/%Y")
+        ret_str = req.return_date.strftime("%d/%m/%Y")
+        
+        send_new_vessel_request_admin_notification(
+            background_tasks=background_tasks,
+            applicant_name=current_user.full_name or current_user.username,
+            project_name=req.project_name,
+            vessel_name=vessel_name,
+            departure_date=dep_str,
+            return_date=ret_str,
+            scientists_count=req.scientists_count,
+            crew_count=req.crew_count
+        )
 
     log_action(
         db=db, user_id=current_user.id, username=current_user.username,
         action="create", module="vessel_requests", entity_type="VesselRequest",
-        entity_id=req.id, description=f"Creó solicitud de embarcación para '{req.project_name}'",
+        entity_id=req.id, description=f"Creó solicitud de embarcación para '{req.project_name}' con estado '{req.status}'",
         ip_address=request.client.host if request.client else None
     )
 
@@ -137,10 +146,11 @@ async def update_request(
     request_id: int,
     data: VesselRequestUpdate,
     request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("vessel_requests", "edit")),
 ):
-    """Actualizar una solicitud existente mientras esté pendiente."""
+    """Actualizar una solicitud existente mientras esté pendiente o sea borrador."""
     req = db.query(VesselRequest).filter(VesselRequest.id == request_id).first()
     if not req:
         raise HTTPException(status_code=404, detail="Solicitud no encontrada")
@@ -150,9 +160,11 @@ async def update_request(
     if not is_admin and req.applicant_id != current_user.id:
         raise HTTPException(status_code=403, detail="No tienes permiso para modificar esta solicitud")
 
-    # Solo se puede editar si está pendiente
-    if req.status != RequestStatus.PENDIENTE and not is_admin:
-        raise HTTPException(status_code=400, detail="Solo se pueden modificar solicitudes en estado pendiente")
+    # Solo se puede editar si está pendiente o es borrador
+    if req.status not in (RequestStatus.PENDIENTE, RequestStatus.BORRADOR) and not is_admin:
+        raise HTTPException(status_code=400, detail="Solo se pueden modificar solicitudes en estado borrador o pendiente")
+
+    old_status = req.status
 
     update_data = data.model_dump(exclude_unset=True)
     if "departure_date" in update_data or "return_date" in update_data:
@@ -177,10 +189,29 @@ async def update_request(
     db.commit()
     db.refresh(req)
 
+    # Si transicionó de Borrador a Pendiente, enviar notificación por correo
+    if old_status == RequestStatus.BORRADOR and req.status == RequestStatus.PENDIENTE:
+        vessel = db.query(Vessel).filter(Vessel.id == req.vessel_id).first()
+        vessel_name = vessel.name if vessel else "Embarcación asignada"
+        
+        dep_str = req.departure_date.strftime("%d/%m/%Y")
+        ret_str = req.return_date.strftime("%d/%m/%Y")
+        
+        send_new_vessel_request_admin_notification(
+            background_tasks=background_tasks,
+            applicant_name=current_user.full_name or current_user.username,
+            project_name=req.project_name,
+            vessel_name=vessel_name,
+            departure_date=dep_str,
+            return_date=ret_str,
+            scientists_count=req.scientists_count,
+            crew_count=req.crew_count
+        )
+
     log_action(
         db=db, user_id=current_user.id, username=current_user.username,
         action="update", module="vessel_requests", entity_type="VesselRequest",
-        entity_id=req.id, description=f"Actualizó solicitud de embarcación para '{req.project_name}'",
+        entity_id=req.id, description=f"Actualizó solicitud de embarcación para '{req.project_name}' con estado '{req.status}'",
         ip_address=request.client.host if request.client else None
     )
 
@@ -256,6 +287,8 @@ async def review_request(
             study_area=req.study_area,
             departure_date=req.departure_date,
             return_date=req.return_date,
+            departure_port_id=req.departure_port_id,
+            return_port_id=req.return_port_id,
             status=CruiseStatus.BORRADOR,
             cruise_number=cruise_number,
             scientists_count=req.scientists_count,
@@ -264,6 +297,51 @@ async def review_request(
         )
         db.add(plan)
         db.flush()  # Generate the plan ID
+
+        # Auto-poblar itinerario diario si existe en la solicitud
+        if req.daily_itineraries:
+            plan.daily_itineraries = req.daily_itineraries
+
+        # Auto-poblar científicos si existen en la solicitud
+        if req.scientists_list:
+            for item in req.scientists_list:
+                part = CruiseParticipant(
+                    cruise_id=plan.id,
+                    participant_id=item.get("participant_id"),
+                    role_in_cruise=item.get("role_in_cruise", "investigador_principal"),
+                    is_principal_investigator=item.get("is_principal_investigator", False),
+                    is_cruise_leader=item.get("is_cruise_leader", False),
+                    notes=item.get("notes")
+                )
+                db.add(part)
+
+        # Auto-poblar equipos científicos si existen
+        if req.equipments_list:
+            for item in req.equipments_list:
+                eq = CruiseEquipmentChecklist(
+                    cruise_id=plan.id,
+                    investigator_name=item.get("investigator_name") or req.scientific_leader,
+                    item_name=item.get("item_name"),
+                    quantity=item.get("quantity", 1.0),
+                    notes=item.get("notes")
+                )
+                db.add(eq)
+
+        # Auto-poblar waypoints si existen
+        if req.waypoints_list:
+            for item in req.waypoints_list:
+                wp = CruiseWaypoint(
+                    cruise_id=plan.id,
+                    order_index=item.get("order_index", 0),
+                    name=item.get("name"),
+                    latitude=item.get("latitude"),
+                    longitude=item.get("longitude"),
+                    description=item.get("description"),
+                    waypoint_type=item.get("waypoint_type", "estacion"),
+                    activity=item.get("activity"),
+                    duration_hours=item.get("duration_hours", 0.0)
+                )
+                db.add(wp)
 
         # Auto-populate base crew of the vessel
         base_crew = db.query(VesselCrew).filter(
