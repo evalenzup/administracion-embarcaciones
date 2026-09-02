@@ -48,7 +48,8 @@ import {
   SyncOutlined,
   CloseOutlined,
   FileZipOutlined,
-  SearchOutlined
+  SearchOutlined,
+  ReloadOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import apiClient from '../../api/client';
