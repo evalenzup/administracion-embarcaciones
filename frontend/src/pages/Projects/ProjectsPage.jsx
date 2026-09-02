@@ -41,7 +41,9 @@ import {
   FileTextOutlined,
   UserOutlined,
   BankOutlined,
-  DeploymentUnitOutlined
+  DeploymentUnitOutlined,
+  CheckCircleOutlined,
+  ApartmentOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import apiClient from '../../api/client';
@@ -59,6 +61,13 @@ export default function ProjectsPage() {
   const [selectedProject, setSelectedProject] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // Estadísticas calculadas
+  const stats = {
+    total: projects.length,
+    active: projects.filter((p) => p.is_active).length,
+    departmentsCount: new Set(projects.map((p) => p.department).filter(Boolean)).size,
+  };
 
   // Filtros de búsqueda
   const [searchTerm, setSearchTerm] = useState('');
