@@ -754,6 +754,7 @@ async def upload_return_receipt_route(
         db.refresh(viatico)
 
         try:
+            monto_log = viatico.monto_devuelto or 0.0
             log_action(
                 db=db,
                 user_id=current_user.id,
@@ -762,7 +763,7 @@ async def upload_return_receipt_route(
                 module="viaticos",
                 entity_type="Viatico",
                 entity_id=viatico.id,
-                description=f"Cargó comprobante de devolución por ${viatico.monto_devuelto:,.2f} MXN para Folio {viatico.folio_comision}",
+                description=f"Cargó comprobante de devolución por ${monto_log:,.2f} MXN para Folio {viatico.folio_comision}",
             )
         except Exception:
             pass

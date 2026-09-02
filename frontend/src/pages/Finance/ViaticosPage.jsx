@@ -791,8 +791,10 @@ export default function ViaticosPage() {
   const handleOpenDevolucionModal = () => {
     if (!selectedViatico) return;
     const diff = Math.max(0, (selectedViatico.monto_solicitado || 0) - (selectedViatico.monto_comprobado || 0));
+    const roundedDiff = Math.round(diff * 100) / 100;
+    const initialMonto = selectedViatico.monto_devuelto != null ? Number(Number(selectedViatico.monto_devuelto).toFixed(2)) : roundedDiff;
     devolucionForm.setFieldsValue({
-      monto_devuelto: selectedViatico.monto_devuelto || diff || 0
+      monto_devuelto: initialMonto
     });
     setIsDevolucionModalOpen(true);
   };
@@ -807,8 +809,11 @@ export default function ViaticosPage() {
 
     const formData = new FormData();
     formData.append('file', file);
-    if (values.monto_devuelto !== undefined && values.monto_devuelto !== null) {
-      formData.append('monto_devuelto', values.monto_devuelto);
+    if (values.monto_devuelto !== undefined && values.monto_devuelto !== null && values.monto_devuelto !== '') {
+      const num = typeof values.monto_devuelto === 'number' ? values.monto_devuelto : parseFloat(String(values.monto_devuelto).replace(/,/g, ''));
+      if (!isNaN(num)) {
+        formData.append('monto_devuelto', (Math.round(num * 100) / 100).toFixed(2));
+      }
     }
 
     setUploadingDevolucion(true);
@@ -823,7 +828,9 @@ export default function ViaticosPage() {
       fetchViaticos();
       fetchStats();
     } catch (error) {
-      message.error(error.response?.data?.detail || 'Error al registrar comprobante de devolución');
+      const detail = error.response?.data?.detail;
+      const errorMsg = Array.isArray(detail) ? detail.map(d => d.msg || JSON.stringify(d)).join(', ') : (typeof detail === 'string' ? detail : 'Error al registrar comprobante de devolución');
+      message.error(errorMsg);
     } finally {
       setUploadingDevolucion(false);
     }
@@ -2329,8 +2336,14 @@ export default function ViaticosPage() {
               style={{ width: '100%' }}
               precision={2}
               min={0}
-              formatter={value => `$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-              parser={value => value.replace(/\$\s?|(,*)/g, '')}
+              step={0.01}
+              formatter={value => {
+                if (value === null || value === undefined || value === '') return '';
+                const parts = `${value}`.split('.');
+                parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                return `$ ${parts.join('.')}`;
+              }}
+              parser={value => (value ? value.replace(/\$\s?|(,*)/g, '') : '')}
             />
           </Form.Item>
 

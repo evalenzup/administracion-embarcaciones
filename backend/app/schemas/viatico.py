@@ -58,13 +58,13 @@ class ViaticoFacturaResponse(ViaticoFacturaBase):
 # ── SCHEMAS DE VIÁTICO PRINCIPAL ──
 class ViaticoBase(BaseModel):
     folio_comision: str = Field(..., max_length=100)
-    fecha_inicio: date
-    fecha_fin: date
-    destino: str = Field(..., max_length=200)
-    justificacion: str
+    fecha_inicio: date | None = None
+    fecha_fin: date | None = None
+    destino: str | None = None
+    justificacion: str | None = None
     observaciones: str | None = None
     fecha_solicitud: date | None = None
-    monto_solicitado: float
+    monto_solicitado: float = 0.0
     monto_viaticos: float = 0.0
     monto_pasaje_aereo: float = 0.0
     monto_hospedaje_paquete: float = 0.0
@@ -121,7 +121,12 @@ class ViaticoBase(BaseModel):
 
 
 class ViaticoCreate(ViaticoBase):
-    pass
+    folio_comision: str = Field(..., max_length=100)
+    fecha_inicio: date
+    fecha_fin: date
+    destino: str = Field(..., max_length=200)
+    justificacion: str
+    monto_solicitado: float
 
 
 class ViaticoUpdate(BaseModel):
