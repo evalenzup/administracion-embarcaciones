@@ -231,7 +231,7 @@ function RolesPage() {
         </Col>
       </Row>
 
-      <Card style={{ borderRadius: 12 }} bodyStyle={{ padding: 0 }}>
+      <Card style={{ borderRadius: 12 }} styles={{ body: { padding: 0 } }}>
         <Table
           columns={columns}
           dataSource={rolesData}

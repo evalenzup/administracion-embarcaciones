@@ -9,7 +9,7 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutli
 import apiClient from '../../api/client';
 import { CanAccess } from '../../components/common/CanAccess';
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
 const { Search } = AntInput;
 
 function UsersPage() {
@@ -311,7 +311,7 @@ function UsersPage() {
         </Col>
       </Row>
 
-      <Card style={{ borderRadius: 12 }} bodyStyle={{ padding: 0 }}>
+      <Card style={{ borderRadius: 12 }} styles={{ body: { padding: 0 } }}>
         <Table
           columns={columns}
           dataSource={users}
