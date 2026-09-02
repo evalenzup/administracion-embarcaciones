@@ -230,6 +230,8 @@ function InventoryPage() {
     {
       title: 'Ítem',
       key: 'name',
+      width: 220,
+      ellipsis: true,
       render: (_, r) => (
         <div>
           <Text strong style={{ fontSize: 13 }}>{r.name}</Text>
@@ -248,11 +250,13 @@ function InventoryPage() {
       title: 'Embarcación', 
       key: 'vessel', 
       width: 140, 
+      ellipsis: true,
       render: (_, r) => <Text>{r.vessel?.name}</Text>,
       sorter: (a, b) => (a.vessel?.name || '').localeCompare(b.vessel?.name || ''),
     },
     {
       title: 'Categoría', dataIndex: 'category', width: 120,
+      align: 'center',
       render: (c) => <Tag color={CATEGORY_MAP[c]?.color}>{CATEGORY_MAP[c]?.label}</Tag>,
       sorter: (a, b) => (a.category || '').localeCompare(b.category || ''),
     },
@@ -271,7 +275,8 @@ function InventoryPage() {
       sorter: (a, b) => (a.quantity || 0) - (b.quantity || 0),
     },
     {
-      title: 'Mínimo', dataIndex: 'min_quantity', width: 80,
+      title: 'Mínimo', dataIndex: 'min_quantity', width: 90,
+      align: 'right',
       render: (v, r) => <Text type="secondary">{v} {r.unit}</Text>,
       sorter: (a, b) => (a.min_quantity || 0) - (b.min_quantity || 0),
     },
@@ -279,11 +284,12 @@ function InventoryPage() {
       title: 'Ubicación', 
       dataIndex: 'location', 
       width: 140, 
+      ellipsis: true,
       render: (v) => v || '—',
       sorter: (a, b) => (a.location || '').localeCompare(b.location || ''),
     },
     {
-      title: 'Acciones', key: 'actions', width: 140,
+      title: 'Acciones', key: 'actions', width: 150, fixed: 'right', align: 'center',
       render: (_, r) => (
         <Space>
           <CanAccess module="inventory" action="edit">
@@ -356,6 +362,7 @@ function InventoryPage() {
       <Card style={{ borderRadius: 12 }} styles={{ body: { padding: 0 } }}>
         <style>{`.row-danger td{background:#fff1f0!important}.row-warning td{background:#fffbf0!important}`}</style>
         <Table columns={columns} dataSource={items} rowKey="id" loading={loading} rowClassName={rowClassName}
+          scroll={{ x: 1050 }}
           pagination={{ current: pagination.current, pageSize: pagination.pageSize, total, showSizeChanger: true,
             showTotal: (t) => `${t} ítems`, onChange: (p, s) => setPagination({ current: p, pageSize: s }) }} />
       </Card>

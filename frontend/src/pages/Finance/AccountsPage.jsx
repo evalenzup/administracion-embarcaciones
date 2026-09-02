@@ -728,6 +728,7 @@ export default function AccountsPage() {
                     }
                   }
                 ]}
+                scroll={{ x: 1000 }}
               />
             </Card>
           </Col>

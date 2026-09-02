@@ -18,7 +18,9 @@ def get_main_keyboard(is_linked: bool = True) -> InlineKeyboardMarkup:
         ])
         buttons.append([InlineKeyboardButton(text="❓ Ayuda de comprobación", callback_data="help_info")])
     else:
-        buttons.append([InlineKeyboardButton(text="🔑 Vincular cuenta en Web", url="http://localhost:3010/profile")])
+        buttons.append([
+            InlineKeyboardButton(text="🔄 Ya me vincularon (Actualizar)", callback_data="check_link_status")
+        ])
     
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -32,14 +34,14 @@ async def cmd_start(message: Message):
     # 1. Si viene con token en los argumentos (ej: /start token_jwt)
     if len(args) > 1:
         token = args[1]
-        await message.answer("🔄 Procesando vinculación con tu cuenta de SIAE...")
+        loading = await message.answer("🔄 Procesando vinculación con tu cuenta de SIAE...")
         res = await api_client.link_account(token, telegram_id)
         
         if res.get("success"):
             data = res["data"]
             username = data.get("username")
             full_name = data.get("full_name")
-            await message.answer(
+            await loading.edit_text(
                 f"🎉 ¡Hola *{full_name}* (@{username})!\n\n"
                 f"Tu cuenta de Telegram ha sido vinculada exitosamente al *Sistema de Administración de Embarcaciones (SIAE)*.\n\n"
                 f"A partir de ahora, cuando los administradores te asignen un viático o GRC, "
@@ -49,16 +51,16 @@ async def cmd_start(message: Message):
             )
         else:
             error_msg = res.get("error", "Token inválido o expirado.")
-            await message.answer(
+            await loading.edit_text(
                 f"❌ *Error de vinculación:*\n{error_msg}\n\n"
-                f"Por favor, ve a tu perfil en el portal web de SIAE y genera un nuevo código de vinculación.",
+                f"ℹ️ *Tu ID de Telegram es:*\n`{telegram_id}`\n\n"
+                f"Compártelo con tu administrador para que te vincule en el sistema.",
                 parse_mode="Markdown",
                 reply_markup=get_main_keyboard(is_linked=False)
             )
         return
 
     # 2. Si es un /start básico, verificar si ya está vinculado
-    await message.answer("🔄 Verificando vinculación...")
     res = await api_client.get_active_grcs(telegram_id)
     
     if res.get("success"):
@@ -70,11 +72,32 @@ async def cmd_start(message: Message):
     else:
         await message.answer(
             f"👋 ¡Hola! Para utilizar este bot necesitas vincular tu cuenta de Telegram con tu usuario de SIAE.\n\n"
-            f"1. Inicia sesión en el portal web de SIAE.\n"
-            f"2. Ve a la sección de tu Perfil.\n"
-            f"3. Haz clic en 'Vincular Telegram' para abrir este chat de forma segura.\n\n"
-            f"ℹ️ *Tu ID de Telegram es:* `{telegram_id}`\n"
-            f"(Compártelo con tu administrador si no tienes acceso al portal web para que te vincule directamente).",
+            f"ℹ️ *Tu ID de Telegram es:*\n`{telegram_id}`\n\n"
+            f"📋 *Pasos para comenzar:*\n"
+            f"1. Copia tu ID de arriba (tócalo para copiarlo).\n"
+            f"2. Compártelo con tu Administrador del SIAE para que registre tu cuenta.\n\n"
+            f"_Una vez registrado, presiona el botón de abajo para actualizar._",
+            parse_mode="Markdown",
+            reply_markup=get_main_keyboard(is_linked=False)
+        )
+
+
+@router.callback_query(F.data == "check_link_status")
+async def callback_check_link_status(callback: CallbackQuery):
+    await callback.answer("Verificando vinculación...")
+    telegram_id = str(callback.from_user.id)
+    res = await api_client.get_active_grcs(telegram_id)
+    if res.get("success"):
+        await callback.message.edit_text(
+            "🎉 ¡Tu cuenta está vinculada exitosamente al SIAE!\n\n"
+            "Usa el menú de abajo para ver tus trámites o subir comprobantes:",
+            reply_markup=get_main_keyboard(is_linked=True)
+        )
+    else:
+        await callback.message.edit_text(
+            f"⚠️ Aún no se ha detectado tu vinculación en el sistema.\n\n"
+            f"ℹ️ *Tu ID de Telegram es:*\n`{telegram_id}`\n\n"
+            f"Por favor compártelo con el Administrador para que guarde tu ID en tu usuario de SIAE.",
             parse_mode="Markdown",
             reply_markup=get_main_keyboard(is_linked=False)
         )
@@ -192,6 +215,62 @@ async def show_grc_list(message: Message, telegram_id: str, edit_message: bool =
             await message.answer(text, reply_markup=keyboard)
         return
 
+MESES_ES = ["", "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+
+
+def format_date_range(fecha_inicio, fecha_fin) -> str:
+    from datetime import datetime
+    try:
+        f_ini = datetime.strptime(str(fecha_inicio)[:10], "%Y-%m-%d") if fecha_inicio else None
+        f_fin = datetime.strptime(str(fecha_fin)[:10], "%Y-%m-%d") if fecha_fin else None
+        if f_ini and f_fin:
+            if f_ini.month == f_fin.month:
+                return f"{f_ini.day}-{f_fin.day} {MESES_ES[f_ini.month]}"
+            else:
+                return f"{f_ini.day} {MESES_ES[f_ini.month]} - {f_fin.day} {MESES_ES[f_fin.month]}"
+        elif f_ini:
+            return f"{f_ini.day} {MESES_ES[f_ini.month]}"
+    except Exception:
+        pass
+    return ""
+
+
+def format_single_date(fecha) -> str:
+    from datetime import datetime
+    try:
+        dt = datetime.strptime(str(fecha)[:10], "%Y-%m-%d") if fecha else None
+        if dt:
+            return f"{dt.day} {MESES_ES[dt.month]}"
+    except Exception:
+        pass
+    return ""
+
+
+async def show_grc_list(message: Message, telegram_id: str, edit_message: bool = False):
+    """Función auxiliar para consultar y listar GRCs."""
+    res = await api_client.get_active_grcs(telegram_id)
+    
+    if not res.get("success"):
+        error_msg = res.get("error", "Error de conexión.")
+        text = f"⚠️ *No se pudieron obtener tus GRCs:*\n{error_msg}"
+        if edit_message:
+            await message.edit_text(text, parse_mode="Markdown")
+        else:
+            await message.answer(text, parse_mode="Markdown")
+        return
+
+    items = res.get("items", [])
+    if not items:
+        text = "🏖️ No tienes GRCs (Compras/Servicios) activos asignados en este momento."
+        buttons = [[InlineKeyboardButton(text="🔄 Actualizar", callback_data="list_grc")],
+                   [InlineKeyboardButton(text="🔙 Menú", callback_data="back_to_menu")]]
+        keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+        if edit_message:
+            await message.edit_text(text, reply_markup=keyboard)
+        else:
+            await message.answer(text, reply_markup=keyboard)
+        return
+
     # Ordenar: primero los personales (is_mine = True)
     items_sorted = sorted(items, key=lambda x: not x.get("is_mine", False))
 
@@ -206,18 +285,21 @@ async def show_grc_list(message: Message, telegram_id: str, edit_message: bool =
     for grc in items_sorted:
         folio = grc.get("folio_episa")
         just = grc.get("justificacion", "")
-        just_short = just[:15] + "..." if len(just) > 15 else just
+        just_short = just[:12] + "..." if len(just) > 12 else just
         monto = grc.get("monto_solicitado", 0.0)
         is_mine = grc.get("is_mine", False)
         
+        date_str = format_single_date(grc.get("fecha_solicitud") or grc.get("created_at"))
+        date_tag = f"[{date_str}] " if date_str else ""
+        
         if is_mine:
-            btn_text = f"👤 {folio} (${monto:,.2f}) - {just_short}"
+            btn_text = f"👤 {folio} {date_tag}(${monto:,.2f}) - {just_short}"
         else:
             solicitante = grc.get("solicitante") or {}
             full_name = solicitante.get("full_name", "")
             parts = [p.strip() for p in full_name.split() if p.strip()]
             short_name = f"{parts[0]} {parts[1]}" if len(parts) >= 2 else (full_name or "N/A")
-            btn_text = f"👥 {folio} ({short_name}) - {just_short}"
+            btn_text = f"👥 {folio} ({short_name}) {date_tag}- {just_short}"
             
         buttons.append([InlineKeyboardButton(text=btn_text, callback_data=f"view_grc_{grc['id']}")])
         
@@ -269,18 +351,21 @@ async def show_viatico_list(message: Message, telegram_id: str, edit_message: bo
     for v in items_sorted:
         folio = v.get("folio_comision")
         just = v.get("justificacion", "")
-        just_short = just[:15] + "..." if len(just) > 15 else just
+        just_short = just[:12] + "..." if len(just) > 12 else just
         monto = v.get("monto_solicitado", 0.0)
         is_mine = v.get("is_mine", False)
         
+        date_range = format_date_range(v.get("fecha_inicio"), v.get("fecha_fin"))
+        date_tag = f"[{date_range}] " if date_range else ""
+        
         if is_mine:
-            btn_text = f"👤 {folio} (${monto:,.2f}) - {just_short}"
+            btn_text = f"👤 {folio} {date_tag}(${monto:,.2f}) - {just_short}"
         else:
             personal = v.get("personal") or {}
             full_name = personal.get("full_name", "")
             parts = [p.strip() for p in full_name.split() if p.strip()]
             short_name = f"{parts[0]} {parts[1]}" if len(parts) >= 2 else (full_name or "N/A")
-            btn_text = f"👥 {folio} ({short_name}) - {just_short}"
+            btn_text = f"👥 {folio} ({short_name}) {date_tag}- {just_short}"
             
         buttons.append([InlineKeyboardButton(text=btn_text, callback_data=f"view_viatico_{v['id']}")])
         

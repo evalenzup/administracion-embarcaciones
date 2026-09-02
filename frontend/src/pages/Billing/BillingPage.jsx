@@ -297,6 +297,8 @@ export default function BillingPage() {
     {
       title: 'Crucero',
       dataIndex: 'cruise',
+      width: 200,
+      ellipsis: true,
       render: (cruise) => cruise ? (
         <div>
           <div style={{ fontWeight: 600, color: '#0A2647' }}>{cruise.name}</div>
@@ -315,6 +317,7 @@ export default function BillingPage() {
     {
       title: 'Proyecto / Solicitante',
       dataIndex: 'billing_entity',
+      width: 220,
       ellipsis: true,
       render: (v, r) => (
         <div>
@@ -329,7 +332,7 @@ export default function BillingPage() {
     {
       title: 'Monto Total',
       dataIndex: 'total',
-      width: 150,
+      width: 160,
       align: 'right',
       render: (v, r) => (
         <div style={{ textAlign: 'right' }}>
@@ -349,7 +352,8 @@ export default function BillingPage() {
     {
       title: 'Estado',
       dataIndex: 'status',
-      width: 130,
+      width: 140,
+      align: 'center',
       render: (status) => {
         const conf = STATUS_CONFIG[status] || { color: 'default', text: status };
         return <Tag color={conf.color} icon={conf.icon} style={{ fontWeight: 600 }}>{conf.text}</Tag>;
@@ -415,7 +419,9 @@ export default function BillingPage() {
     {
       title: 'Acciones',
       key: 'actions',
-      width: 140,
+      width: 130,
+      fixed: 'right',
+      align: 'center',
       render: (_, record) => (
         <Space size="small">
           <Tooltip title="Ver Detalle">
@@ -457,24 +463,30 @@ export default function BillingPage() {
       title: 'Embarcación',
       dataIndex: ['vessel', 'name'],
       key: 'vessel_name',
+      width: 160,
       render: (text, record) => <Tag color="blue" style={{ fontWeight: 500 }}>{record.vessel?.name || '—'}</Tag>,
     },
     {
       title: 'Concepto / Servicio',
       dataIndex: 'concept',
       key: 'concept',
+      width: 220,
+      ellipsis: true,
       render: (text) => <Text strong>{text}</Text>,
     },
     {
       title: 'Tipo de Cliente / Proyecto',
       dataIndex: 'client_type',
       key: 'client_type',
+      width: 200,
+      ellipsis: true,
       render: (val) => CLIENT_TYPE_LABELS[val] || val,
     },
     {
       title: 'Tarifa Autorizada',
       dataIndex: 'rate_amount',
       key: 'rate_amount',
+      width: 160,
       align: 'right',
       render: (val, record) => (
         <span style={{ fontWeight: 600, color: '#0A2647', fontSize: 14 }}>
@@ -486,12 +498,14 @@ export default function BillingPage() {
       title: 'Año',
       dataIndex: 'year',
       key: 'year',
+      width: 90,
       align: 'center',
     },
     {
       title: 'Estado',
       dataIndex: 'is_active',
       key: 'is_active',
+      width: 110,
       align: 'center',
       render: (isActive) => (
         <Tag color={isActive ? 'success' : 'default'}>
@@ -503,6 +517,8 @@ export default function BillingPage() {
       title: 'Acciones',
       key: 'actions',
       width: 110,
+      fixed: 'right',
+      align: 'center',
       render: (_, record) => (
         <Space size="middle">
           {canEdit && (
@@ -652,6 +668,7 @@ export default function BillingPage() {
               columns={columns}
               rowKey="id"
               loading={loading}
+              scroll={{ x: 1100 }}
               pagination={{
                 current: page,
                 pageSize: pageSize,
@@ -726,6 +743,7 @@ export default function BillingPage() {
               rowKey="id"
               loading={ratesLoading}
               pagination={false}
+              scroll={{ x: 900 }}
             />
           </Card>
         </>

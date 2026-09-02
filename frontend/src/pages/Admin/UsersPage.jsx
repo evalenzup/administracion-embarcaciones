@@ -187,11 +187,12 @@ function UsersPage() {
   const columns = [
     {
       title: 'Usuario',
-      dataIndex: 'username',
       key: 'username',
-      render: (text, record) => (
+      width: 160,
+      ellipsis: true,
+      render: (_, record) => (
         <Space>
-          <strong>{text}</strong>
+          <Text strong>{record.username}</Text>
           {record.is_superadmin && <Tag color="gold">Superadmin</Tag>}
         </Space>
       ),
@@ -202,17 +203,22 @@ function UsersPage() {
       title: 'Nombre Completo',
       dataIndex: 'full_name',
       key: 'full_name',
+      width: 200,
+      ellipsis: true,
       sorter: (a, b) => (a.full_name || '').localeCompare(b.full_name || ''),
     },
     {
       title: 'Email',
       dataIndex: 'email',
       key: 'email',
+      width: 200,
+      ellipsis: true,
       sorter: (a, b) => (a.email || '').localeCompare(b.email || ''),
     },
     {
       title: 'Roles',
       key: 'roles',
+      width: 180,
       render: (_, record) => (
         <Space wrap>
           {record.roles.map((role) => (
@@ -225,12 +231,16 @@ function UsersPage() {
       title: 'Vínculo Telegram',
       dataIndex: 'telegram_id',
       key: 'telegram_id',
+      width: 150,
+      align: 'center',
       render: (id) => id ? <Tag color="cyan">💬 {id}</Tag> : <span style={{ color: '#aaa', fontStyle: 'italic' }}>No vinculado</span>,
     },
     {
       title: 'Estado',
       dataIndex: 'is_active',
       key: 'is_active',
+      width: 110,
+      align: 'center',
       render: (active) => (
         <Tag color={active ? 'success' : 'default'}>
           {active ? 'Activo' : 'Inactivo'}
@@ -241,7 +251,9 @@ function UsersPage() {
     {
       title: 'Acciones',
       key: 'actions',
-      width: 150,
+      width: 130,
+      fixed: 'right',
+      align: 'center',
       render: (_, record) => (
         <Space>
           <CanAccess module="users" action="edit">
@@ -305,6 +317,7 @@ function UsersPage() {
           dataSource={users}
           rowKey="id"
           loading={loading}
+          scroll={{ x: 1000 }}
           pagination={{
             current: pagination.current,
             pageSize: pagination.pageSize,

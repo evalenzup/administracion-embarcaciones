@@ -20,6 +20,7 @@ from app.models.financial_category import FinancialCategory
 from app.models.project import Project
 from app.models.account import Account, AccountTransaction, TransactionType
 from app.models.gasto_reserva_comprobar import GastoReservaComprobar, GastoReservaComprobarFactura, GastoReservaComprobarItem
+from app.services.audit import log_action
 from app.schemas.gasto_reserva_comprobar import (
     GastoReservaComprobarCreate,
     GastoReservaComprobarUpdate,
@@ -357,6 +358,23 @@ async def create_grc(
 
     db.commit()
     db.refresh(grc)
+
+    # Log de auditoría
+    try:
+        log_action(
+            db=db,
+            user_id=current_user.id,
+            username=current_user.username,
+            action="create",
+            module="gastos_reserva_comprobar",
+            entity_type="GastoReservaComprobar",
+            entity_id=grc.id,
+            description=f"Creó solicitud GRC Folio {grc.folio_episa} por ${grc.monto_solicitado:,.2f} MXN",
+            details={"folio": grc.folio_episa, "solicitante_id": grc.solicitante_id, "monto_solicitado": grc.monto_solicitado}
+        )
+    except Exception:
+        pass
+
     return grc
 
 
@@ -387,13 +405,13 @@ async def get_grc(
 @router.get("/{id}/invoices/zip")
 async def download_grc_invoices_zip(
     id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Descargar todas las facturas de un GRC agrupadas en un archivo ZIP."""
+    """Descargar bundle contable en ZIP de un GRC (Excel con fórmulas dinámicas + facturas renombradas 01_... + anexos)."""
     from fastapi.responses import StreamingResponse
-    import zipfile
-    import io
+    from app.utils.invoice_bundle import create_invoices_zip_bundle
 
     grc = db.query(GastoReservaComprobar).filter(GastoReservaComprobar.id == id).first()
     if not grc:
@@ -410,21 +428,44 @@ async def download_grc_invoices_zip(
     if not grc.facturas:
         raise HTTPException(status_code=400, detail="Esta solicitud GRC no tiene facturas registradas.")
 
-    zip_buffer = io.BytesIO()
-    with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
-        for invoice in grc.facturas:
-            if invoice.xml_filename:
-                xml_path = os.path.join(XML_DIR, invoice.xml_filename)
-                if os.path.exists(xml_path):
-                    zip_file.write(xml_path, arcname=invoice.xml_filename)
-            if invoice.pdf_filename:
-                pdf_path = os.path.join(PDF_DIR, invoice.pdf_filename)
-                if os.path.exists(pdf_path):
-                    zip_file.write(pdf_path, arcname=invoice.pdf_filename)
+    extra_files = []
+    if getattr(grc, "comprobante_devolucion_path", None):
+        extra_files.append((
+            grc.comprobante_devolucion_path,
+            f"Devoluciones/{os.path.basename(grc.comprobante_devolucion_path)}"
+        ))
+    if getattr(grc, "comprobacion_pdf_path", None):
+        extra_files.append((
+            grc.comprobacion_pdf_path,
+            f"Extras/{os.path.basename(grc.comprobacion_pdf_path)}"
+        ))
 
-    zip_buffer.seek(0)
+    zip_buffer = create_invoices_zip_bundle(
+        folio=grc.folio_episa,
+        facturas=grc.facturas,
+        tramite_type="grc",
+        extra_files=extra_files
+    )
+
+    # Log de auditoría
+    try:
+        is_telegram = bool(request.headers.get("x-bot-token") or request.headers.get("x-impersonate-telegram-id"))
+        source_str = "Telegram Bot" if is_telegram else "Plataforma Web"
+        log_action(
+            db=db,
+            user_id=current_user.id,
+            username=current_user.username,
+            action="download",
+            module="telegram_bot" if is_telegram else "gastos_reserva_comprobar",
+            entity_type="GastoReservaComprobar",
+            entity_id=grc.id,
+            description=f"Descargó bundle ZIP con Excel de comprobación de GRC Folio {grc.folio_episa} ({source_str})",
+            details={"source": "telegram_bot" if is_telegram else "web", "folio": grc.folio_episa, "facturas_count": len(grc.facturas)}
+        )
+    except Exception:
+        pass
     
-    filename = f"grc_{grc.folio_episa}.zip"
+    filename = f"grc_{grc.folio_episa}_bundle.zip"
     return StreamingResponse(
         zip_buffer,
         media_type="application/zip",
@@ -491,6 +532,23 @@ async def update_grc(
 
     db.commit()
     db.refresh(grc)
+
+    # Log de auditoría
+    try:
+        log_action(
+            db=db,
+            user_id=current_user.id,
+            username=current_user.username,
+            action="update",
+            module="gastos_reserva_comprobar",
+            entity_type="GastoReservaComprobar",
+            entity_id=grc.id,
+            description=f"Actualizó solicitud GRC Folio {grc.folio_episa}",
+            details={"folio": grc.folio_episa, "status": grc.status}
+        )
+    except Exception:
+        pass
+
     return grc
 
 
@@ -505,11 +563,29 @@ async def delete_grc(
     if not grc:
         raise HTTPException(status_code=404, detail="Solicitud GRC no encontrada")
     
+    folio_deleted = grc.folio_episa
     # Eliminar transacciones bancarias asociadas
     db.query(AccountTransaction).filter(AccountTransaction.reference == grc.folio_episa).delete()
     
     db.delete(grc)
     db.commit()
+
+    # Log de auditoría
+    try:
+        log_action(
+            db=db,
+            user_id=current_user.id,
+            username=current_user.username,
+            action="delete",
+            module="gastos_reserva_comprobar",
+            entity_type="GastoReservaComprobar",
+            entity_id=id,
+            description=f"Eliminó solicitud GRC Folio {folio_deleted}",
+            details={"folio": folio_deleted}
+        )
+    except Exception:
+        pass
+
     return {"message": "Solicitud GRC eliminada correctamente"}
 
 
@@ -1072,12 +1148,41 @@ async def upload_grc_invoice(
     db.refresh(invoice)
     db.refresh(grc)
 
+    # Log de auditoría
+    try:
+        is_telegram = bool(request.headers.get("x-bot-token") or request.headers.get("x-impersonate-telegram-id"))
+        source_str = "Telegram Bot" if is_telegram else "Plataforma Web"
+        log_action(
+            db=db,
+            user_id=current_user.id,
+            username=current_user.username,
+            action="create",
+            module="telegram_bot" if is_telegram else "gastos_reserva_comprobar",
+            entity_type="GastoReservaComprobarFactura",
+            entity_id=invoice.id,
+            description=f"Subió factura {invoice.emisor_nombre} (${invoice.total:,.2f} MXN) UUID: {invoice.uuid or 'MANUAL'} a GRC Folio {grc.folio_episa} ({source_str})",
+            details={
+                "source": "telegram_bot" if is_telegram else "web",
+                "gasto_id": grc.id,
+                "folio_episa": grc.folio_episa,
+                "invoice_id": invoice.id,
+                "uuid": invoice.uuid,
+                "emisor_nombre": invoice.emisor_nombre,
+                "emisor_rfc": invoice.emisor_rfc,
+                "total": invoice.total,
+                "category": invoice.category.name if invoice.category else None,
+            }
+        )
+    except Exception:
+        pass
+
     return invoice
 
 
 @router.delete("/invoices/{inv_id}")
 async def delete_grc_invoice(
     inv_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("gastos_reserva_comprobar", "edit")),
 ):
@@ -1089,6 +1194,27 @@ async def delete_grc_invoice(
     grc_id = invoice.gasto_id
     grc = db.query(GastoReservaComprobar).filter(GastoReservaComprobar.id == grc_id).first()
 
+    inv_details = {
+        "source": "telegram_bot" if bool(request.headers.get("x-bot-token") or request.headers.get("x-impersonate-telegram-id")) else "web",
+        "uuid": invoice.uuid,
+        "emisor_nombre": invoice.emisor_nombre,
+        "total": invoice.total,
+        "folio": grc.folio_episa if grc else None
+    }
+
+    # Borrar archivos físicos del servidor
+    try:
+        if invoice.xml_filename:
+            xml_path = invoice.xml_filename.lstrip("/")
+            if os.path.exists(xml_path):
+                os.remove(xml_path)
+        if invoice.pdf_filename:
+            pdf_path = invoice.pdf_filename.lstrip("/")
+            if os.path.exists(pdf_path):
+                os.remove(pdf_path)
+    except Exception:
+        pass
+
     db.delete(invoice)
     db.flush()
 
@@ -1097,6 +1223,25 @@ async def delete_grc_invoice(
 
     sync_grc_transactions(grc, db, current_user.id)
     db.commit()
+
+    # Log de auditoría
+    try:
+        is_telegram = bool(request.headers.get("x-bot-token") or request.headers.get("x-impersonate-telegram-id"))
+        source_str = "Telegram Bot" if is_telegram else "Plataforma Web"
+        log_action(
+            db=db,
+            user_id=current_user.id,
+            username=current_user.username,
+            action="delete",
+            module="telegram_bot" if is_telegram else "gastos_reserva_comprobar",
+            entity_type="GastoReservaComprobarFactura",
+            entity_id=inv_id,
+            description=f"Eliminó factura {inv_details['emisor_nombre']} (${inv_details['total']:,.2f} MXN) del GRC Folio {inv_details['folio']} ({source_str})",
+            details=inv_details
+        )
+    except Exception:
+        pass
+
     return {"message": "Factura eliminada de la comprobación"}
 
 
@@ -1132,6 +1277,23 @@ async def update_grc_invoice_category(
     invoice.category_id = category_id
     db.commit()
     db.refresh(invoice)
+
+    # Log de auditoría
+    try:
+        log_action(
+            db=db,
+            user_id=current_user.id,
+            username=current_user.username,
+            action="update",
+            module="gastos_reserva_comprobar",
+            entity_type="GastoReservaComprobarFactura",
+            entity_id=invoice.id,
+            description=f"Cambió categoría a '{category.name}' en factura {invoice.emisor_nombre} de GRC Folio {grc.folio_episa}",
+            details={"invoice_id": invoice.id, "category": category.name, "folio": grc.folio_episa}
+        )
+    except Exception:
+        pass
+
     return {"message": "Categoría de factura actualizada correctamente", "category_id": category_id}
 
 

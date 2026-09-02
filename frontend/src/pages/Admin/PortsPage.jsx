@@ -145,6 +145,8 @@ function PortsPage() {
       title: 'Puerto / Escollera',
       dataIndex: 'name',
       key: 'name',
+      width: 200,
+      ellipsis: true,
       render: (text) => <strong>{text}</strong>,
       sorter: (a, b) => (a.name || '').localeCompare(b.name || ''),
       defaultSortOrder: 'ascend',
@@ -152,10 +154,11 @@ function PortsPage() {
     {
       title: 'Coordenadas',
       key: 'coordinates',
-      width: 200,
+      width: 180,
+      align: 'center',
       render: (_, record) => (
         <span>
-          {record.latitude.toFixed(5)}, {record.longitude.toFixed(5)}
+          {record.latitude?.toFixed(5)}, {record.longitude?.toFixed(5)}
         </span>
       ),
     },
@@ -163,13 +166,15 @@ function PortsPage() {
       title: 'Descripción',
       dataIndex: 'description',
       key: 'description',
+      width: 250,
       ellipsis: true,
     },
     {
       title: 'Estado',
       dataIndex: 'is_active',
       key: 'is_active',
-      width: 120,
+      width: 110,
+      align: 'center',
       render: (active) => (
         <Tag color={active ? 'success' : 'default'}>
           {active ? 'Activo' : 'Inactivo'}
@@ -180,7 +185,9 @@ function PortsPage() {
     {
       title: 'Acciones',
       key: 'actions',
-      width: 120,
+      width: 100,
+      fixed: 'right',
+      align: 'center',
       render: (_, record) => (
         <Space>
           <CanAccess module="ports" action="edit">
@@ -243,6 +250,7 @@ function PortsPage() {
           dataSource={ports}
           rowKey="id"
           loading={loading}
+          scroll={{ x: 800 }}
           pagination={{
             current: pagination.current,
             pageSize: pagination.pageSize,

@@ -47,7 +47,8 @@ import {
   InboxOutlined,
   SyncOutlined,
   CloseOutlined,
-  FileZipOutlined
+  FileZipOutlined,
+  SearchOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import apiClient from '../../api/client';
@@ -126,6 +127,9 @@ export default function GastosReservaComprobarPage() {
   const [returnFileList, setReturnFileList] = useState([]);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [detailTab, setDetailTab] = useState('signatures');
+  
+  // Buscador de Facturas en modal de detalle
+  const [invoiceSearchText, setInvoiceSearchText] = useState('');
   
   // Alertas de contraste del PDF
   const [pdfWarnings, setPdfWarnings] = useState([]);
@@ -666,11 +670,33 @@ export default function GastosReservaComprobarPage() {
     }
   };
 
+  // Filtrado de facturas en modal de detalle de GRC
+  const filteredGrcFacturas = (selectedGrc?.facturas || []).filter((inv) => {
+    if (!invoiceSearchText.trim()) return true;
+    const q = invoiceSearchText.trim().toLowerCase();
+    const emisor = (inv.emisor_nombre || '').toLowerCase();
+    const rfc = (inv.emisor_rfc || '').toLowerCase();
+    const uuid = (inv.uuid || '').toLowerCase();
+    const folio = (inv.folio || '').toLowerCase();
+    const serie = (inv.serie || '').toLowerCase();
+    const desc = (inv.description || '').toLowerCase();
+    return (
+      emisor.includes(q) ||
+      rfc.includes(q) ||
+      uuid.includes(q) ||
+      folio.includes(q) ||
+      serie.includes(q) ||
+      desc.includes(q)
+    );
+  });
+
   const columns = [
     {
       title: 'Folio EPISA',
       dataIndex: 'folio_episa',
       key: 'folio_episa',
+      width: 140,
+      sorter: (a, b) => (a.folio_episa || '').localeCompare(b.folio_episa || '', undefined, { numeric: true }),
       render: (val, record) => (
         <span style={{ fontWeight: 600, color: '#1B4F72' }}>
           {val}
@@ -681,6 +707,9 @@ export default function GastosReservaComprobarPage() {
       title: 'Estado',
       dataIndex: 'status',
       key: 'status',
+      width: 140,
+      align: 'center',
+      sorter: (a, b) => (a.status || '').localeCompare(b.status || ''),
       render: (val) => {
         const cfg = STATUS_MAP[val] || { label: val, color: 'default' };
         return <Tag color={cfg.color}>{cfg.label.toUpperCase()}</Tag>;
@@ -690,17 +719,30 @@ export default function GastosReservaComprobarPage() {
       title: 'Solicitado',
       dataIndex: 'monto_solicitado',
       key: 'monto_solicitado',
+      width: 150,
+      align: 'right',
+      sorter: (a, b) => (a.monto_solicitado || 0) - (b.monto_solicitado || 0),
       render: (val) => `$ ${val.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
     },
     {
       title: 'Comprobado',
       dataIndex: 'monto_comprobado',
       key: 'monto_comprobado',
+      width: 150,
+      align: 'right',
+      sorter: (a, b) => (a.monto_comprobado || 0) - (b.monto_comprobado || 0),
       render: (val) => `$ ${val.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
     },
     {
       title: 'Saldo / Dev.',
       key: 'saldo',
+      width: 150,
+      align: 'right',
+      sorter: (a, b) => {
+        const saldoA = (a.monto_solicitado || 0) - (a.monto_comprobado || 0);
+        const saldoB = (b.monto_solicitado || 0) - (b.monto_comprobado || 0);
+        return saldoA - saldoB;
+      },
       render: (_, record) => {
         if (record.status === 'devolucion_realizada' && record.monto_devuelto > 0) {
           return <span style={{ color: '#2980B9', fontWeight: 500 }}>Devuelto: $ {record.monto_devuelto.toLocaleString()}</span>;
@@ -717,15 +759,22 @@ export default function GastosReservaComprobarPage() {
     {
       title: 'Fecha Sol.',
       dataIndex: 'fecha_solicitud',
-      key: 'fecha_solicitud'
+      key: 'fecha_solicitud',
+      width: 130,
+      align: 'center',
+      sorter: (a, b) => dayjs(a.fecha_solicitud || 0).valueOf() - dayjs(b.fecha_solicitud || 0).valueOf(),
+      defaultSortOrder: 'descend'
     },
     {
       title: 'Acciones',
       key: 'actions',
+      width: 180,
+      fixed: 'right',
+      align: 'center',
       render: (_, record) => (
         <Space>
-          <Button icon={<EyeOutlined />} onClick={() => handleOpenDetail(record)}>Detalles</Button>
-          <Button icon={<EditOutlined />} onClick={() => handleOpenEdit(record)}>Editar</Button>
+          <Button icon={<EyeOutlined />} size="small" onClick={() => handleOpenDetail(record)}>Detalles</Button>
+          <Button icon={<EditOutlined />} size="small" onClick={() => handleOpenEdit(record)}>Editar</Button>
           <Popconfirm
             title="¿Eliminar esta solicitud GRC?"
             description="Esta acción es irreversible y eliminará todos los comprobantes vinculados."
@@ -734,7 +783,7 @@ export default function GastosReservaComprobarPage() {
             cancelText="Cancelar"
             okButtonProps={{ danger: true }}
           >
-            <Button icon={<DeleteOutlined />} danger />
+            <Button icon={<DeleteOutlined />} size="small" danger />
           </Popconfirm>
         </Space>
       )
@@ -796,23 +845,28 @@ export default function GastosReservaComprobarPage() {
           </Col>
           <Col xs={24} sm={12} md={6} style={{ borderLeft: '1px solid rgba(255,255,255,0.15)' }}>
             <div style={{ padding: '8px' }}>
-              <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, opacity: 0.8 }}>Reintegros / Devoluciones</div>
+              <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, opacity: 0.8 }}>Total Reintegrado</div>
               <div style={{ fontSize: 24, fontWeight: 700, marginTop: 4, color: '#3498DB' }}>
                 $ {totalDevuelto.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
               </div>
               <div style={{ fontSize: 11, opacity: 0.7, marginTop: 4 }}>
-                Dinero devuelto a cuentas
+                Devoluciones en Tesorería
               </div>
             </div>
           </Col>
         </Row>
       </Card>
 
-      {/* CONTENIDO PRINCIPAL */}
+      {/* TABLA PRINCIPAL DE GRC */}
       <Card
-        title={
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-            <span style={{ color: '#0A2647', fontWeight: 600, fontSize: 18 }}>Control de Anticipos (GRC)</span>
+        title={<span style={{ color: '#0A2647', fontSize: 18, fontWeight: 600 }}>📋 Solicitudes de Gastos a Reserva a Comprobar</span>}
+        extra={
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={() => { fetchGrcs(); fetchStats(); }}
+              style={{ borderRadius: 8 }}
+            />
             <Button
               type="primary"
               icon={<PlusOutlined />}
@@ -837,6 +891,7 @@ export default function GastosReservaComprobarPage() {
           rowKey="id"
           loading={loading}
           pagination={{ pageSize: 15 }}
+          scroll={{ x: 1100 }}
         />
       </Card>
 
@@ -1029,9 +1084,15 @@ export default function GastosReservaComprobarPage() {
           </Space>
         }
         open={isDetailOpen}
-        onCancel={() => setIsDetailOpen(false)}
+        onCancel={() => {
+          setIsDetailOpen(false);
+          setInvoiceSearchText('');
+        }}
         footer={[
-          <Button key="close" onClick={() => setIsDetailOpen(false)}>Cerrar</Button>
+          <Button key="close" onClick={() => {
+            setIsDetailOpen(false);
+            setInvoiceSearchText('');
+          }}>Cerrar</Button>
         ]}
         width={1100}
         destroyOnClose
@@ -1413,19 +1474,34 @@ export default function GastosReservaComprobarPage() {
 
               {/* PESTAÑA: DETALLE DE COMPROBACIONES (INVOICES CFDI) */}
               <TabPane tab={<span><DollarOutlined /> Facturas de Comprobación</span>} key="invoices">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                  <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                     <strong>Total Comprobado: </strong>
                     <span style={{ fontSize: 18, color: '#27AE60', fontWeight: 600 }}>
                       $ {selectedGrc.monto_comprobado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                     </span>
-                    <span style={{ marginLeft: 16 }}>
+                    {selectedGrc.facturas && selectedGrc.facturas.length > 0 && (
+                      <Tag color="blue" style={{ borderRadius: 10, marginLeft: 4 }}>
+                        {invoiceSearchText.trim()
+                          ? `${filteredGrcFacturas.length} de ${selectedGrc.facturas.length}`
+                          : `${selectedGrc.facturas.length} facturas`}
+                      </Tag>
+                    )}
+                    <span style={{ marginLeft: 12 }}>
                       {selectedGrc.monto_devuelto > 0 && `(Usuario devuelve: $${selectedGrc.monto_devuelto.toLocaleString()})`}
                       {selectedGrc.monto_saldo_favor > 0 && `(A favor del usuario: $${selectedGrc.monto_saldo_favor.toLocaleString()})`}
                     </span>
                   </div>
                   
-                  <Space>
+                  <Space wrap>
+                    <Input
+                      placeholder="Buscar por proveedor, RFC o UUID..."
+                      prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
+                      value={invoiceSearchText}
+                      onChange={(e) => setInvoiceSearchText(e.target.value)}
+                      allowClear
+                      style={{ width: 280 }}
+                    />
                     {selectedGrc.facturas && selectedGrc.facturas.length > 0 && (
                       <Button
                         icon={<FileZipOutlined style={{ color: '#E67E22' }} />}
@@ -1441,19 +1517,28 @@ export default function GastosReservaComprobarPage() {
                 </div>
 
                 <Table
-                  dataSource={selectedGrc.facturas}
+                  dataSource={filteredGrcFacturas}
                   rowKey="id"
                   size="small"
                   pagination={{ pageSize: 5 }}
                   columns={[
                     {
-                      title: 'Emisor',
+                      title: 'Emisor / UUID',
                       dataIndex: 'emisor_nombre',
                       key: 'emisor_nombre',
                       render: (val, record) => (
                         <div>
                           <strong>{val}</strong>
-                          <div style={{ fontSize: 10, color: '#7F8C8D' }}>{record.emisor_rfc}</div>
+                          <div style={{ fontSize: 10, color: '#7F8C8D' }}>
+                            {record.emisor_rfc}
+                            {record.uuid && (
+                              <Tooltip title={`UUID: ${record.uuid}`}>
+                                <span style={{ marginLeft: 6, cursor: 'help' }}>
+                                  • {record.uuid.substring(0, 18)}...
+                                </span>
+                              </Tooltip>
+                            )}
+                          </div>
                         </div>
                       )
                     },

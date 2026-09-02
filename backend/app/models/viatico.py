@@ -45,6 +45,7 @@ class Viatico(Base):
     solicitud_pdf_path = Column(String(500), nullable=True)
     comprobacion_pdf_path = Column(String(500), nullable=True)
     comprobante_devolucion_path = Column(String(500), nullable=True)
+    reporte_pdf_path = Column(String(500), nullable=True)
 
     # Historial de firmas de la solicitud
     firma_solicitante_nombre = Column(String(200), nullable=True)
@@ -66,6 +67,23 @@ class Viatico(Base):
     firma_responsable_nombre = Column(String(200), nullable=True)
     firma_responsable_fecha = Column(DateTime(timezone=True), nullable=True)
     firma_responsable_hash = Column(Text, nullable=True)
+
+    # Historial de firmas de la comprobación EPISA
+    firma_comp_solicitante_nombre = Column(String(200), nullable=True)
+    firma_comp_solicitante_fecha = Column(DateTime(timezone=True), nullable=True)
+    firma_comp_solicitante_hash = Column(Text, nullable=True)
+
+    firma_comp_revisor_nombre = Column(String(200), nullable=True)
+    firma_comp_revisor_fecha = Column(DateTime(timezone=True), nullable=True)
+    firma_comp_revisor_hash = Column(Text, nullable=True)
+
+    firma_comp_tesoreria_nombre = Column(String(200), nullable=True)
+    firma_comp_tesoreria_fecha = Column(DateTime(timezone=True), nullable=True)
+    firma_comp_tesoreria_hash = Column(Text, nullable=True)
+
+    firma_comp_contabilidad_nombre = Column(String(200), nullable=True)
+    firma_comp_contabilidad_fecha = Column(DateTime(timezone=True), nullable=True)
+    firma_comp_contabilidad_hash = Column(Text, nullable=True)
     
     # Cuentas, proyectos
     account_id = Column(Integer, ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True)

@@ -15,7 +15,7 @@ import {
   FilePdfOutlined, FileWordOutlined, CheckOutlined, CloseOutlined,
   DownOutlined, RightOutlined, ExperimentOutlined, InfoCircleOutlined,
   UploadOutlined, LoadingOutlined, DollarOutlined, SyncOutlined, CheckCircleOutlined,
-  EyeOutlined, ArrowUpOutlined, ArrowDownOutlined
+  EyeOutlined, ArrowUpOutlined, ArrowDownOutlined, DownloadOutlined
 } from '@ant-design/icons';
 import {
   MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents, useMap, Tooltip as MapTooltip
@@ -375,7 +375,7 @@ function calcTelemetryStats(track) {
 
   // Calcular estadísticas del clima/meteorología
   let totalTemp = 0, minTemp = Infinity, maxTemp = -Infinity, countTemp = 0;
-  let totalWind = 0, maxWind = 0, countWind = 0;
+  let totalWind = 0, maxWind = 0, countWind = 0, maxWindDir = null;
   let totalPressure = 0, minPressure = Infinity, maxPressure = -Infinity, countPressure = 0;
   let sumCos = 0, sumSin = 0, countWindDir = 0;
 
@@ -387,13 +387,16 @@ function calcTelemetryStats(track) {
       countTemp++;
     }
     const wind = pt.wind_speed_corr != null ? pt.wind_speed_corr : pt.wind_speed;
+    const windDir = pt.wind_dir_corr != null ? pt.wind_dir_corr : pt.wind_dir;
     if (wind != null) {
       const windKts = wind * 1.94384;
       totalWind += windKts;
-      if (windKts > maxWind) maxWind = windKts;
+      if (windKts > maxWind) {
+        maxWind = windKts;
+        maxWindDir = windDir;
+      }
       countWind++;
     }
-    const windDir = pt.wind_dir_corr != null ? pt.wind_dir_corr : pt.wind_dir;
     if (windDir != null) {
       const rad = windDir * Math.PI / 180;
       sumCos += Math.cos(rad);
@@ -427,6 +430,7 @@ function calcTelemetryStats(track) {
     maxTemp: countTemp > 0 ? maxTemp : null,
     avgWind: countWind > 0 ? totalWind / countWind : null,
     maxWind: countWind > 0 ? maxWind : null,
+    maxWindDir,
     avgWindDir,
     avgPressure: countPressure > 0 ? totalPressure / countPressure : null,
     minPressure: countPressure > 0 ? minPressure : null,
@@ -1658,6 +1662,79 @@ function CruisesPage() {
     }
   }, [editingCruise?.vessel_id, editingCruise?.departure_date, editingCruise?.return_date]);
 
+  const handleDownloadTelemetryCsv = useCallback(() => {
+    if (!telemetryTrack || telemetryTrack.length === 0) {
+      message.warning('No hay datos de telemetría disponibles para exportar.');
+      return;
+    }
+
+    const headers = [
+      'Fecha y Hora (Local)',
+      'Fecha y Hora (UTC)',
+      'Latitud',
+      'Longitud',
+      'Temperatura (C)',
+      'Humedad (%)',
+      'Presion (hPa)',
+      'Punto Rocio (C)',
+      'Viento Relativo (m/s)',
+      'Viento Relativo (nudos)',
+      'Dir Viento Relativo (grados)',
+      'Viento Corregido (m/s)',
+      'Viento Corregido (nudos)',
+      'Dir Viento Corregido (grados)',
+      'Dir Cardinal',
+      'Precipitacion Total (mm)',
+      'Intensidad Precipitacion (mm/h)',
+      'Voltaje Suministro (V)',
+    ];
+
+    const rows = telemetryTrack.map((pt) => {
+      const localTime = pt.timestamp ? dayjs(pt.timestamp).format('YYYY-MM-DD HH:mm:ss') : '';
+      const utcTime = pt.timestamp ? new Date(pt.timestamp).toISOString().replace('T', ' ').substring(0, 19) : '';
+      const windKts = pt.wind_speed != null ? (pt.wind_speed * 1.94384).toFixed(2) : '';
+      const windCorrKts = pt.wind_speed_corr != null ? (pt.wind_speed_corr * 1.94384).toFixed(2) : '';
+      const dirCard = pt.wind_dir_corr != null ? getWindDirectionText(pt.wind_dir_corr) : (pt.wind_dir != null ? getWindDirectionText(pt.wind_dir) : '');
+
+      return [
+        localTime,
+        utcTime,
+        pt.latitude ?? '',
+        pt.longitude ?? '',
+        pt.temp ?? '',
+        pt.humidity ?? '',
+        pt.pressure ?? '',
+        pt.dewpoint ?? '',
+        pt.wind_speed ?? '',
+        windKts,
+        pt.wind_dir ?? '',
+        pt.wind_speed_corr ?? '',
+        windCorrKts,
+        pt.wind_dir_corr ?? '',
+        `"${dirCard}"`,
+        pt.precip_total ?? '',
+        pt.precip_int ?? '',
+        pt.supply_v ?? '',
+      ].join(',');
+    });
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const safeName = (editingCruise?.name || `crucero_${editingCruise?.id || 'telemetria'}`)
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9_\-]/g, '_');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `telemetria_${safeName}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    message.success('Archivo CSV de telemetría descargado exitosamente');
+  }, [telemetryTrack, editingCruise]);
+
   useEffect(() => {
     if (modalOpen && trackSource === 'telemetry') {
       fetchTelemetryTrack();
@@ -2797,7 +2874,27 @@ function CruisesPage() {
                     {telemetryLoading ? (
                       <Spin size="small" style={{ marginLeft: 8 }} />
                     ) : (
-                      <Tag color="cyan" style={{ margin: 0, fontSize: 10 }}>{telemetryTrack.length} pts</Tag>
+                      <>
+                        <Tag color="cyan" style={{ margin: 0, fontSize: 10 }}>{telemetryTrack.length} pts</Tag>
+                        {telemetryTrack.length > 0 && (
+                          <Button
+                            size="small"
+                            icon={<DownloadOutlined />}
+                            onClick={handleDownloadTelemetryCsv}
+                            style={{
+                              background: 'rgba(19, 194, 194, 0.2)',
+                              borderColor: '#13C2C2',
+                              color: '#13C2C2',
+                              fontSize: 11,
+                              fontWeight: 600,
+                              height: 24,
+                              padding: '0 8px',
+                            }}
+                          >
+                            Descargar CSV
+                          </Button>
+                        )}
+                      </>
                     )}
                   </>
                 )}
@@ -3009,7 +3106,7 @@ function CruisesPage() {
                   {/* Resumen meteorológico de telemetría */}
                   <div style={{ marginTop: 8, borderTop: '1px solid #eee', paddingTop: 6 }}>
                     <div style={{ fontWeight: 'bold', color: '#0A2647', fontSize: 10, marginBottom: 4 }}>
-                      🌡️ Meteorología Promedio
+                      🌡️ Meteorología de Ruta
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 8px', fontSize: 9 }}>
                       <div>
@@ -3025,10 +3122,17 @@ function CruisesPage() {
                         </strong>
                       </div>
                       <div style={{ gridColumn: 'span 2' }}>
-                        <span style={{ color: '#888' }}>Viento: </span>
+                        <span style={{ color: '#888' }}>Viento Promedio: </span>
                         <strong style={{ color: '#333' }}>
                           {telemetryStats.avgWind != null ? `${telemetryStats.avgWind.toFixed(1)} kt` : '—'}
                           {telemetryStats.avgWindDir != null ? ` (${Math.round(telemetryStats.avgWindDir)}° ${getWindDirectionText(telemetryStats.avgWindDir)})` : ''}
+                        </strong>
+                      </div>
+                      <div style={{ gridColumn: 'span 2' }}>
+                        <span style={{ color: '#888' }}>Viento Máximo: </span>
+                        <strong style={{ color: '#333' }}>
+                          {telemetryStats.maxWind != null ? `${telemetryStats.maxWind.toFixed(1)} kt` : '—'}
+                          {telemetryStats.maxWindDir != null ? ` (${Math.round(telemetryStats.maxWindDir)}° ${getWindDirectionText(telemetryStats.maxWindDir)})` : ''}
                         </strong>
                       </div>
                     </div>
@@ -3040,6 +3144,24 @@ function CruisesPage() {
                       <div>📅 Regreso: {dayjs(telemetryStats.endTime).format('DD/MM HH:mm')}</div>
                     </div>
                   )}
+
+                  <Button
+                    size="small"
+                    type="primary"
+                    ghost
+                    block
+                    icon={<DownloadOutlined />}
+                    onClick={handleDownloadTelemetryCsv}
+                    style={{
+                      marginTop: 8,
+                      fontSize: 11,
+                      borderColor: '#13C2C2',
+                      color: '#08979c',
+                      borderRadius: 6,
+                    }}
+                  >
+                    Descargar Telemetría (CSV)
+                  </Button>
                 </div>
               )}
             </div>

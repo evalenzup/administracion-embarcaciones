@@ -65,13 +65,14 @@ async def show_grc_details(message: Message, telegram_id: str, grc_id: int, edit
         "rechazado": "❌ Rechazado"
     }
     status_es = status_map.get(grc.get("status"), grc.get("status"))
+    solicitante = (grc.get("solicitante") or {}).get("full_name") or grc.get("firma_solicitante_nombre") or "No asignado"
 
     text = (
         f"📋 *Detalle de GRC (Compras)*\n"
         f"• *Folio EPISA:* {folio}\n"
         f"• *Estado:* {status_es}\n"
         f"• *Justificación:* {just}\n"
-        f"• *Proyecto:* {grc.get('project_name') or 'N/A'}\n\n"
+        f"• *Solicitante:* {solicitante}\n\n"
         f"💵 *Resumen de Saldos:*\n"
         f"• *Monto Asignado:* ${monto_solicitado:,.2f} MXN\n"
         f"• *Comprobado:* ${monto_comprobado:,.2f} MXN\n"
@@ -83,7 +84,10 @@ async def show_grc_details(message: Message, telegram_id: str, grc_id: int, edit
     facturas = grc.get("facturas", [])
     if facturas:
         buttons.append([
-            InlineKeyboardButton(text=f"📄 Ver Facturas Cargadas ({len(facturas)})", callback_data=f"list_grc_invs_{grc_id}")
+            InlineKeyboardButton(text=f"📄 Ver Facturas ({len(facturas)})", callback_data=f"list_grc_invs_{grc_id}")
+        ])
+        buttons.append([
+            InlineKeyboardButton(text="📦 Descargar Paquete ZIP (Excel + Facturas)", callback_data=f"down_bundle_grc_{grc_id}")
         ])
 
     if grc.get("status") in ["comprobacion_pendiente", "aprobado", "solicitado"]:
@@ -127,6 +131,7 @@ async def show_viatico_details(message: Message, telegram_id: str, viatico_id: i
         "rechazado": "❌ Rechazado"
     }
     status_es = status_map.get(v.get("status"), v.get("status"))
+    comisionado = (v.get("personal") or {}).get("full_name") or v.get("firma_solicitante_nombre") or "No asignado"
 
     text = (
         f"✈️ *Detalle de Viáticos (Comisión)*\n"
@@ -135,7 +140,7 @@ async def show_viatico_details(message: Message, telegram_id: str, viatico_id: i
         f"• *Destino:* {destino}\n"
         f"• *Periodo:* {v.get('fecha_inicio')} al {v.get('fecha_fin')}\n"
         f"• *Justificación:* {just}\n"
-        f"• *Proyecto:* {v.get('project_name') or 'N/A'}\n\n"
+        f"• *Comisionado:* {comisionado}\n\n"
         f"💵 *Resumen de Saldos:*\n"
         f"• *Monto Asignado:* ${monto_solicitado:,.2f} MXN\n"
         f"• *Comprobado:* ${monto_comprobado:,.2f} MXN\n"
@@ -147,7 +152,10 @@ async def show_viatico_details(message: Message, telegram_id: str, viatico_id: i
     facturas = v.get("facturas", [])
     if facturas:
         buttons.append([
-            InlineKeyboardButton(text=f"📄 Ver Facturas Cargadas ({len(facturas)})", callback_data=f"list_via_invs_{viatico_id}")
+            InlineKeyboardButton(text=f"📄 Ver Facturas ({len(facturas)})", callback_data=f"list_via_invs_{viatico_id}")
+        ])
+        buttons.append([
+            InlineKeyboardButton(text="📦 Descargar Paquete ZIP (Excel + Facturas)", callback_data=f"down_bundle_via_{viatico_id}")
         ])
 
     if v.get("status") in ["comprobacion_pendiente", "aprobado", "solicitado"]:
@@ -440,16 +448,29 @@ async def callback_list_via_invoices(callback: CallbackQuery):
     v = res["data"]
     facturas = v.get("facturas", [])
     
+    MESES_ES = ["", "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+    def format_inv_date(fecha_str):
+        from datetime import datetime
+        try:
+            dt = datetime.strptime(str(fecha_str)[:10], "%Y-%m-%d") if fecha_str else None
+            if dt:
+                return f"{dt.day} {MESES_ES[dt.month]}"
+        except Exception:
+            pass
+        return ""
+
     text = f"📄 *Facturas de Comisión Folio {v.get('folio_comision')}:*\n\nSelecciona una para ver detalles y descargar:"
     buttons = []
     for f in facturas:
         emisor = f.get("emisor_nombre", "Sin Emisor")
-        emisor_short = emisor[:15] + "..." if len(emisor) > 15 else emisor
+        emisor_short = emisor[:12] + "..." if len(emisor) > 12 else emisor
         total = f.get("total", 0.0)
         category = f.get("category") or {}
         cat_icon = category.get("icon", "📄")
+        d_str = format_inv_date(f.get("fecha_emision") or f.get("created_at"))
+        d_tag = f"[{d_str}] " if d_str else ""
         
-        btn_text = f"{cat_icon} {emisor_short} - ${total:,.2f}"
+        btn_text = f"{cat_icon} {d_tag}{emisor_short} - ${total:,.2f}"
         buttons.append([InlineKeyboardButton(text=btn_text, callback_data=f"view_via_inv_{viatico_id}_{f['id']}")])
         
     buttons.append([InlineKeyboardButton(text="🔙 Volver al Detalle", callback_data=f"view_viatico_{viatico_id}")])
@@ -471,16 +492,29 @@ async def callback_list_grc_invoices(callback: CallbackQuery):
     grc = res["data"]
     facturas = grc.get("facturas", [])
     
+    MESES_ES = ["", "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+    def format_inv_date(fecha_str):
+        from datetime import datetime
+        try:
+            dt = datetime.strptime(str(fecha_str)[:10], "%Y-%m-%d") if fecha_str else None
+            if dt:
+                return f"{dt.day} {MESES_ES[dt.month]}"
+        except Exception:
+            pass
+        return ""
+
     text = f"📄 *Facturas de GRC Folio {grc.get('folio_episa')}:*\n\nSelecciona una para ver detalles y descargar:"
     buttons = []
     for f in facturas:
         emisor = f.get("emisor_nombre", "Sin Emisor")
-        emisor_short = emisor[:15] + "..." if len(emisor) > 15 else emisor
+        emisor_short = emisor[:12] + "..." if len(emisor) > 12 else emisor
         total = f.get("total", 0.0)
         category = f.get("category") or {}
         cat_icon = category.get("icon", "📄")
+        d_str = format_inv_date(f.get("fecha_emision") or f.get("created_at"))
+        d_tag = f"[{d_str}] " if d_str else ""
         
-        btn_text = f"{cat_icon} {emisor_short} - ${total:,.2f}"
+        btn_text = f"{cat_icon} {d_tag}{emisor_short} - ${total:,.2f}"
         buttons.append([InlineKeyboardButton(text=btn_text, callback_data=f"view_grc_inv_{grc_id}_{f['id']}")])
         
     buttons.append([InlineKeyboardButton(text="🔙 Volver al Detalle", callback_data=f"view_grc_{grc_id}")])
@@ -642,3 +676,42 @@ async def callback_download_invoice_file(callback: CallbackQuery):
     except Exception as e:
         logger.error(f"Error al descargar archivo de bot: {e}")
         await callback.message.answer("❌ Error al conectar con el servidor para descargar el archivo.")
+
+
+@router.callback_query(F.data.startswith("down_bundle_via_"))
+@router.callback_query(F.data.startswith("down_bundle_grc_"))
+async def callback_download_bundle(callback: CallbackQuery):
+    await callback.answer("Generando paquete contable ZIP...")
+    import httpx
+    from aiogram.types import BufferedInputFile
+
+    parts = callback.data.split("_")
+    # Format: down_bundle_via_{viatico_id} or down_bundle_grc_{grc_id}
+    module = parts[2]  # "via" or "grc"
+    tramite_id = int(parts[3])
+    telegram_id = str(callback.from_user.id)
+
+    endpoint = f"/api/v1/{'viaticos' if module == 'via' else 'gastos-reserva-comprobar'}/{tramite_id}/invoices/zip"
+    url = f"{api_client.base_url}{endpoint}"
+    headers = api_client._get_headers(impersonate_tg_id=telegram_id)
+
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(url, headers=headers, timeout=60.0)
+            if resp.status_code == 200:
+                zip_bytes = resp.content
+                cd = resp.headers.get("content-disposition", "")
+                filename = f"{'viatico' if module == 'via' else 'grc'}_{tramite_id}_bundle.zip"
+                if "filename=" in cd:
+                    filename = cd.split("filename=")[-1].strip('"').strip()
+                
+                input_file = BufferedInputFile(zip_bytes, filename=filename)
+                await callback.message.answer_document(
+                    document=input_file,
+                    caption=f"📦 *Paquete Contable Completo:*\n• Reporte en Excel con Fórmulas (`.xlsx`)\n• Facturas digitales correlacionadas (`XML + PDF`)"
+                )
+            else:
+                await callback.message.answer("❌ No se pudo generar el paquete ZIP en este momento.")
+    except Exception as e:
+        logger.error(f"Error al descargar bundle ZIP: {e}")
+        await callback.message.answer("❌ Error de conexión al generar el archivo ZIP.")

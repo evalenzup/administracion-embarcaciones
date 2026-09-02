@@ -63,6 +63,8 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    volumes:
+      - ./telegram_bot:/app
     depends_on:
       - backend
 

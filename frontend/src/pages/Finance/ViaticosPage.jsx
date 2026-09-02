@@ -45,8 +45,11 @@ import {
   ClockCircleOutlined,
   InboxOutlined,
   SyncOutlined,
-  CloseOutlined,
-  FileZipOutlined
+  FileZipOutlined,
+  SearchOutlined,
+  InfoCircleOutlined,
+  FolderOpenOutlined,
+  SafetyCertificateOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import apiClient from '../../api/client';
@@ -89,16 +92,26 @@ export default function ViaticosPage() {
   const [selectedViatico, setSelectedViatico] = useState(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [replacingPdf, setReplacingPdf] = useState(false);
-  const [detailTab, setDetailTab] = useState('signatures');
+  const [detailTab, setDetailTab] = useState('general');
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
   const [invoiceForm] = Form.useForm();
   const [xmlFileList, setXmlFileList] = useState([]);
   const [pdfFileList, setPdfFileList] = useState([]);
   
+  // Buscador de Facturas en modal de detalle
+  const [invoiceSearchText, setInvoiceSearchText] = useState('');
+  
   // Bulk Invoice upload states
   const [matchedInvoices, setMatchedInvoices] = useState([]);
   const [processingFiles, setProcessingFiles] = useState(false);
   const [isUploadingMulti, setIsUploadingMulti] = useState(false);
+
+  // Estados para documentos de liquidación y cierre
+  const [isDevolucionModalOpen, setIsDevolucionModalOpen] = useState(false);
+  const [uploadingComprobacion, setUploadingComprobacion] = useState(false);
+  const [uploadingReporte, setUploadingReporte] = useState(false);
+  const [uploadingDevolucion, setUploadingDevolucion] = useState(false);
+  const [devolucionForm] = Form.useForm();
 
   const { hasPermission } = useAuth();
   const isAdmin = hasPermission('viaticos', 'edit');
@@ -352,6 +365,7 @@ export default function ViaticosPage() {
     try {
       const res = await apiClient.get(`/viaticos/${v.id}`);
       setSelectedViatico(res.data);
+      setDetailTab('general');
       setIsDetailOpen(true);
     } catch (error) {
       message.error('Error al obtener detalle del viático');
@@ -733,6 +747,120 @@ export default function ViaticosPage() {
     }
   };
 
+  const handleUploadComprobacionPdf = async (file) => {
+    if (!selectedViatico) return false;
+    const formData = new FormData();
+    formData.append('file', file);
+    setUploadingComprobacion(true);
+    try {
+      const res = await apiClient.post(`/viaticos/${selectedViatico.id}/upload-comprobacion-pdf`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      message.success('Comprobación EPISA cargada y firmas extraídas con éxito');
+      setSelectedViatico(res.data);
+      fetchViaticos();
+      fetchStats();
+    } catch (error) {
+      message.error(error.response?.data?.detail || 'Error al procesar el PDF de comprobación');
+    } finally {
+      setUploadingComprobacion(false);
+    }
+    return false;
+  };
+
+  const handleUploadReportePdf = async (file) => {
+    if (!selectedViatico) return false;
+    const formData = new FormData();
+    formData.append('file', file);
+    setUploadingReporte(true);
+    try {
+      const res = await apiClient.post(`/viaticos/${selectedViatico.id}/upload-reporte-pdf`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      message.success('Reporte de actividades cargado correctamente');
+      setSelectedViatico(res.data);
+      fetchViaticos();
+    } catch (error) {
+      message.error(error.response?.data?.detail || 'Error al subir reporte de actividades');
+    } finally {
+      setUploadingReporte(false);
+    }
+    return false;
+  };
+
+  const handleOpenDevolucionModal = () => {
+    if (!selectedViatico) return;
+    const diff = Math.max(0, (selectedViatico.monto_solicitado || 0) - (selectedViatico.monto_comprobado || 0));
+    devolucionForm.setFieldsValue({
+      monto_devuelto: selectedViatico.monto_devuelto || diff || 0
+    });
+    setIsDevolucionModalOpen(true);
+  };
+
+  const handleUploadDevolucion = async (values) => {
+    if (!selectedViatico) return;
+    const file = values.comprobante_file?.fileList?.[0]?.originFileObj || values.comprobante_file?.file;
+    if (!file) {
+      message.error('Por favor selecciona el archivo del comprobante de devolución');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    if (values.monto_devuelto !== undefined && values.monto_devuelto !== null) {
+      formData.append('monto_devuelto', values.monto_devuelto);
+    }
+
+    setUploadingDevolucion(true);
+    try {
+      const res = await apiClient.post(`/viaticos/${selectedViatico.id}/upload-return-receipt`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      message.success('Comprobante de devolución registrado y comisión liquidada');
+      setSelectedViatico(res.data);
+      setIsDevolucionModalOpen(false);
+      devolucionForm.resetFields();
+      fetchViaticos();
+      fetchStats();
+    } catch (error) {
+      message.error(error.response?.data?.detail || 'Error al registrar comprobante de devolución');
+    } finally {
+      setUploadingDevolucion(false);
+    }
+  };
+
+  const handleClearFile = async (fileType) => {
+    if (!selectedViatico) return;
+    try {
+      const res = await apiClient.delete(`/viaticos/${selectedViatico.id}/clear-file/${fileType}`);
+      message.success('Archivo eliminado correctamente');
+      setSelectedViatico(res.data);
+      fetchViaticos();
+    } catch (error) {
+      message.error(error.response?.data?.detail || 'Error al eliminar el archivo');
+    }
+  };
+
+  // Filtrado de facturas en modal de detalle de viáticos
+  const filteredViaticoFacturas = (selectedViatico?.facturas || []).filter((inv) => {
+    if (!invoiceSearchText.trim()) return true;
+    const q = invoiceSearchText.trim().toLowerCase();
+    const emisor = (inv.emisor_nombre || '').toLowerCase();
+    const rfc = (inv.emisor_rfc || '').toLowerCase();
+    const uuid = (inv.uuid || '').toLowerCase();
+    const folio = (inv.folio || '').toLowerCase();
+    const serie = (inv.serie || '').toLowerCase();
+    const desc = (inv.description || '').toLowerCase();
+    return (
+      emisor.includes(q) ||
+      rfc.includes(q) ||
+      uuid.includes(q) ||
+      folio.includes(q) ||
+      serie.includes(q) ||
+      desc.includes(q)
+    );
+  });
+
   // Obtener desglose de presupuesto Solicitado vs Comprobado por categoría
   const getCategoryComparison = () => {
     if (!selectedViatico) return [];
@@ -787,8 +915,8 @@ export default function ViaticosPage() {
     ].filter(item => item.budget > 0 || item.spent > 0);
   };
 
-  // Renderizar la línea de tiempo de firmas
-  const renderSignatureTimeline = (v) => {
+  // Renderizar la línea de tiempo de firmas de Solicitud Inicial
+  const renderSolicitudTimeline = (v) => {
     const steps = [
       {
         title: '1. Solicitante / Comisionado',
@@ -798,37 +926,30 @@ export default function ViaticosPage() {
         role: 'Comisionado'
       },
       {
-        title: '2. Jefe Inmediato',
-        name: v.firma_jefe_nombre,
-        fecha: v.firma_jefe_fecha,
-        hash: v.firma_jefe_hash,
-        role: 'Jefe Inmediato'
+        title: '2. Responsable de Cuenta / Jefe Inmediato',
+        name: v.firma_jefe_nombre || v.firma_responsable_nombre,
+        fecha: v.firma_jefe_fecha || v.firma_responsable_fecha,
+        hash: v.firma_jefe_hash || v.firma_responsable_hash,
+        role: 'Responsable de Cuenta / Jefe Inmediato'
       },
       {
-        title: '3. Encargado / Responsable de Cuenta',
-        name: v.firma_responsable_nombre,
-        fecha: v.firma_responsable_fecha,
-        hash: v.firma_responsable_hash,
-        role: 'Responsable'
-      },
-      {
-        title: '4. Revisor Administrativo',
+        title: '3. Revisor Administrativo',
         name: v.firma_revisor_nombre,
         fecha: v.firma_revisor_fecha,
         hash: v.firma_revisor_hash,
-        role: 'Administración'
+        role: 'Revisor Administrativo'
       },
       {
-        title: '5. Ventanilla de Tesorería (Pago)',
+        title: '4. Ventanilla de Tesorería (Pago)',
         name: v.firma_tesoreria_nombre,
         fecha: v.firma_tesoreria_fecha,
         hash: v.firma_tesoreria_hash,
-        role: 'Tesorería'
+        role: 'Ventanilla de Tesorería (Pago)'
       }
     ];
 
     return (
-      <Timeline style={{ marginTop: 24 }}>
+      <Timeline style={{ marginTop: 16 }}>
         {steps.map((step, idx) => {
           const isSigned = !!step.name;
           return (
@@ -853,7 +974,73 @@ export default function ViaticosPage() {
                   </div>
                 ) : (
                   <div style={{ color: '#8c8c8c', fontStyle: 'italic', marginTop: 2, fontSize: 12 }}>
-                    Pendiente de firma en el documento oficial
+                    Pendiente de firma en solicitud
+                  </div>
+                )}
+              </div>
+            </Timeline.Item>
+          );
+        })}
+      </Timeline>
+    );
+  };
+
+  // Renderizar la línea de tiempo de firmas de Comprobación EPISA
+  const renderComprobacionTimeline = (v) => {
+    const steps = [
+      {
+        title: '1. Responsable de Cuenta / Solicitante',
+        name: v.firma_comp_solicitante_nombre,
+        fecha: v.firma_comp_solicitante_fecha,
+        hash: v.firma_comp_solicitante_hash
+      },
+      {
+        title: '2. Revisor Administrativo',
+        name: v.firma_comp_revisor_nombre,
+        fecha: v.firma_comp_revisor_fecha,
+        hash: v.firma_comp_revisor_hash
+      },
+      {
+        title: '3. Ventanilla de Tesorería',
+        name: v.firma_comp_tesoreria_nombre,
+        fecha: v.firma_comp_tesoreria_fecha,
+        hash: v.firma_comp_tesoreria_hash
+      },
+      {
+        title: '4. Ventanilla de Contabilidad (Cierre)',
+        name: v.firma_comp_contabilidad_nombre,
+        fecha: v.firma_comp_contabilidad_fecha,
+        hash: v.firma_comp_contabilidad_hash
+      }
+    ];
+
+    return (
+      <Timeline style={{ marginTop: 16 }}>
+        {steps.map((step, idx) => {
+          const isSigned = !!step.name;
+          return (
+            <Timeline.Item
+              key={idx}
+              color={isSigned ? 'green' : 'gray'}
+              dot={isSigned ? <CheckCircleOutlined style={{ fontSize: 16 }} /> : <ClockCircleOutlined style={{ fontSize: 16 }} />}
+            >
+              <div>
+                <b style={{ color: isSigned ? '#0E6251' : '#8c8c8c' }}>{step.title}</b>
+                {isSigned ? (
+                  <div style={{
+                    marginTop: 6,
+                    padding: '8px 12px',
+                    background: '#e8f8f5',
+                    border: '1px solid #a3e4d7',
+                    borderRadius: 6,
+                    fontSize: 13
+                  }}>
+                    <div><b>Firmante:</b> {step.name}</div>
+                    {step.fecha && <div><b>Fecha y Hora:</b> {dayjs(step.fecha).format('DD/MM/YYYY HH:mm:ss')}</div>}
+                  </div>
+                ) : (
+                  <div style={{ color: '#8c8c8c', fontStyle: 'italic', marginTop: 2, fontSize: 12 }}>
+                    Pendiente de firma en comprobación EPISA
                   </div>
                 )}
               </div>
@@ -870,29 +1057,85 @@ export default function ViaticosPage() {
       title: 'Folio Comisión',
       dataIndex: 'folio_comision',
       key: 'folio_comision',
+      width: 140,
+      sorter: (a, b) => (a.folio_comision || '').localeCompare(b.folio_comision || '', undefined, { numeric: true }),
       render: (text, record) => <a onClick={() => handleOpenDetail(record)}><b>{text}</b></a>
     },
     {
       title: 'Comisionado',
       dataIndex: 'personal',
       key: 'personal',
+      width: 220,
+      ellipsis: true,
+      sorter: (a, b) => {
+        const nameA = a.personal ? `${a.personal.first_name || ''} ${a.personal.last_name || ''}`.trim() : '';
+        const nameB = b.personal ? `${b.personal.first_name || ''} ${b.personal.last_name || ''}`.trim() : '';
+        return nameA.localeCompare(nameB);
+      },
       render: (p) => p ? `${p.first_name} ${p.last_name}` : 'No asignado'
     },
     {
       title: 'Destino',
       dataIndex: 'destino',
-      key: 'destino'
+      key: 'destino',
+      width: 200,
+      ellipsis: true,
+      sorter: (a, b) => (a.destino || '').localeCompare(b.destino || '')
     },
     {
       title: 'Fecha Inicio',
       dataIndex: 'fecha_inicio',
       key: 'fecha_inicio',
+      width: 130,
+      align: 'center',
+      sorter: (a, b) => dayjs(a.fecha_inicio || 0).valueOf() - dayjs(b.fecha_inicio || 0).valueOf(),
+      defaultSortOrder: 'descend',
       render: (d) => dayjs(d).format('DD/MM/YYYY')
+    },
+    {
+      title: 'Fecha Fin',
+      dataIndex: 'fecha_fin',
+      key: 'fecha_fin',
+      width: 130,
+      align: 'center',
+      sorter: (a, b) => dayjs(a.fecha_fin || 0).valueOf() - dayjs(b.fecha_fin || 0).valueOf(),
+      render: (d, record) => {
+        if (!d) return '—';
+        const isPast = dayjs(d).isBefore(dayjs(), 'day');
+        const isComprobado = record.status === 'comprobado';
+        const isExpired = isPast && !isComprobado && record.status !== 'rechazado';
+
+        if (isComprobado) {
+          return (
+            <Tooltip title="Comisión comprobada y cerrada">
+              <span style={{ fontWeight: 'bold', color: '#1f1f1f' }}>
+                {dayjs(d).format('DD/MM/YYYY')}
+              </span>
+            </Tooltip>
+          );
+        }
+
+        if (isExpired) {
+          const daysDiff = dayjs().diff(dayjs(d), 'day');
+          return (
+            <Tooltip title={`Comisión vencida hace ${daysDiff} día${daysDiff === 1 ? '' : 's'}`}>
+              <span style={{ color: '#cf1322', fontWeight: 600 }}>
+                {dayjs(d).format('DD/MM/YYYY')}
+              </span>
+            </Tooltip>
+          );
+        }
+
+        return <span>{dayjs(d).format('DD/MM/YYYY')}</span>;
+      }
     },
     {
       title: 'Monto Solicitado',
       dataIndex: 'monto_solicitado',
       key: 'monto_solicitado',
+      width: 160,
+      align: 'right',
+      sorter: (a, b) => (a.monto_solicitado || 0) - (b.monto_solicitado || 0),
       render: (m, record) => (
         <Tooltip title={
           <div style={{ fontSize: '11px', lineHeight: '1.4' }}>
@@ -914,6 +1157,9 @@ export default function ViaticosPage() {
       title: 'Monto Comprobado',
       dataIndex: 'monto_comprobado',
       key: 'monto_comprobado',
+      width: 160,
+      align: 'right',
+      sorter: (a, b) => (a.monto_comprobado || 0) - (b.monto_comprobado || 0),
       render: (m) => (
         <span style={{ color: m > 0 ? '#52c41a' : '#d9d9d9', fontWeight: m > 0 ? 'bold' : 'normal' }}>
           ${m.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
@@ -924,6 +1170,9 @@ export default function ViaticosPage() {
       title: 'Estado',
       dataIndex: 'status',
       key: 'status',
+      width: 150,
+      align: 'center',
+      sorter: (a, b) => (a.status || '').localeCompare(b.status || ''),
       render: (status) => {
         const config = STATUS_MAP[status] || { label: status, color: 'default' };
         return <Tag color={config.color}>{config.label}</Tag>;
@@ -932,6 +1181,9 @@ export default function ViaticosPage() {
     {
       title: 'Acciones',
       key: 'acciones',
+      width: 120,
+      fixed: 'right',
+      align: 'center',
       render: (_, record) => (
         <Space size="middle">
           <Tooltip title="Ver detalle">
@@ -1018,6 +1270,7 @@ export default function ViaticosPage() {
           rowKey="id"
           loading={loading}
           pagination={{ pageSize: 15 }}
+          scroll={{ x: 1280 }}
         />
       </Card>
 
@@ -1266,87 +1519,149 @@ export default function ViaticosPage() {
         </Form>
       </Modal>
 
-      {/* Modal Detalle de Comisión, Timeline y Facturas */}
+      {/* Modal Detalle de Comisión, Expediente, Facturas y Firmas */}
       <Modal
         title={
-          <span style={{ fontSize: 18, color: '#0A2647', fontWeight: 600 }}>
-            ✈️ Detalle de Comisión: {selectedViatico?.folio_comision}
-          </span>
+          selectedViatico ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: 24, flexWrap: 'wrap', gap: 8 }}>
+              <Space align="center" size="middle">
+                <span style={{ fontSize: 18, color: '#0A2647', fontWeight: 700 }}>
+                  ✈️ Comisión {selectedViatico.folio_comision}
+                </span>
+                <Tag color={STATUS_MAP[selectedViatico.status]?.color || 'default'} style={{ fontSize: 12, padding: '2px 8px', borderRadius: 4 }}>
+                  {STATUS_MAP[selectedViatico.status]?.label?.toUpperCase() || selectedViatico.status}
+                </Tag>
+              </Space>
+              <div style={{ fontSize: 12, color: '#555' }}>
+                📍 <b>{selectedViatico.destino}</b> | 📅 {dayjs(selectedViatico.fecha_inicio).format('DD/MM/YYYY')} al {dayjs(selectedViatico.fecha_fin).format('DD/MM/YYYY')}
+              </div>
+            </div>
+          ) : 'Detalle de Comisión'
         }
         open={isDetailOpen}
-        onCancel={() => setIsDetailOpen(false)}
+        onCancel={() => {
+          setIsDetailOpen(false);
+          setInvoiceSearchText('');
+        }}
         footer={null}
-        width={1100}
+        width={1050}
         destroyOnClose
       >
         {selectedViatico && (
           <div style={{ marginTop: 8 }}>
             <Tabs activeKey={detailTab} onChange={setDetailTab}>
-              {/* PESTAÑA 1: FIRMAS Y TIEMPOS */}
-              <TabPane tab={<span><ClockCircleOutlined /> Firmas y Tiempos</span>} key="signatures">
-                <Row gutter={[24, 24]} style={{ marginTop: 12 }}>
-                  <Col span={12}>
-                    <Card size="small" title="Información General de la Comisión" style={{ marginBottom: 16 }}>
-                      <p><b>Comisionado:</b> {selectedViatico.personal ? `${selectedViatico.personal.first_name} ${selectedViatico.personal.last_name}` : 'No asignado'}</p>
-                      <p><b>Destino:</b> {selectedViatico.destino}</p>
-                      <p><b>Periodo:</b> {dayjs(selectedViatico.fecha_inicio).format('DD/MM/YYYY')} al {dayjs(selectedViatico.fecha_fin).format('DD/MM/YYYY')}</p>
-                      <p style={{ marginBottom: 4 }}><b>Presupuesto Solicitado (Total):</b> ${selectedViatico.monto_solicitado.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN</p>
-                      <div style={{ marginLeft: 12, marginBottom: 12, fontSize: '12px', color: '#666', lineHeight: '1.7' }}>
-                        <Row>
-                          <Col span={12}>
-                            <div>• Viáticos (37504): <b>${(selectedViatico.monto_viaticos || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</b> MXN</div>
-                            <div>• Avión (37104): <b>${(selectedViatico.monto_pasaje_aereo || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</b> MXN</div>
-                            <div>• Hotel / Paquete (37504): <b>${(selectedViatico.monto_hospedaje_paquete || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</b> MXN</div>
-                          </Col>
-                          <Col span={12}>
-                            <div>• Renta Vehículo (32503): <b>${(selectedViatico.monto_arrendamiento_vehiculos || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</b> MXN</div>
-                            <div>• Pasaje Terrestre (37204): <b>${(selectedViatico.monto_pasaje_terrestre || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</b> MXN</div>
-                            <div>• Gasolina (26103): <b>${(selectedViatico.monto_gasolina || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</b> MXN</div>
-                          </Col>
-                        </Row>
-                      </div>
-                      
-                      <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-                        {selectedViatico.solicitud_pdf_path && (
-                          <Button
-                            type="primary"
-                            ghost
-                            icon={<FilePdfOutlined />}
-                            href={getFileUrl(selectedViatico.solicitud_pdf_path)}
-                            target="_blank"
-                          >
-                            Ver Solicitud PDF
-                          </Button>
+              {/* PESTAÑA 1: INFORMACIÓN GENERAL Y SOLICITUD */}
+              <TabPane tab={<span><InfoCircleOutlined /> Información General</span>} key="general">
+                <Row gutter={[20, 20]} style={{ marginTop: 12 }}>
+                  {/* Columna Izquierda: Datos y Justificación */}
+                  <Col xs={24} md={13}>
+                    <Card size="small" title="Datos de la Comisión" style={{ borderRadius: 8, marginBottom: 16 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
+                        <div><b>Comisionado:</b> {selectedViatico.personal ? `${selectedViatico.personal.first_name} ${selectedViatico.personal.last_name}` : 'No asignado'}</div>
+                        <div><b>Destino:</b> {selectedViatico.destino}</div>
+                        <div><b>Periodo:</b> {dayjs(selectedViatico.fecha_inicio).format('DD/MM/YYYY')} al {dayjs(selectedViatico.fecha_fin).format('DD/MM/YYYY')}</div>
+                        {selectedViatico.fecha_solicitud && (
+                          <div><b>Fecha de Elaboración:</b> {dayjs(selectedViatico.fecha_solicitud).format('DD/MM/YYYY')}</div>
                         )}
-                        {isAdmin && (
-                          <Upload
-                            accept=".pdf"
-                            multiple={false}
-                            beforeUpload={handleReplacePdf}
-                            showUploadList={false}
-                          >
-                            <Button icon={<UploadOutlined />}>Reemplazar PDF</Button>
-                          </Upload>
+                        <div><b>Cuenta Financiera:</b> {selectedViatico.account ? `${selectedViatico.account.name} (${selectedViatico.account.account_number})` : (selectedViatico.account_id || 'No asignada')}</div>
+                        {selectedViatico.asistente && (
+                          <div><b>Asistente Asignado:</b> {selectedViatico.asistente.full_name || selectedViatico.asistente.username}</div>
                         )}
                       </div>
                     </Card>
-                    
-                    <Alert
-                      message="Justificación de Comisión"
-                      description={selectedViatico.justificacion}
-                      type="info"
-                      showIcon
-                    />
+
+                    <Card size="small" title="Justificación / Motivo del Viaje" style={{ borderRadius: 8 }}>
+                      <p style={{ margin: 0, color: '#333', lineHeight: 1.6, fontSize: 13 }}>
+                        {selectedViatico.justificacion || 'Sin justificación registrada.'}
+                      </p>
+                      {selectedViatico.observaciones && (
+                        <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid #f0f0f0', fontSize: 12, color: '#666' }}>
+                          <b>Observaciones:</b> {selectedViatico.observaciones}
+                        </div>
+                      )}
+                    </Card>
                   </Col>
-                  
-                  <Col span={12}>
-                    <Card
-                      size="small"
-                      title={<span style={{ color: '#0A2647', fontSize: 14, fontWeight: 600 }}>🔏 Historial y Seguimiento de Firmas</span>}
-                      bordered
-                      style={{ background: '#fafafa' }}
+
+                  {/* Columna Derecha: Presupuesto Solicitado y Documento de Solicitud */}
+                  <Col xs={24} md={11}>
+                    <Card 
+                      size="small" 
+                      title="Presupuesto Solicitado" 
+                      extra={<b style={{ color: '#1B4F72', fontSize: 15 }}>${(selectedViatico.monto_solicitado || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN</b>}
+                      style={{ borderRadius: 8, marginBottom: 16, background: '#F8FAFC' }}
                     >
-                      {renderSignatureTimeline(selectedViatico)}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px dashed #E2E8F0' }}>
+                          <span>🍔 Viáticos (37504):</span>
+                          <b>${(selectedViatico.monto_viaticos || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</b>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px dashed #E2E8F0' }}>
+                          <span>✈️ Pasaje Aéreo (37104):</span>
+                          <b>${(selectedViatico.monto_pasaje_aereo || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</b>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px dashed #E2E8F0' }}>
+                          <span>🏨 Hospedaje / Paquete (37504):</span>
+                          <b>${(selectedViatico.monto_hospedaje_paquete || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</b>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px dashed #E2E8F0' }}>
+                          <span>🚗 Arrendamiento Vehicular (32503):</span>
+                          <b>${(selectedViatico.monto_arrendamiento_vehiculos || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</b>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px dashed #E2E8F0' }}>
+                          <span>🚌 Pasaje Terrestre (37204):</span>
+                          <b>${(selectedViatico.monto_pasaje_terrestre || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</b>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
+                          <span>⛽ Gasolina (26103):</span>
+                          <b>${(selectedViatico.monto_gasolina || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</b>
+                        </div>
+                      </div>
+                    </Card>
+
+                    <Card size="small" title="Documento de Solicitud Inicial" style={{ borderRadius: 8 }}>
+                      {selectedViatico.solicitud_pdf_path ? (
+                        <div>
+                          <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <Tag color="green">PDF CARGADO</Tag>
+                            <span style={{ fontSize: 12, color: '#666' }}>Documento institucional</span>
+                          </div>
+                          <Space wrap style={{ width: '100%' }}>
+                            <Button
+                              type="primary"
+                              ghost
+                              icon={<FilePdfOutlined />}
+                              href={getFileUrl(selectedViatico.solicitud_pdf_path)}
+                              target="_blank"
+                            >
+                              Ver PDF de Solicitud
+                            </Button>
+                            {isAdmin && (
+                              <Upload
+                                accept=".pdf"
+                                multiple={false}
+                                beforeUpload={handleReplacePdf}
+                                showUploadList={false}
+                              >
+                                <Button icon={<UploadOutlined />}>Reemplazar</Button>
+                              </Upload>
+                            )}
+                          </Space>
+                        </div>
+                      ) : (
+                        <div>
+                          <div style={{ marginBottom: 8 }}><Tag color="orange">PENDIENTE</Tag></div>
+                          {isAdmin && (
+                            <Upload
+                              accept=".pdf"
+                              multiple={false}
+                              beforeUpload={handleReplacePdf}
+                              showUploadList={false}
+                            >
+                              <Button type="primary" icon={<UploadOutlined />}>Cargar Solicitud PDF</Button>
+                            </Upload>
+                          )}
+                        </div>
+                      )}
                     </Card>
                   </Col>
                 </Row>
@@ -1355,82 +1670,129 @@ export default function ViaticosPage() {
               {/* PESTAÑA 2: FACTURAS DE COMPROBACIÓN */}
               <TabPane tab={<span><DollarOutlined /> Facturas de Comprobación</span>} key="invoices">
                 <div style={{ marginTop: 12 }}>
-                  <Row gutter={16} style={{ marginBottom: 16 }}>
-                    <Col span={12}>
-                      <Card size="small" style={{ background: '#F8F9FA' }}>
-                        <div style={{ fontSize: 12, color: '#7F8C8D' }}>Presupuesto Solicitado (Total)</div>
-                        <div style={{ fontSize: 18, fontWeight: 'bold', color: '#2C3E50' }}>
-                          ${selectedViatico.monto_solicitado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                        </div>
-                        <div style={{ fontSize: 11, color: '#666', marginTop: 4, lineHeight: '1.5' }}>
-                          <div>
-                            Viáticos: <b>${(selectedViatico.monto_viaticos || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</b> | 
-                            Avión: <b>${(selectedViatico.monto_pasaje_aereo || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</b> | 
-                            Hotel: <b>${(selectedViatico.monto_hospedaje_paquete || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</b>
-                          </div>
-                          <div>
-                            Renta Auto: <b>${(selectedViatico.monto_arrendamiento_vehiculos || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</b> | 
-                            Terrestre: <b>${(selectedViatico.monto_pasaje_terrestre || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</b> | 
-                            Gasolina: <b>${(selectedViatico.monto_gasolina || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</b>
-                          </div>
-                        </div>
-                      </Card>
-                    </Col>
-                    <Col span={12}>
-                      <Card size="small" style={{ background: '#E8F8F5' }}>
-                        <div style={{ fontSize: 12, color: '#27AE60' }}>Monto Comprobado</div>
-                        <div style={{ fontSize: 18, fontWeight: 'bold', color: '#27AE60' }}>
-                          ${selectedViatico.monto_comprobado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                        </div>
-                      </Card>
-                    </Col>
-                  </Row>
+                  {(() => {
+                    const solicitado = selectedViatico.monto_solicitado || 0;
+                    const comprobado = selectedViatico.monto_comprobado || 0;
+                    const diff = solicitado - comprobado;
+                    const isDevolucion = diff > 0;
+                    const isAFavor = diff < 0;
+
+                    return (
+                      <Row gutter={16} style={{ marginBottom: 16, alignItems: 'stretch' }}>
+                        <Col span={8}>
+                          <Card size="small" style={{ background: '#F8F9FA', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', borderRadius: 8 }}>
+                            <div>
+                              <div style={{ fontSize: 12, color: '#7F8C8D' }}>Presupuesto Solicitado (Total)</div>
+                              <div style={{ fontSize: 18, fontWeight: 'bold', color: '#2C3E50' }}>
+                                ${solicitado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                              </div>
+                            </div>
+                            <div style={{ fontSize: 11, color: '#666', marginTop: 6, lineHeight: '1.4' }}>
+                              <div>
+                                Viáticos: <b>${(selectedViatico.monto_viaticos || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</b> | 
+                                Avión: <b>${(selectedViatico.monto_pasaje_aereo || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</b> | 
+                                Hotel: <b>${(selectedViatico.monto_hospedaje_paquete || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</b>
+                              </div>
+                            </div>
+                          </Card>
+                        </Col>
+                        <Col span={8}>
+                          <Card size="small" style={{ background: '#E8F8F5', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', borderRadius: 8 }}>
+                            <div>
+                              <div style={{ fontSize: 12, color: '#27AE60' }}>Monto Comprobado (Gastado)</div>
+                              <div style={{ fontSize: 18, fontWeight: 'bold', color: '#27AE60' }}>
+                                ${comprobado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                              </div>
+                            </div>
+                            <div style={{ fontSize: 11, color: '#666', marginTop: 6 }}>
+                              Facturas capturadas: <b>{selectedViatico.facturas?.length || 0}</b>
+                            </div>
+                          </Card>
+                        </Col>
+                        <Col span={8}>
+                          <Card 
+                            size="small" 
+                            style={{ 
+                              background: isDevolucion ? '#FEF9E7' : (isAFavor ? '#FDEDEC' : '#F4F6F7'), 
+                              borderColor: isDevolucion ? '#F9E79F' : (isAFavor ? '#FADBD8' : '#D5D8DC'),
+                              height: '100%',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              justifyContent: 'space-between',
+                              borderRadius: 8
+                            }}
+                          >
+                            <div>
+                              <div style={{ 
+                                fontSize: 12, 
+                                fontWeight: 600,
+                                color: isDevolucion ? '#B7950B' : (isAFavor ? '#C0392B' : '#7F8C8D') 
+                              }}>
+                                {isDevolucion ? 'Monto a Regresar / Devolver' : (isAFavor ? 'Saldo a Favor del Usuario' : 'Diferencia (Saldo)')}
+                              </div>
+                              <div style={{ 
+                                fontSize: 18, 
+                                fontWeight: 'bold', 
+                                color: isDevolucion ? '#D68910' : (isAFavor ? '#E74C3C' : '#27AE60') 
+                              }}>
+                                ${Math.abs(diff).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                              </div>
+                            </div>
+                            <div style={{ fontSize: 11, color: '#555', marginTop: 6 }}>
+                              {isDevolucion && <span>⚠️ Reintegro pendiente</span>}
+                              {isAFavor && <span>ℹ️ Se gastó más de lo presupuestado</span>}
+                              {diff === 0 && <span>✅ Comprobación exacta sin saldo</span>}
+                            </div>
+                          </Card>
+                        </Col>
+                      </Row>
+                    );
+                  })()}
 
                   <Card 
                     size="small" 
-                    title={<span style={{ color: '#0A2647', fontSize: 13, fontWeight: 600 }}>📊 Control de Presupuesto por Categoría (Solicitado vs Comprobado)</span>}
-                    style={{ marginBottom: 20, background: '#fafafa', border: '1px solid #E2E8F0' }}
+                    title={<span style={{ fontSize: 13, color: '#1B4F72' }}>📊 Control por Partida Presupuestal</span>}
+                    style={{ marginBottom: 16, background: '#FAFAFA', borderRadius: 8 }}
                   >
-                    <Table
-                      size="small"
-                      pagination={false}
+                    <Table 
                       dataSource={getCategoryComparison()}
+                      pagination={false}
+                      size="small"
                       rowKey="concept"
                       columns={[
                         {
                           title: 'Concepto / Rubro',
-                          dataIndex: 'concept',
                           key: 'concept',
-                          render: (text, r) => <span>{r.icon} {text}</span>
+                          render: (_, r) => <span><span style={{ marginRight: 6 }}>{r.icon}</span><b>{r.concept}</b></span>
                         },
                         {
-                          title: 'Solicitado (Presupuesto)',
+                          title: 'Presupuestado',
                           dataIndex: 'budget',
                           key: 'budget',
-                          render: (v) => <b>${v.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</b>
+                          align: 'right',
+                          render: (v) => `$${v.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
                         },
                         {
-                          title: 'Comprobado (Gastado)',
+                          title: 'Comprobado (Facturas)',
                           dataIndex: 'spent',
                           key: 'spent',
+                          align: 'right',
                           render: (v) => (
-                            <span style={{ color: v > 0 ? '#1B4F72' : '#8c8c8c', fontWeight: v > 0 ? 500 : 'normal' }}>
+                            <span style={{ color: v > 0 ? '#1B4F72' : '#999', fontWeight: v > 0 ? 'bold' : 'normal' }}>
                               ${v.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                             </span>
                           )
                         },
                         {
-                          title: 'Diferencia (Saldo)',
+                          title: 'Diferencia',
                           key: 'diff',
+                          align: 'right',
                           render: (_, r) => {
-                            const diff = r.budget - r.spent;
-                            const isOver = diff < 0;
+                            const d = r.budget - r.spent;
+                            const color = d > 0 ? '#27AE60' : d < 0 ? '#E74C3C' : '#95A5A6';
                             return (
-                              <span style={{ 
-                                fontWeight: 'bold', 
-                                color: isOver ? '#E74C3C' : (diff === 0 ? '#8c8c8c' : '#27AE60') 
-                              }}>
-                                {isOver ? '-' : ''}${Math.abs(diff).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                              <span style={{ color, fontWeight: 'bold' }}>
+                                {d < 0 ? `-$${Math.abs(d).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : `$${d.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`}
                               </span>
                             );
                           }
@@ -1439,9 +1801,26 @@ export default function ViaticosPage() {
                     />
                   </Card>
                   
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                    <span style={{ fontSize: 15, fontWeight: 'bold', color: '#0A2647' }}>Comprobantes Fiscales</span>
-                    <Space>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 15, fontWeight: 'bold', color: '#0A2647' }}>Comprobantes Fiscales</span>
+                      {selectedViatico.facturas && selectedViatico.facturas.length > 0 && (
+                        <Tag color="blue" style={{ borderRadius: 10 }}>
+                          {invoiceSearchText.trim()
+                            ? `${filteredViaticoFacturas.length} de ${selectedViatico.facturas.length}`
+                            : `${selectedViatico.facturas.length}`}
+                        </Tag>
+                      )}
+                    </div>
+                    <Space wrap>
+                      <Input
+                        placeholder="Buscar por proveedor, RFC o UUID..."
+                        prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
+                        value={invoiceSearchText}
+                        onChange={(e) => setInvoiceSearchText(e.target.value)}
+                        allowClear
+                        style={{ width: 280 }}
+                      />
                       {selectedViatico.facturas && selectedViatico.facturas.length > 0 && (
                         <Button
                           icon={<FileZipOutlined style={{ color: '#E67E22' }} />}
@@ -1463,7 +1842,7 @@ export default function ViaticosPage() {
                   </div>
 
                   <Table
-                    dataSource={selectedViatico.facturas}
+                    dataSource={filteredViaticoFacturas}
                     rowKey="id"
                     pagination={false}
                     size="small"
@@ -1476,7 +1855,15 @@ export default function ViaticosPage() {
                           <div>
                             <small><b>{r.emisor_nombre}</b></small>
                             <br />
-                            <small style={{ color: '#999' }}>{r.uuid ? r.uuid.substring(0, 18) + '...' : 'Carga Manual'}</small>
+                            <small style={{ color: '#999' }}>
+                              {r.uuid ? (
+                                <Tooltip title={`UUID: ${r.uuid}`}>
+                                  <span style={{ cursor: 'help' }}>{r.uuid.substring(0, 18)}...</span>
+                                </Tooltip>
+                              ) : (
+                                'Carga Manual'
+                              )}
+                            </small>
                           </div>
                         )
                       },
@@ -1539,20 +1926,20 @@ export default function ViaticosPage() {
                           <Space>
                             {r.xml_filename && (
                               <Button
-                                icon={<FileTextOutlined style={{ color: '#1B4F72' }} />}
                                 size="small"
+                                icon={<FileTextOutlined />}
                                 href={getFileUrl(r.xml_filename)}
                                 target="_blank"
-                                title="Descargar XML"
+                                title="Ver XML"
                               />
                             )}
                             {r.pdf_filename && (
                               <Button
-                                icon={<FilePdfOutlined style={{ color: '#ff4d4f' }} />}
                                 size="small"
+                                icon={<FilePdfOutlined />}
                                 href={getFileUrl(r.pdf_filename)}
                                 target="_blank"
-                                title="Descargar PDF"
+                                title="Ver PDF"
                               />
                             )}
                             {r.uuid && (
@@ -1585,42 +1972,387 @@ export default function ViaticosPage() {
                 </div>
               </TabPane>
 
-              {/* PESTAÑA 3: HASHES DE FIRMAS */}
-              <TabPane tab={<span><CheckOutlined /> Hashes de Firmas</span>} key="signature_hashes">
-                <Card size="small" title="Historial Criptográfico de Firmas (Auditoría)" style={{ marginTop: 12 }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                    {[
-                      { label: 'Solicitante / Comisionado', nombre: selectedViatico.firma_solicitante_nombre, fecha: selectedViatico.firma_solicitante_fecha, hash: selectedViatico.firma_solicitante_hash },
-                      { label: 'Responsable de Cuenta / Jefe Inmediato', nombre: selectedViatico.firma_jefe_nombre, fecha: selectedViatico.firma_jefe_fecha, hash: selectedViatico.firma_jefe_hash },
-                      { label: 'Revisor Administrativo', nombre: selectedViatico.firma_revisor_nombre, fecha: selectedViatico.firma_revisor_fecha, hash: selectedViatico.firma_revisor_hash },
-                      { label: 'Ventanilla Tesorería (Pago)', nombre: selectedViatico.firma_tesoreria_nombre, fecha: selectedViatico.firma_tesoreria_fecha, hash: selectedViatico.firma_tesoreria_hash },
-                    ].map((sig, idx) => (
-                      <div key={idx} style={{ paddingBottom: 12, borderBottom: idx < 3 ? '1px solid #E2E8F0' : 'none' }}>
-                        <div style={{ fontWeight: 600, color: '#1B4F72', fontSize: 13 }}>{sig.label}</div>
-                        {sig.nombre ? (
-                          <div style={{ marginTop: 4 }}>
-                            <div style={{ fontSize: 12 }}>
-                              <strong>Firmante:</strong> {sig.nombre} | <strong>Fecha:</strong> {dayjs(sig.fecha).format('DD-MM-YYYY HH:mm:ss')}
+              {/* PESTAÑA 3: EXPEDIENTE Y CIERRE */}
+              <TabPane tab={<span><FolderOpenOutlined /> Expediente y Cierre</span>} key="expediente">
+                <div style={{ marginTop: 12 }}>
+                  <Alert
+                    message="Control del Expediente de Comprobación y Cierre"
+                    description="Para cerrar y liquidar formalmente la comisión de viáticos, sube los documentos oficiales requeridos (Comprobación EPISA, Reporte de Actividades y Comprobante de Reintegro si aplica)."
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 20, borderRadius: 8 }}
+                  />
+
+                  <Row gutter={[16, 16]}>
+                    {/* DOC 1: SOLICITUD */}
+                    <Col xs={24} sm={12}>
+                      <Card 
+                        size="small" 
+                        title={<span style={{ fontWeight: 600 }}>1. Solicitud Oficial de Viáticos</span>}
+                        style={{ height: '100%', borderRadius: 8, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}
+                      >
+                        <div style={{ marginBottom: 16 }}>
+                          <p style={{ color: '#666', fontSize: 12, marginBottom: 8 }}>
+                            Formato de solicitud de recursos emitido previo a la salida de la comisión.
+                          </p>
+                          {selectedViatico.solicitud_pdf_path ? (
+                            <Tag color="green" style={{ fontSize: 12, padding: '2px 8px' }}>DOCUMENTO CARGADO</Tag>
+                          ) : (
+                            <Tag color="orange" style={{ fontSize: 12, padding: '2px 8px' }}>PENDIENTE</Tag>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, marginTop: 'auto', flexWrap: 'wrap' }}>
+                          {selectedViatico.solicitud_pdf_path && (
+                            <Button
+                              type="primary"
+                              ghost
+                              icon={<FilePdfOutlined />}
+                              href={getFileUrl(selectedViatico.solicitud_pdf_path)}
+                              target="_blank"
+                            >
+                              Ver PDF
+                            </Button>
+                          )}
+                          {isAdmin && (
+                            <Upload
+                              accept=".pdf"
+                              multiple={false}
+                              beforeUpload={handleReplacePdf}
+                              showUploadList={false}
+                            >
+                              <Button icon={<UploadOutlined />}>
+                                {selectedViatico.solicitud_pdf_path ? 'Reemplazar' : 'Subir PDF'}
+                              </Button>
+                            </Upload>
+                          )}
+                          {selectedViatico.solicitud_pdf_path && (
+                            <Popconfirm
+                              title="¿Eliminar PDF de solicitud?"
+                              description="Se restablecerán las firmas asociadas a esta solicitud."
+                              onConfirm={() => handleClearFile('solicitud')}
+                              okText="Sí"
+                              cancelText="No"
+                            >
+                              <Button icon={<DeleteOutlined />} danger type="text" />
+                            </Popconfirm>
+                          )}
+                        </div>
+                      </Card>
+                    </Col>
+
+                    {/* DOC 2: COMPROBACIÓN EPISA */}
+                    <Col xs={24} sm={12}>
+                      <Card 
+                        size="small" 
+                        title={<span style={{ fontWeight: 600 }}>2. Reporte de Comprobación EPISA</span>}
+                        style={{ height: '100%', borderRadius: 8, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}
+                      >
+                        <div style={{ marginBottom: 16 }}>
+                          <p style={{ color: '#666', fontSize: 12, marginBottom: 8 }}>
+                            Documento oficial generado en el sistema EPISA con liquidación y firmas de revisión.
+                          </p>
+                          {selectedViatico.comprobacion_pdf_path ? (
+                            <Tag color="green" style={{ fontSize: 12, padding: '2px 8px' }}>COMPROBACIÓN CARGADA</Tag>
+                          ) : (
+                            <Tag color="orange" style={{ fontSize: 12, padding: '2px 8px' }}>PENDIENTE DE SUBIR</Tag>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, marginTop: 'auto', flexWrap: 'wrap' }}>
+                          {selectedViatico.comprobacion_pdf_path && (
+                            <Button
+                              type="primary"
+                              ghost
+                              icon={<FilePdfOutlined />}
+                              href={getFileUrl(selectedViatico.comprobacion_pdf_path)}
+                              target="_blank"
+                            >
+                              Ver Comprobación
+                            </Button>
+                          )}
+                          <Upload
+                            accept=".pdf"
+                            multiple={false}
+                            beforeUpload={handleUploadComprobacionPdf}
+                            showUploadList={false}
+                          >
+                            <Button 
+                              type={selectedViatico.comprobacion_pdf_path ? "default" : "primary"}
+                              icon={<UploadOutlined />} 
+                              loading={uploadingComprobacion}
+                            >
+                              {selectedViatico.comprobacion_pdf_path ? 'Actualizar EPISA' : 'Subir Comprobación EPISA'}
+                            </Button>
+                          </Upload>
+                          {selectedViatico.comprobacion_pdf_path && (
+                            <Popconfirm
+                              title="¿Eliminar comprobación EPISA?"
+                              description="Se restablecerán las firmas de seguimiento asociadas."
+                              onConfirm={() => handleClearFile('comprobacion')}
+                              okText="Sí"
+                              cancelText="No"
+                            >
+                              <Button icon={<DeleteOutlined />} danger type="text" />
+                            </Popconfirm>
+                          )}
+                        </div>
+                      </Card>
+                    </Col>
+
+                    {/* DOC 3: REPORTE DE ACTIVIDADES */}
+                    <Col xs={24} sm={12}>
+                      <Card 
+                        size="small" 
+                        title={<span style={{ fontWeight: 600 }}>3. Reporte de Actividades / Informe</span>}
+                        style={{ height: '100%', borderRadius: 8, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}
+                      >
+                        <div style={{ marginBottom: 16 }}>
+                          <p style={{ color: '#666', fontSize: 12, marginBottom: 8 }}>
+                            Informe técnico detallando las actividades y objetivos cumplidos durante el viaje.
+                          </p>
+                          {selectedViatico.reporte_pdf_path ? (
+                            <Tag color="green" style={{ fontSize: 12, padding: '2px 8px' }}>REPORTE CARGADO</Tag>
+                          ) : (
+                            <Tag color="orange" style={{ fontSize: 12, padding: '2px 8px' }}>PENDIENTE</Tag>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, marginTop: 'auto', flexWrap: 'wrap' }}>
+                          {selectedViatico.reporte_pdf_path && (
+                            <Button
+                              type="primary"
+                              ghost
+                              icon={<FileTextOutlined />}
+                              href={getFileUrl(selectedViatico.reporte_pdf_path)}
+                              target="_blank"
+                            >
+                              Ver Reporte PDF
+                            </Button>
+                          )}
+                          <Upload
+                            accept=".pdf"
+                            multiple={false}
+                            beforeUpload={handleUploadReportePdf}
+                            showUploadList={false}
+                          >
+                            <Button icon={<UploadOutlined />} loading={uploadingReporte}>
+                              {selectedViatico.reporte_pdf_path ? 'Reemplazar' : 'Subir Reporte PDF'}
+                            </Button>
+                          </Upload>
+                          {selectedViatico.reporte_pdf_path && (
+                            <Popconfirm
+                              title="¿Eliminar reporte de actividades?"
+                              onConfirm={() => handleClearFile('reporte')}
+                              okText="Sí"
+                              cancelText="No"
+                            >
+                              <Button icon={<DeleteOutlined />} danger type="text" />
+                            </Popconfirm>
+                          )}
+                        </div>
+                      </Card>
+                    </Col>
+
+                    {/* DOC 4: REINTEGRO / DEVOLUCIÓN */}
+                    <Col xs={24} sm={12}>
+                      <Card 
+                        size="small" 
+                        title={<span style={{ fontWeight: 600 }}>4. Reintegro / Ficha de Devolución</span>}
+                        style={{ height: '100%', borderRadius: 8, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}
+                      >
+                        <div style={{ marginBottom: 16 }}>
+                          <p style={{ color: '#666', fontSize: 12, marginBottom: 8 }}>
+                            Comprobante bancario o recibo de tesorería institucional por el remanente no ejercido.
+                          </p>
+                          {selectedViatico.comprobante_devolucion_path ? (
+                            <Tag color="green" style={{ fontSize: 12, padding: '2px 8px' }}>
+                              DEVUELTO: ${(selectedViatico.monto_devuelto || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN
+                            </Tag>
+                          ) : (
+                            <div>
+                              {(selectedViatico.monto_devuelto > 0 || (selectedViatico.monto_solicitado - selectedViatico.monto_comprobado) > 0) ? (
+                                <Tag color="volcano" style={{ fontSize: 12, padding: '2px 8px' }}>
+                                  REMANENTE REQUERIDO: ${(selectedViatico.monto_devuelto || Math.max(0, selectedViatico.monto_solicitado - selectedViatico.monto_comprobado)).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN
+                                </Tag>
+                              ) : (
+                                <Tag color="default" style={{ fontSize: 12, padding: '2px 8px' }}>NO REQUERIDO (SIN SALDO)</Tag>
+                              )}
                             </div>
-                            {sig.hash ? (
-                              <div style={{ background: '#F8F9FA', padding: '6px 10px', borderRadius: 4, fontFamily: 'monospace', fontSize: 10, wordBreak: 'break-all', marginTop: 4, color: '#555', border: '1px solid #E2E8F0' }}>
-                                {sig.hash}
-                              </div>
-                            ) : (
-                              <div style={{ fontSize: 11, color: '#7F8C8D', fontStyle: 'italic', marginTop: 2 }}>Sin hash capturado</div>
-                            )}
-                          </div>
-                        ) : (
-                          <div style={{ fontSize: 11, color: '#7F8C8D', fontStyle: 'italic', marginTop: 2 }}>Firma pendiente</div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </Card>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, marginTop: 'auto', flexWrap: 'wrap' }}>
+                          {selectedViatico.comprobante_devolucion_path && (
+                            <Button
+                              type="primary"
+                              ghost
+                              icon={<FileTextOutlined />}
+                              href={getFileUrl(selectedViatico.comprobante_devolucion_path)}
+                              target="_blank"
+                            >
+                              Ver Ficha
+                            </Button>
+                          )}
+                          <Button 
+                            type={(selectedViatico.monto_devuelto > 0 || (selectedViatico.monto_solicitado - selectedViatico.monto_comprobado) > 0) && !selectedViatico.comprobante_devolucion_path ? "primary" : "default"}
+                            danger={(selectedViatico.monto_devuelto > 0 || (selectedViatico.monto_solicitado - selectedViatico.monto_comprobado) > 0) && !selectedViatico.comprobante_devolucion_path}
+                            icon={<UploadOutlined />} 
+                            onClick={handleOpenDevolucionModal}
+                          >
+                            {selectedViatico.comprobante_devolucion_path ? 'Actualizar Ficha' : 'Registrar Ficha de Devolución'}
+                          </Button>
+                          {selectedViatico.comprobante_devolucion_path && (
+                            <Popconfirm
+                              title="¿Eliminar comprobante de devolución?"
+                              onConfirm={() => handleClearFile('devolucion')}
+                              okText="Sí"
+                              cancelText="No"
+                            >
+                              <Button icon={<DeleteOutlined />} danger type="text" />
+                            </Popconfirm>
+                          )}
+                        </div>
+                      </Card>
+                    </Col>
+                  </Row>
+                </div>
+              </TabPane>
+
+              {/* PESTAÑA 4: FIRMAS Y AUDITORÍA */}
+              <TabPane tab={<span><SafetyCertificateOutlined /> Firmas y Auditoría</span>} key="signatures">
+                <div style={{ marginTop: 12 }}>
+                  <Row gutter={[20, 20]}>
+                    <Col xs={24} md={12}>
+                      <Card
+                        size="small"
+                        title={<span style={{ color: '#1B4F72', fontSize: 14, fontWeight: 600 }}>🛫 1. Autorización y Pago (Solicitud)</span>}
+                        style={{ borderRadius: 8, background: '#FAFAFA' }}
+                      >
+                        {renderSolicitudTimeline(selectedViatico)}
+                      </Card>
+                    </Col>
+
+                    <Col xs={24} md={12}>
+                      <Card
+                        size="small"
+                        title={<span style={{ color: '#0E6251', fontSize: 14, fontWeight: 600 }}>🏁 2. Liquidación y Cierre (Comprobación EPISA)</span>}
+                        style={{ borderRadius: 8, background: '#FAFAFA' }}
+                      >
+                        {renderComprobacionTimeline(selectedViatico)}
+                      </Card>
+                    </Col>
+                  </Row>
+
+                  {/* Hashes Criptográficos de Auditoría */}
+                  <Card 
+                    size="small" 
+                    title={<span style={{ color: '#555', fontSize: 13, fontWeight: 600 }}>🔒 Hashes Criptográficos de Auditoría</span>}
+                    style={{ marginTop: 20, borderRadius: 8 }}
+                  >
+                    <Row gutter={[16, 16]}>
+                      <Col xs={24} md={12}>
+                        <div style={{ fontWeight: 600, color: '#1B4F72', marginBottom: 8, fontSize: 12 }}>
+                          Firmas de Solicitud Inicial:
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {[
+                            { label: 'Solicitante', hash: selectedViatico.firma_solicitante_hash },
+                            { label: 'Resp. Cuenta / Jefe', hash: selectedViatico.firma_jefe_hash || selectedViatico.firma_responsable_hash },
+                            { label: 'Revisor Administrativo', hash: selectedViatico.firma_revisor_hash },
+                            { label: 'Ventanilla Tesorería', hash: selectedViatico.firma_tesoreria_hash },
+                          ].map((s, idx) => (
+                            <div key={idx} style={{ fontSize: 11, background: '#f8f9fa', padding: '4px 8px', borderRadius: 4, border: '1px solid #e9ecef' }}>
+                              <b>{s.label}:</b> <span style={{ fontFamily: 'monospace', color: s.hash ? '#333' : '#999', wordBreak: 'break-all' }}>{s.hash || 'Pendiente'}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </Col>
+
+                      <Col xs={24} md={12}>
+                        <div style={{ fontWeight: 600, color: '#0E6251', marginBottom: 8, fontSize: 12 }}>
+                          Firmas de Comprobación EPISA:
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {[
+                            { label: 'Resp. Cuenta / Solicitante', hash: selectedViatico.firma_comp_solicitante_hash },
+                            { label: 'Revisor Administrativo', hash: selectedViatico.firma_comp_revisor_hash },
+                            { label: 'Ventanilla Tesorería', hash: selectedViatico.firma_comp_tesoreria_hash },
+                            { label: 'Ventanilla Contabilidad', hash: selectedViatico.firma_comp_contabilidad_hash },
+                          ].map((s, idx) => (
+                            <div key={idx} style={{ fontSize: 11, background: '#f8f9fa', padding: '4px 8px', borderRadius: 4, border: '1px solid #e9ecef' }}>
+                              <b>{s.label}:</b> <span style={{ fontFamily: 'monospace', color: s.hash ? '#333' : '#999', wordBreak: 'break-all' }}>{s.hash || 'Pendiente'}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </Col>
+                    </Row>
+                  </Card>
+                </div>
               </TabPane>
             </Tabs>
           </div>
         )}
+      </Modal>
+
+      {/* Modal Registrar Devolución / Reintegro */}
+      <Modal
+        title={<span style={{ color: '#0A2647', fontWeight: 600 }}>💳 Registrar Comprobante de Devolución / Reintegro</span>}
+        open={isDevolucionModalOpen}
+        onCancel={() => {
+          setIsDevolucionModalOpen(false);
+          devolucionForm.resetFields();
+        }}
+        onOk={() => devolucionForm.submit()}
+        okText="Guardar y Liquidar"
+        cancelText="Cancelar"
+        confirmLoading={uploadingDevolucion}
+        destroyOnClose
+        width={600}
+      >
+        <Form
+          form={devolucionForm}
+          layout="vertical"
+          onFinish={handleUploadDevolucion}
+          style={{ marginTop: 16 }}
+        >
+          <Alert
+            message="Comprobante de Reintegro a Tesorería"
+            description="Adjunta la ficha de depósito bancario, transferencia o recibo de tesorería institucional que acredita la devolución del remanente no ejercido."
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+          />
+
+          <Form.Item
+            name="monto_devuelto"
+            label="Monto Devuelto ($ MXN)"
+            rules={[{ required: true, message: 'Ingresa el monto devuelto' }]}
+          >
+            <InputNumber
+              style={{ width: '100%' }}
+              precision={2}
+              min={0}
+              formatter={value => `$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+              parser={value => value.replace(/\$\s?|(,*)/g, '')}
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="comprobante_file"
+            label="Archivo del Comprobante (PDF o Imagen JPG / PNG)"
+            rules={[{ required: true, message: 'Selecciona el archivo del comprobante' }]}
+          >
+            <Upload.Dragger
+              accept=".pdf,.jpg,.jpeg,.png"
+              multiple={false}
+              beforeUpload={() => false}
+              maxCount={1}
+            >
+              <p className="ant-upload-drag-icon">
+                <InboxOutlined style={{ color: '#1B4F72' }} />
+              </p>
+              <p className="ant-upload-text">Haz clic o arrastra el archivo aquí</p>
+              <p className="ant-upload-hint">Formatos soportados: PDF, JPG, PNG</p>
+            </Upload.Dragger>
+          </Form.Item>
+        </Form>
       </Modal>
 
       {/* Modal Cargar Factura */}

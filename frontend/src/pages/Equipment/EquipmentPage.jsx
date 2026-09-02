@@ -438,6 +438,8 @@ function EquipmentPage() {
     {
       title: 'Equipo / Sistema',
       key: 'name',
+      width: 240,
+      ellipsis: true,
       render: (_, r) => (
         <Space>
           <SettingOutlined style={{ color: CATEGORY_MAP[r.category]?.color, fontSize: 18 }} />
@@ -455,12 +457,14 @@ function EquipmentPage() {
       key: 'vessel',
       render: (_, r) => <Text>{r.vessel?.name}</Text>,
       width: 140,
+      ellipsis: true,
       sorter: (a, b) => (a.vessel?.name || '').localeCompare(b.vessel?.name || ''),
     },
     {
       title: 'Categoría',
       dataIndex: 'category',
       width: 150,
+      align: 'center',
       render: (cat) => <Tag color={CATEGORY_MAP[cat]?.color}>{CATEGORY_MAP[cat]?.label}</Tag>,
       sorter: (a, b) => (a.category || '').localeCompare(b.category || ''),
     },
@@ -468,6 +472,7 @@ function EquipmentPage() {
       title: 'No. Serie',
       dataIndex: 'serial_number',
       width: 130,
+      ellipsis: true,
       render: (sn) => sn ? <Text copyable>{sn}</Text> : <Text type="secondary">—</Text>,
       sorter: (a, b) => (a.serial_number || '').localeCompare(b.serial_number || ''),
     },
@@ -485,6 +490,7 @@ function EquipmentPage() {
       title: 'Horómetro',
       key: 'hours',
       width: 120,
+      align: 'right',
       render: (_, r) => (
         <div style={{ fontSize: 12 }}>
           <strong>{r.hour_meter?.toFixed(1) || 0}</strong> hrs
@@ -493,7 +499,7 @@ function EquipmentPage() {
       sorter: (a, b) => (a.hour_meter || 0) - (b.hour_meter || 0),
     },
     {
-      title: 'Acciones', key: 'actions', width: 140,
+      title: 'Acciones', key: 'actions', width: 140, fixed: 'right', align: 'center',
       render: (_, r) => (
         <Space>
           {r.manual_file_path && (
@@ -558,6 +564,7 @@ function EquipmentPage() {
 
       <Card style={{ borderRadius: 12 }} styles={{ body: { padding: 0 } }}>
         <Table columns={columns} dataSource={equipment} rowKey="id" loading={loading}
+          scroll={{ x: 1050 }}
           pagination={{ current: pagination.current, pageSize: pagination.pageSize, total, showSizeChanger: true, showTotal: (t) => `${t} equipos`, onChange: (p, s) => setPagination({ current: p, pageSize: s }) }} />
       </Card>
 

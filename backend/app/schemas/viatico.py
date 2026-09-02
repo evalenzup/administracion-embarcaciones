@@ -78,7 +78,10 @@ class ViaticoBase(BaseModel):
     asistente_id: int | None = None
     solicitud_pdf_path: str | None = None
     
-    # Firmas
+    # Archivos
+    reporte_pdf_path: str | None = None
+
+    # Firmas de solicitud
     firma_solicitante_nombre: str | None = None
     firma_solicitante_fecha: datetime | None = None
     firma_solicitante_hash: str | None = None
@@ -98,6 +101,23 @@ class ViaticoBase(BaseModel):
     firma_responsable_nombre: str | None = None
     firma_responsable_fecha: datetime | None = None
     firma_responsable_hash: str | None = None
+
+    # Firmas de comprobación EPISA
+    firma_comp_solicitante_nombre: str | None = None
+    firma_comp_solicitante_fecha: datetime | None = None
+    firma_comp_solicitante_hash: str | None = None
+
+    firma_comp_revisor_nombre: str | None = None
+    firma_comp_revisor_fecha: datetime | None = None
+    firma_comp_revisor_hash: str | None = None
+
+    firma_comp_tesoreria_nombre: str | None = None
+    firma_comp_tesoreria_fecha: datetime | None = None
+    firma_comp_tesoreria_hash: str | None = None
+
+    firma_comp_contabilidad_nombre: str | None = None
+    firma_comp_contabilidad_fecha: datetime | None = None
+    firma_comp_contabilidad_hash: str | None = None
 
 
 class ViaticoCreate(ViaticoBase):
@@ -126,10 +146,12 @@ class ViaticoUpdate(BaseModel):
     project_id: int | None = None
     project_name: str | None = None
     comprobante_devolucion_path: str | None = None
+    reporte_pdf_path: str | None = None
     personal_id: int | None = None
     fecha_solicitud: date | None = None
     asistente_id: int | None = None
     solicitud_pdf_path: str | None = None
+    comprobacion_pdf_path: str | None = None
     
     # Firmas
     firma_solicitante_nombre: str | None = None
@@ -152,18 +174,36 @@ class ViaticoUpdate(BaseModel):
     firma_responsable_fecha: datetime | None = None
     firma_responsable_hash: str | None = None
 
+    # Firmas de comprobación EPISA
+    firma_comp_solicitante_nombre: str | None = None
+    firma_comp_solicitante_fecha: datetime | None = None
+    firma_comp_solicitante_hash: str | None = None
+
+    firma_comp_revisor_nombre: str | None = None
+    firma_comp_revisor_fecha: datetime | None = None
+    firma_comp_revisor_hash: str | None = None
+
+    firma_comp_tesoreria_nombre: str | None = None
+    firma_comp_tesoreria_fecha: datetime | None = None
+    firma_comp_tesoreria_hash: str | None = None
+
+    firma_comp_contabilidad_nombre: str | None = None
+    firma_comp_contabilidad_fecha: datetime | None = None
+    firma_comp_contabilidad_hash: str | None = None
+
 
 class ViaticoResponse(ViaticoBase):
     id: int
-    personal_id: int | None
-    fecha_solicitud: date
-    monto_comprobado: float
-    monto_devuelto: float
-    monto_saldo_favor: float
+    personal_id: int | None = None
+    fecha_solicitud: date | None = None
+    monto_comprobado: float = 0.0
+    monto_devuelto: float = 0.0
+    monto_saldo_favor: float = 0.0
     status: str
-    solicitud_pdf_path: str | None
-    comprobacion_pdf_path: str | None
-    comprobante_devolucion_path: str | None
+    solicitud_pdf_path: str | None = None
+    comprobacion_pdf_path: str | None = None
+    comprobante_devolucion_path: str | None = None
+    reporte_pdf_path: str | None = None
     created_at: datetime
     updated_at: datetime
     

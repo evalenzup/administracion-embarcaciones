@@ -17,6 +17,7 @@ from app.utils.security import (
     create_telegram_link_token
 )
 from app.config import get_settings
+from app.services.audit import log_action
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Autenticación"])
 
@@ -40,6 +41,22 @@ async def login(data: LoginRequest, db: Session = Depends(get_db)):
 
     access_token = create_access_token(data={"sub": user.id})
     refresh_token = create_refresh_token(data={"sub": user.id})
+
+    # Log de auditoría
+    try:
+        log_action(
+            db=db,
+            user_id=user.id,
+            username=user.username,
+            action="login",
+            module="auth",
+            entity_type="User",
+            entity_id=user.id,
+            description=f"Inicio de sesión exitoso ({user.username})",
+            details={"source": "web"}
+        )
+    except Exception:
+        pass
 
     return TokenResponse(
         access_token=access_token,
@@ -174,6 +191,22 @@ async def link_telegram(
     # Guardar vinculación
     user.telegram_id = data.telegram_id
     db.commit()
+
+    # Log de auditoría
+    try:
+        log_action(
+            db=db,
+            user_id=user.id,
+            username=user.username,
+            action="link_telegram",
+            module="telegram_bot",
+            entity_type="User",
+            entity_id=user.id,
+            description=f"Vinculó cuenta de Telegram (ID: {data.telegram_id}) al usuario {user.username}",
+            details={"telegram_id": str(data.telegram_id), "username": user.username, "source": "telegram_bot"}
+        )
+    except Exception:
+        pass
 
     return TelegramLinkResponse(
         username=user.username,

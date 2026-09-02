@@ -1885,6 +1885,7 @@ export default function PettyCashPage() {
                       width: 130
                     }
                   ]}
+                  scroll={{ x: 1200 }}
                 />
               </Card>
             )
@@ -2043,6 +2044,7 @@ export default function PettyCashPage() {
                       )
                     }
                   ]}
+                  scroll={{ x: 1000 }}
                 />
               </Card>
             )

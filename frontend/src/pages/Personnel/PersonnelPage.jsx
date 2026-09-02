@@ -500,6 +500,8 @@ function PersonnelPage() {
     {
       title: 'Persona',
       key: 'name',
+      width: 220,
+      ellipsis: true,
       render: (_, r) => (
         <Space>
           <Avatar size={36}
@@ -524,11 +526,11 @@ function PersonnelPage() {
       sorter: (a, b) => (a.role || '').localeCompare(b.role || ''),
     },
     {
-      title: 'Estado', dataIndex: 'status', width: 100,
+      title: 'Estado', dataIndex: 'status', width: 110,
       render: (s) => <Badge status={STATUS_MAP[s]?.badge} text={STATUS_MAP[s]?.label} />,
       sorter: (a, b) => (a.status || '').localeCompare(b.status || ''),
     },
-    { title: 'Email', dataIndex: 'email', width: 200, render: (v) => v || '—' },
+    { title: 'Email', dataIndex: 'email', width: 200, ellipsis: true, render: (v) => v || '—' },
     {
       title: 'Documentos', key: 'docs', width: 140,
       render: (_, r) => <AlertBadge alerts={r.document_alerts} />,
@@ -539,7 +541,7 @@ function PersonnelPage() {
       sorter: (a, b) => dayjs(a.hire_date || 0).unix() - dayjs(b.hire_date || 0).unix(),
     },
     {
-      title: 'Acciones', key: 'actions', width: 110,
+      title: 'Acciones', key: 'actions', width: 110, fixed: 'right',
       render: (_, r) => (
         <Space>
           <Tooltip title="Ver detalle"><Button type="text" icon={<IdcardOutlined />} onClick={() => setDetailPerson(r)} /></Tooltip>
@@ -570,10 +572,18 @@ function PersonnelPage() {
           { key: 'con_alertas', label: 'Con Alertas',       color: '#FAAD14', bg: '#fffbf0', clickable: true },
           { key: 'vencidos',    label: 'Doc. Vencidos',     color: '#F5222D', bg: '#fff1f0', clickable: true },
         ].map(({ key, label, color, bg, clickable }) => (
-          <Col xs={12} md={6} key={key}>
-            <Card size="small" style={{ borderRadius: 10, borderLeft: `3px solid ${color}`, background: bg, cursor: clickable ? 'pointer' : 'default' }}
-              onClick={() => clickable && setFilterAlerts(!filterAlerts)}>
-              <Statistic title={label} value={summary[key]} valueStyle={{ color, fontSize: 20 }} />
+          <Col xs={12} sm={6} key={key}>
+            <Card
+              size="small"
+              style={{
+                borderRadius: 10,
+                borderLeft: `3px solid ${color}`,
+                background: bg,
+                cursor: clickable ? 'pointer' : 'default',
+              }}
+              onClick={clickable ? () => { setFilterAlerts(true); setPagination({...pagination, current: 1}); } : undefined}
+            >
+              <Statistic title={label} value={summary[key]} valueStyle={{ color, fontSize: 22 }} />
             </Card>
           </Col>
         ))}
@@ -608,6 +618,7 @@ function PersonnelPage() {
       <Card style={{ borderRadius: 12 }} styles={{ body: { padding: 0 } }}>
         <style>{`.row-danger td{background:#fff1f0!important}.row-warning td{background:#fffbf0!important}`}</style>
         <Table columns={columns} dataSource={people} rowKey="id" loading={loading} rowClassName={rowClassName}
+          scroll={{ x: 1050 }}
           pagination={{ current: pagination.current, pageSize: pagination.pageSize, total, showSizeChanger: true,
             showTotal: (t) => `${t} registros`, onChange: (p, s) => setPagination({ current: p, pageSize: s }) }} />
       </Card>

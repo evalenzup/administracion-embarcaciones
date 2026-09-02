@@ -12,6 +12,7 @@ from app.models.role import Role
 from app.models.permission import Permission
 from app.schemas.role import RoleCreate, RoleUpdate, RoleResponse, RoleList
 from app.schemas.permission import PermissionResponse, PermissionList
+from app.services.audit import log_action
 
 router = APIRouter(prefix="/api/v1/roles", tags=["Roles"])
 
@@ -75,6 +76,23 @@ async def create_role(
     db.add(role)
     db.commit()
     db.refresh(role)
+
+    # Log de auditoría
+    try:
+        log_action(
+            db=db,
+            user_id=current_user.id,
+            username=current_user.username,
+            action="create",
+            module="roles",
+            entity_type="Role",
+            entity_id=role.id,
+            description=f"Creó el rol '{role.name}'",
+            details={"name": role.name, "description": role.description, "permissions_count": len(role.permissions or [])}
+        )
+    except Exception:
+        pass
+
     return role
 
 
@@ -105,6 +123,23 @@ async def update_role(
 
     db.commit()
     db.refresh(role)
+
+    # Log de auditoría
+    try:
+        log_action(
+            db=db,
+            user_id=current_user.id,
+            username=current_user.username,
+            action="update",
+            module="roles",
+            entity_type="Role",
+            entity_id=role.id,
+            description=f"Actualizó el rol '{role.name}'",
+            details={"name": role.name, "description": role.description, "permissions_count": len(role.permissions or [])}
+        )
+    except Exception:
+        pass
+
     return role
 
 
@@ -119,9 +154,24 @@ async def delete_role(
     if not role:
         raise HTTPException(status_code=404, detail="Rol no encontrado")
 
-    if role.is_system_role:
-        raise HTTPException(status_code=400, detail="No se pueden eliminar roles del sistema")
-
+    role_name = role.name
     db.delete(role)
     db.commit()
+
+    # Log de auditoría
+    try:
+        log_action(
+            db=db,
+            user_id=current_user.id,
+            username=current_user.username,
+            action="delete",
+            module="roles",
+            entity_type="Role",
+            entity_id=role_id,
+            description=f"Eliminó el rol '{role_name}'",
+            details={"name": role_name}
+        )
+    except Exception:
+        pass
+
     return {"message": "Rol eliminado correctamente"}

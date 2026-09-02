@@ -14,6 +14,7 @@ from app.models.personnel import Personnel
 from app.models.participant_profile import ParticipantProfile
 from app.schemas.user import UserCreate, UserUpdate, UserResponse, UserList, UserResetPassword
 from app.utils.security import hash_password
+from app.services.audit import log_action
 
 router = APIRouter(prefix="/api/v1/users", tags=["Usuarios"])
 
@@ -152,6 +153,22 @@ async def create_user(
     db.commit()
     db.refresh(user)
 
+    # Log de auditoría
+    try:
+        log_action(
+            db=db,
+            user_id=current_user.id,
+            username=current_user.username,
+            action="create",
+            module="users",
+            entity_type="User",
+            entity_id=user.id,
+            description=f"Creó el usuario '{user.username}' ({user.full_name})",
+            details={"username": user.username, "email": user.email, "is_active": user.is_active}
+        )
+    except Exception:
+        pass
+
     return UserResponse(
         id=user.id,
         username=user.username,
@@ -248,6 +265,22 @@ async def update_user(
     db.commit()
     db.refresh(user)
 
+    # Log de auditoría
+    try:
+        log_action(
+            db=db,
+            user_id=current_user.id,
+            username=current_user.username,
+            action="update",
+            module="users",
+            entity_type="User",
+            entity_id=user.id,
+            description=f"Actualizó datos del usuario '{user.username}' ({user.full_name})",
+            details={"username": user.username, "email": user.email, "is_active": user.is_active}
+        )
+    except Exception:
+        pass
+
     return UserResponse(
         id=user.id,
         username=user.username,
@@ -281,8 +314,25 @@ async def delete_user(
     if user.id == current_user.id:
         raise HTTPException(status_code=400, detail="No puedes eliminarte a ti mismo")
 
+    username_deleted = user.username
     db.delete(user)
     db.commit()
+
+    # Log de auditoría
+    try:
+        log_action(
+            db=db,
+            user_id=current_user.id,
+            username=current_user.username,
+            action="delete",
+            module="users",
+            entity_type="User",
+            entity_id=user_id,
+            description=f"Eliminó el usuario '{username_deleted}'",
+            details={"username": username_deleted}
+        )
+    except Exception:
+        pass
 
     return {"message": "Usuario eliminado correctamente"}
 
@@ -301,6 +351,22 @@ async def reset_user_password(
 
     user.hashed_password = hash_password(data.password)
     db.commit()
+
+    # Log de auditoría
+    try:
+        log_action(
+            db=db,
+            user_id=current_user.id,
+            username=current_user.username,
+            action="update",
+            module="users",
+            entity_type="User",
+            entity_id=user.id,
+            description=f"Restableció la contraseña del usuario '{user.username}'",
+            details={"username": user.username}
+        )
+    except Exception:
+        pass
 
     return {"message": "Contraseña restablecida correctamente"}
 

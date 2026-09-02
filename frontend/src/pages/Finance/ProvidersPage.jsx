@@ -243,6 +243,8 @@ export default function ProvidersPage() {
       title: 'Nombre Comercial',
       dataIndex: 'commercial_name',
       key: 'commercial_name',
+      width: 240,
+      ellipsis: true,
       render: (text, record) => (
         <Text strong style={{ color: text ? '#1890ff' : '#595959' }}>
           {text || record.legal_name || 'Sin Nombre Comercial'}
@@ -255,6 +257,7 @@ export default function ProvidersPage() {
       title: 'RFC',
       dataIndex: 'rfc',
       key: 'rfc',
+      width: 150,
       render: (text) => <Text code>{text}</Text>,
       sorter: (a, b) => (a.rfc || '').localeCompare(b.rfc || ''),
     },
@@ -262,6 +265,8 @@ export default function ProvidersPage() {
       title: 'Razón Social (SAT)',
       dataIndex: 'legal_name',
       key: 'legal_name',
+      width: 260,
+      ellipsis: true,
       render: (text) => text || <Text type="secondary">—</Text>,
       sorter: (a, b) => (a.legal_name || '').localeCompare(b.legal_name || ''),
     },
@@ -269,6 +274,8 @@ export default function ProvidersPage() {
       title: 'Estado',
       dataIndex: 'is_active',
       key: 'is_active',
+      width: 120,
+      align: 'center',
       render: (active) => (
         <Tag color={active ? 'green' : 'red'}>
           {active ? 'Activo' : 'Inactivo'}
@@ -280,12 +287,17 @@ export default function ProvidersPage() {
       title: 'Fecha Registro',
       dataIndex: 'created_at',
       key: 'created_at',
+      width: 140,
+      align: 'center',
       render: (date) => dayjs(date).format('DD/MM/YYYY'),
       sorter: (a, b) => dayjs(a.created_at || 0).unix() - dayjs(b.created_at || 0).unix(),
     },
     {
       title: 'Acciones',
       key: 'actions',
+      width: 110,
+      fixed: 'right',
+      align: 'center',
       render: (_, record) => (
         <Space size="middle" onClick={(e) => e.stopPropagation()}>
           <Tooltip title="Ver historial y estadísticas">
@@ -431,6 +443,7 @@ export default function ProvidersPage() {
           loading={loading}
           pagination={{ pageSize: 10 }}
           style={{ cursor: 'pointer' }}
+          scroll={{ x: 1000 }}
           onRow={(record) => ({
             onClick: () => handleViewDetail(record),
           })}

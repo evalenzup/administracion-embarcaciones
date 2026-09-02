@@ -24,6 +24,9 @@ const ACTION_COLORS = {
   update: 'processing',
   delete: 'error',
   login: 'default',
+  link_telegram: 'cyan',
+  download: 'geekblue',
+  rejected: 'volcano',
 };
 
 const ACTION_LABELS = {
@@ -31,22 +34,36 @@ const ACTION_LABELS = {
   update: 'EDICIÓN',
   delete: 'ELIMINACIÓN',
   login: 'INICIO SESIÓN',
+  link_telegram: 'VINCULACIÓN BOT',
+  download: 'DESCARGA',
+  rejected: 'RECHAZO',
 };
 
 const MODULE_NAMES = {
-  vessels: 'Embarcaciones',
-  users: 'Usuarios',
-  roles: 'Roles y Permisos',
-  documents: 'Documentos',
-  maintenance: 'Mantenimiento',
-  inventory: 'Inventario',
-  logbooks: 'Bitácoras',
-  cruises: 'Cruceros',
-  personnel: 'Personal DEO',
-  ports: 'Puertos',
-  billing: 'Facturación y Cobros',
-  vessel_requests: 'Solicitudes',
-  fuel_logs: 'Combustibles',
+  telegram_bot: '🤖 Telegram Bot',
+  viaticos: '✈️ Viáticos',
+  gastos_reserva_comprobar: '🚢 Gastos a Reserva (GRC)',
+  petty_cash: '💵 Caja Chica',
+  services: '🛠️ Servicios y Compras',
+  accounts: '💳 Cuentas Contables',
+  projects: '📁 Proyectos',
+  providers: '🏢 Proveedores',
+  vessels: '🚤 Embarcaciones',
+  equipment: '🧰 Equipamiento',
+  inventory: '📦 Inventario',
+  cruises: '🌊 Cruceros',
+  cruise_billings: '🧾 Facturación de Cruceros',
+  vessel_requests: '📋 Solicitudes de Buque',
+  vessel_rates: '💲 Tarifas de Buques',
+  maintenance: '🔧 Mantenimiento',
+  fuel_logs: '⛽ Combustibles',
+  logbooks: '📓 Bitácoras',
+  documents: '📂 Documentos',
+  personnel: '👥 Personal DEO',
+  ports: '⚓ Puertos',
+  users: '👤 Usuarios',
+  roles: '🛡️ Roles y Permisos',
+  auth: '🔑 Autenticación',
 };
 
 export default function AuditPage() {
@@ -150,7 +167,14 @@ export default function AuditPage() {
       dataIndex: 'module',
       key: 'module',
       width: 160,
-      render: (mod) => <Tag color="cyan">{MODULE_NAMES[mod] || mod}</Tag>,
+      render: (mod) => {
+        const isBot = mod === 'telegram_bot';
+        return (
+          <Tag color={isBot ? 'purple' : 'cyan'} style={{ fontWeight: isBot ? 700 : 500 }}>
+            {MODULE_NAMES[mod] || mod}
+          </Tag>
+        );
+      },
       sorter: (a, b) => (a.module || '').localeCompare(b.module || ''),
     },
     {

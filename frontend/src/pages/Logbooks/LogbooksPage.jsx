@@ -231,6 +231,7 @@ function EntriesTable({ logbookType, vessels, eventTypes, cruises }) {
     {
       title: 'Contenido',
       key: 'content',
+      width: 300,
       render: (_, r) => (
         <div>
           {r.title && <Text strong style={{ fontSize: 13 }}>{r.title}</Text>}
@@ -252,7 +253,7 @@ function EntriesTable({ logbookType, vessels, eventTypes, cruises }) {
   ];
 
   const signColumn = {
-    title: 'Firma', key: 'signed', width: 100,
+    title: 'Firma', key: 'signed', width: 100, align: 'center',
     render: (_, r) => r.is_signed
       ? <Badge status="success" text={<Text style={{ fontSize: 11 }}>{r.signed_by || 'Firmado'}</Text>} />
       : <Badge status="default" text={<Text type="secondary" style={{ fontSize: 11 }}>Sin firma</Text>} />,
@@ -260,7 +261,7 @@ function EntriesTable({ logbookType, vessels, eventTypes, cruises }) {
   };
 
   const actionsColumn = {
-    title: 'Acciones', key: 'actions', width: 90,
+    title: 'Acciones', key: 'actions', width: 90, fixed: 'right', align: 'center',
     render: (_, r) => (
       <Space>
         <CanAccess module="logbooks" action="edit">
@@ -308,6 +309,7 @@ function EntriesTable({ logbookType, vessels, eventTypes, cruises }) {
 
       <Card style={{ borderRadius: 12 }} styles={{ body: { padding: 0 } }}>
         <Table columns={columns} dataSource={entries} rowKey="id" loading={loading}
+          scroll={{ x: 950 }}
           pagination={{
             current: pagination.current, pageSize: pagination.pageSize, total, showSizeChanger: true,
             showTotal: (t) => `${t} entradas`, onChange: (p, s) => setPagination({ current: p, pageSize: s })

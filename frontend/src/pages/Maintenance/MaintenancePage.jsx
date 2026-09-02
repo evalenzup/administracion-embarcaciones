@@ -203,6 +203,8 @@ function RecordsTab({ vessels, categories, equipments }) {
     {
       title: 'Mantenimiento',
       key: 'title',
+      width: 250,
+      ellipsis: true,
       render: (_, r) => (
         <div>
           <Text strong style={{ fontSize: 13 }}>{r.title}</Text>
@@ -225,16 +227,19 @@ function RecordsTab({ vessels, categories, equipments }) {
       title: 'Embarcación', 
       key: 'vessel', 
       width: 140, 
+      ellipsis: true,
       render: (_, r) => <Text>{r.vessel?.name}</Text>,
       sorter: (a, b) => (a.vessel?.name || '').localeCompare(b.vessel?.name || ''),
     },
     {
       title: 'Tipo', dataIndex: 'maintenance_type', width: 110,
+      align: 'center',
       render: (t) => <Tag color={TYPE_MAP[t]?.color}>{TYPE_MAP[t]?.label}</Tag>,
       sorter: (a, b) => (a.maintenance_type || '').localeCompare(b.maintenance_type || ''),
     },
     {
       title: 'Prioridad', dataIndex: 'priority', width: 100,
+      align: 'center',
       render: (p) => <Tag color={PRIORITY_MAP[p]?.color}>{PRIORITY_MAP[p]?.label}</Tag>,
       sorter: (a, b) => {
         const weights = { critica: 4, alta: 3, media: 2, baja: 1 };
@@ -247,13 +252,14 @@ function RecordsTab({ vessels, categories, equipments }) {
       sorter: (a, b) => (a.status || '').localeCompare(b.status || ''),
     },
     {
-      title: 'Fecha Prog.', dataIndex: 'scheduled_date', width: 110,
+      title: 'Fecha Prog.', dataIndex: 'scheduled_date', width: 120,
+      align: 'center',
       render: (d) => d ? dayjs(d).format('DD/MM/YYYY') : '—',
       sorter: (a, b) => dayjs(a.scheduled_date || 0).unix() - dayjs(b.scheduled_date || 0).unix(),
       defaultSortOrder: 'descend',
     },
     {
-      title: 'Acciones', key: 'actions', width: 100,
+      title: 'Acciones', key: 'actions', width: 100, fixed: 'right', align: 'center',
       render: (_, r) => (
         <Space>
           <CanAccess module="maintenance" action="edit">
@@ -314,6 +320,7 @@ function RecordsTab({ vessels, categories, equipments }) {
       <Card style={{ borderRadius: 12 }} styles={{ body: { padding: 0 } }}>
         <style>{`.row-danger td { background: #fff1f0 !important; }`}</style>
         <Table columns={columns} dataSource={records} rowKey="id" loading={loading} rowClassName={rowClassName}
+          scroll={{ x: 1000 }}
           pagination={{ current: pagination.current, pageSize: pagination.pageSize, total, showSizeChanger: true, showTotal: (t) => `${t} registros`, onChange: (p, s) => setPagination({ current: p, pageSize: s }) }} />
       </Card>
 

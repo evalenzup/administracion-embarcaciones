@@ -572,7 +572,7 @@ function ParticipantsPage() {
 
   const columns = [
     {
-      title: 'Participante', key: 'name',
+      title: 'Participante', key: 'name', width: 240, ellipsis: true,
       render: (_, r) => (
         <Space>
           <Avatar size={36}
@@ -595,7 +595,7 @@ function ParticipantsPage() {
       defaultSortOrder: 'ascend',
     },
     {
-      title: 'Tipo', key: 'tipo', width: 120,
+      title: 'Tipo', key: 'tipo', width: 120, align: 'center',
       render: (_, r) => r.is_cicese_staff
         ? <Tag color="#0A2647">CICESE</Tag>
         : <Tag color="#6b7280">Externo</Tag>,
@@ -623,7 +623,7 @@ function ParticipantsPage() {
       sorter: (a, b) => (a.cruise_count || 0) - (b.cruise_count || 0),
     },
     {
-      title: 'Acciones', key: 'actions', width: 110,
+      title: 'Acciones', key: 'actions', width: 110, fixed: 'right', align: 'center',
       render: (_, r) => {
         const isRecordOwnerOrAdmin = is_admin || (r.created_by_id === user?.id) || (user?.participant_profile_id === r.id);
         const isSelf = user?.participant_profile_id === r.id;
@@ -690,6 +690,7 @@ function ParticipantsPage() {
 
       <Card style={{ borderRadius: 12 }} styles={{ body: { padding: 0 } }}>
         <Table columns={columns} dataSource={participants} rowKey="id" loading={loading}
+          scroll={{ x: 900 }}
           pagination={{
             current: pagination.current, pageSize: pagination.pageSize, total,
             showSizeChanger: true, showTotal: (t) => `${t} participantes`,

@@ -183,6 +183,8 @@ function DocumentsPage() {
     {
       title: 'Documento',
       key: 'doc',
+      width: 240,
+      ellipsis: true,
       render: (_, r) => (
         <Space>
           <FileTextOutlined style={{ color: CATEGORY_MAP[r.category]?.color, fontSize: 18 }} />
@@ -201,12 +203,14 @@ function DocumentsPage() {
       key: 'vessel',
       render: (_, r) => <Text>{r.vessel?.name}</Text>,
       width: 160,
+      ellipsis: true,
       sorter: (a, b) => (a.vessel?.name || '').localeCompare(b.vessel?.name || ''),
     },
     {
       title: 'Categoría',
       dataIndex: 'category',
       width: 130,
+      align: 'center',
       render: (cat) => <Tag color={CATEGORY_MAP[cat]?.color}>{CATEGORY_MAP[cat]?.label}</Tag>,
       sorter: (a, b) => (a.category || '').localeCompare(b.category || ''),
     },
@@ -235,12 +239,13 @@ function DocumentsPage() {
       title: 'Vencimiento',
       dataIndex: 'expiry_date',
       width: 120,
+      align: 'center',
       render: (d, r) => r.is_permanent ? <Tag color="green">Permanente</Tag> : (d ? dayjs(d).format('DD/MM/YYYY') : '—'),
       sorter: (a, b) => dayjs(a.expiry_date || 0).unix() - dayjs(b.expiry_date || 0).unix(),
       defaultSortOrder: 'ascend',
     },
     {
-      title: 'Acciones', key: 'actions', width: 140,
+      title: 'Acciones', key: 'actions', width: 130, fixed: 'right', align: 'center',
       render: (_, r) => (
         <Space>
           {r.file_path && (
@@ -273,36 +278,35 @@ function DocumentsPage() {
       {/* Semáforo de resumen */}
       <Row gutter={12} style={{ marginBottom: 20 }}>
         {[
-          { key: 'vigente',      label: 'Vigentes',      color: '#27AE60', bg: '#f0fff4' },
-          { key: 'por_vencer',   label: 'Por Vencer',    color: '#E67E22', bg: '#fff8f0' },
-          { key: 'vencido',      label: 'Vencidos',      color: '#E74C3C', bg: '#fff0f0' },
-          { key: 'sin_vigencia', label: 'Sin Vigencia',  color: '#95A5A6', bg: '#f9f9f9' },
+          { key: 'total',        label: 'Total Documentos', color: '#1677FF', bg: '#f0f5ff' },
+          { key: 'vigente',      label: 'Vigentes',         color: '#52C41A', bg: '#f6ffed' },
+          { key: 'por_vencer',   label: 'Por Vencer (<60d)', color: '#FAAD14', bg: '#fffbf0' },
+          { key: 'vencido',      label: 'Vencidos',         color: '#E74C3C', bg: '#fff0f0' },
+          { key: 'sin_vigencia', label: 'Sin Vigencia',     color: '#8C8C8C', bg: '#fafafa' },
         ].map(({ key, label, color, bg }) => (
-          <Col xs={12} md={6} key={key}>
-            <Card
-              size="small"
-              style={{ borderRadius: 10, borderLeft: `3px solid ${color}`, background: bg, cursor: 'pointer' }}
-              onClick={() => { setFilterVigency(filterVigency === key ? null : key); setPagination({ ...pagination, current: 1 }); }}
-            >
-              <Statistic title={label} value={summary[key]} valueStyle={{ color, fontSize: 22 }} />
+          <Col xs={12} sm={8} md={4} lg={4} key={key} style={{ flex: '1 1 180px' }}>
+            <Card size="small" style={{ borderRadius: 10, borderLeft: `3px solid ${color}`, background: bg }}>
+              <Statistic title={label} value={summary[key]} valueStyle={{ color, fontSize: 20 }} />
             </Card>
           </Col>
         ))}
       </Row>
 
-      {/* Header */}
+      {/* Barra de herramientas */}
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
         <Col>
-          <Title level={3} style={{ color: '#0A2647', margin: 0 }}>📋 Documentación</Title>
-          <Text type="secondary">{total} documentos {filterVigency ? `(filtro: ${VIGENCY_MAP[filterVigency]?.label})` : ''}</Text>
+          <Title level={3} style={{ color: '#0A2647', margin: 0 }}>📂 Documentación de Embarcaciones</Title>
+          <Text type="secondary">{total} documentos registrados</Text>
         </Col>
         <Col>
           <Space wrap>
-            <Search placeholder="Buscar documento..." allowClear onSearch={(v) => { setSearch(v); setPagination({ ...pagination, current: 1 }); }} style={{ width: 200 }} />
+            <Search placeholder="Buscar documento..." allowClear onSearch={(v) => { setSearch(v); setPagination({ ...pagination, current: 1 }); }} style={{ width: 180 }} />
             <Select placeholder="Embarcación" allowClear style={{ width: 160 }} onChange={(v) => { setFilterVessel(v); setPagination({ ...pagination, current: 1 }); }}
               options={vessels.map((v) => ({ value: v.id, label: v.name }))} />
             <Select placeholder="Categoría" allowClear style={{ width: 140 }} onChange={(v) => { setFilterCategory(v); setPagination({ ...pagination, current: 1 }); }}
               options={Object.entries(CATEGORY_MAP).map(([k, v]) => ({ value: k, label: v.label }))} />
+            <Select placeholder="Vigencia" allowClear style={{ width: 140 }} onChange={(v) => { setFilterVigency(v); setPagination({ ...pagination, current: 1 }); }}
+              options={Object.entries(VIGENCY_MAP).map(([k, v]) => ({ value: k, label: v.label }))} />
             <Button icon={<ReloadOutlined />} onClick={() => { fetchDocs(); fetchSummary(); }} />
             <CanAccess module="documents" action="create">
               <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>Nuevo Documento</Button>
@@ -314,6 +318,7 @@ function DocumentsPage() {
       <Card style={{ borderRadius: 12 }} styles={{ body: { padding: 0 } }}>
         <style>{`.row-danger td { background: #fff5f5 !important; } .row-warning td { background: #fffbf0 !important; }`}</style>
         <Table columns={columns} dataSource={docs} rowKey="id" loading={loading} rowClassName={rowClassName}
+          scroll={{ x: 1000 }}
           pagination={{ current: pagination.current, pageSize: pagination.pageSize, total, showSizeChanger: true, showTotal: (t) => `${t} documentos`, onChange: (p, s) => setPagination({ current: p, pageSize: s }) }} />
       </Card>
 

@@ -230,6 +230,8 @@ export default function ProjectsPage() {
       title: 'Nombre del Proyecto',
       dataIndex: 'name',
       key: 'name',
+      width: 250,
+      ellipsis: true,
       render: (text) => (
         <Text strong style={{ color: '#1B4F72' }}>
           {text}
@@ -241,12 +243,16 @@ export default function ProjectsPage() {
       title: 'Responsable (PI)',
       dataIndex: 'responsible_name',
       key: 'responsible_name',
+      width: 200,
+      ellipsis: true,
       sorter: (a, b) => (a.responsible_name || '').localeCompare(b.responsible_name || ''),
     },
     {
       title: 'Departamento',
       dataIndex: 'department',
       key: 'department',
+      width: 180,
+      ellipsis: true,
       sorter: (a, b) => (a.department || '').localeCompare(b.department || ''),
     },
     {
@@ -258,13 +264,16 @@ export default function ProjectsPage() {
           {active ? 'Activo' : 'Inactivo'}
         </Tag>
       ),
-      width: 100,
+      width: 110,
+      align: 'center',
       sorter: (a, b) => (a.is_active ? 1 : 0) - (b.is_active ? 1 : 0),
     },
     {
       title: 'Acciones',
       key: 'actions',
-      width: 130,
+      width: 120,
+      fixed: 'right',
+      align: 'center',
       render: (_, record) => (
         <Space size="middle" onClick={(e) => e.stopPropagation()}>
           <Tooltip title="Ver detalles y cruceros">
@@ -322,70 +331,65 @@ export default function ProjectsPage() {
           <Button
             type="primary"
             icon={<PlusOutlined />}
-            onClick={() => setCreateModalOpen(true)}
             size="large"
-            style={{ borderRadius: 8, backgroundColor: '#0A2647', borderColor: '#0A2647', boxShadow: '0 4px 10px rgba(10, 38, 71, 0.2)' }}
+            onClick={() => setCreateModalOpen(true)}
+            style={{ borderRadius: 8 }}
           >
-            Registrar Proyecto
+            Nuevo Proyecto
           </Button>
         )}
       </div>
 
-      {/* KPIs */}
+      {/* Tarjetas de Métricas Rápidas */}
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col xs={24} sm={8}>
-          <Card bordered={false} style={{ borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-            <Statistic
-              title="Total Proyectos"
-              value={projects.length}
-              prefix={<AppstoreOutlined style={{ color: '#1890ff' }} />}
-            />
+          <Card bordered={false} style={{ borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+            <Statistic title="Total Proyectos Registrados" value={stats.total} />
           </Card>
         </Col>
-        <Col xs={12} sm={8}>
-          <Card bordered={false} style={{ borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.04)', background: '#eafff0' }}>
+        <Col xs={24} sm={8}>
+          <Card bordered={false} style={{ borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
             <Statistic
               title="Proyectos Activos"
-              value={projects.filter((p) => p.is_active).length}
-              valueStyle={{ color: '#27ae60' }}
-              prefix={<Badge status="success" />}
+              value={stats.active}
+              valueStyle={{ color: '#52c41a' }}
+              prefix={<CheckCircleOutlined />}
             />
           </Card>
         </Col>
-        <Col xs={12} sm={8}>
-          <Card bordered={false} style={{ borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.04)', background: '#fff1f0' }}>
+        <Col xs={24} sm={8}>
+          <Card bordered={false} style={{ borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
             <Statistic
-              title="Proyectos Inactivos"
-              value={projects.filter((p) => !p.is_active).length}
-              valueStyle={{ color: '#c0392b' }}
-              prefix={<Badge status="error" />}
+              title="Departamentos Involucrados"
+              value={stats.departmentsCount}
+              valueStyle={{ color: '#1890ff' }}
+              prefix={<ApartmentOutlined />}
             />
           </Card>
         </Col>
       </Row>
 
-      {/* Buscadores y Filtros */}
-      <Card bordered={false} style={{ borderRadius: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
-        <div style={{ display: 'flex', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
+      {/* Filtros y Tabla */}
+      <Card bordered={false} style={{ borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+        <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
           <Input
-            placeholder="Buscar por Cuenta, Nombre, Responsable, División..."
+            placeholder="Buscar por nombre, no. cuenta, PI o departamento..."
             prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            onPressEnter={handleSearch}
-            style={{ width: 380, borderRadius: 8 }}
+            style={{ width: 340, borderRadius: 8 }}
+            allowClear
           />
           <Select
+            placeholder="Filtrar por estado"
             value={activeFilter}
             onChange={(val) => setActiveFilter(val)}
             style={{ width: 180 }}
           >
-            <Select.Option value={true}>Solo Activos</Select.Option>
-            <Select.Option value={false}>Mostrar Todos</Select.Option>
+            <Option value={true}>Solo Activos</Option>
+            <Option value={false}>Solo Inactivos</Option>
+            <Option value={null}>Todos los Estados</Option>
           </Select>
-          <Button type="primary" onClick={handleSearch} style={{ borderRadius: 8, backgroundColor: '#1B4F72', borderColor: '#1B4F72' }}>
-            Buscar
-          </Button>
           <Button
             onClick={() => {
               setSearchTerm('');
@@ -410,6 +414,7 @@ export default function ProjectsPage() {
           loading={loading}
           pagination={{ pageSize: 10 }}
           style={{ cursor: 'pointer' }}
+          scroll={{ x: 1000 }}
           onRow={(record) => ({
             onClick: () => handleViewDetail(record),
           })}

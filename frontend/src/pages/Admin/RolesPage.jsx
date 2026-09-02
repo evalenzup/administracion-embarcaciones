@@ -149,6 +149,8 @@ function RolesPage() {
       title: 'Rol',
       dataIndex: 'name',
       key: 'name',
+      width: 200,
+      ellipsis: true,
       render: (name, record) => (
         <Space>
           <SafetyOutlined style={{ color: '#1B4F72' }} />
@@ -163,11 +165,16 @@ function RolesPage() {
       title: 'Descripción',
       dataIndex: 'description',
       key: 'description',
+      width: 250,
+      ellipsis: true,
+      render: (text) => text || <span style={{ color: '#aaa', fontStyle: 'italic' }}>Sin descripción</span>,
       sorter: (a, b) => (a.description || '').localeCompare(b.description || ''),
     },
     {
       title: 'Permisos',
       key: 'permissions',
+      width: 140,
+      align: 'center',
       render: (_, record) => (
         <Tag color="cyan">{record.permissions.length} permisos</Tag>
       ),
@@ -176,7 +183,9 @@ function RolesPage() {
     {
       title: 'Acciones',
       key: 'actions',
-      width: 120,
+      width: 110,
+      fixed: 'right',
+      align: 'center',
       render: (_, record) => (
         <Space>
           <CanAccess module="roles" action="edit">
@@ -229,6 +238,7 @@ function RolesPage() {
           rowKey="id"
           loading={loading}
           pagination={false}
+          scroll={{ x: 700 }}
         />
       </Card>
 

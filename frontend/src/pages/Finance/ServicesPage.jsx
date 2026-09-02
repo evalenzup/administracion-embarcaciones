@@ -645,12 +645,15 @@ export default function ServicesPage() {
       title: 'Folio e-Pisa',
       dataIndex: 'episa_folio',
       key: 'episa_folio',
+      width: 140,
       render: (text) => <Tag color="blue">{text}</Tag>,
       sorter: (a, b) => (a.episa_folio || '').localeCompare(b.episa_folio || ''),
     },
     {
       title: 'Proveedor',
       key: 'provider_name',
+      width: 220,
+      ellipsis: true,
       render: (_, record) => {
         const p = record.provider;
         const name = p ? (p.commercial_name || p.legal_name) : record.provider_name;
@@ -661,12 +664,15 @@ export default function ServicesPage() {
       title: 'Descripción',
       dataIndex: 'description',
       key: 'description',
+      width: 260,
       ellipsis: true,
     },
     {
       title: 'Monto Presupuesto',
       dataIndex: 'budget_amount',
       key: 'budget_amount',
+      width: 170,
+      align: 'right',
       render: (amount, record) => {
         const currency = record.currency || 'MXN';
         const formattedAmount = new Intl.NumberFormat('es-MX', { style: 'currency', currency: currency }).format(amount);
@@ -681,11 +687,13 @@ export default function ServicesPage() {
       title: 'Estado',
       dataIndex: 'status',
       key: 'status',
+      width: 160,
+      align: 'center',
       render: (status) => {
         const conf = stageConfig[status];
         return (
-          <Tag color={conf.color} icon={conf.icon}>
-            {conf.label}
+          <Tag color={conf?.color} icon={conf?.icon}>
+            {conf?.label}
           </Tag>
         );
       },
@@ -694,6 +702,8 @@ export default function ServicesPage() {
       title: 'Fecha Solicitud',
       dataIndex: 'created_at',
       key: 'created_at',
+      width: 150,
+      align: 'center',
       render: (date) => dayjs(date).format('DD/MM/YYYY HH:mm'),
       sorter: (a, b) => dayjs(a.created_at).unix() - dayjs(b.created_at).unix(),
       defaultSortOrder: 'descend',
@@ -701,6 +711,9 @@ export default function ServicesPage() {
     {
       title: 'Acciones',
       key: 'actions',
+      width: 100,
+      fixed: 'right',
+      align: 'center',
       render: (_, record) => (
         <Space size="middle">
           <Tooltip title="Ver detalle">
@@ -862,6 +875,7 @@ export default function ServicesPage() {
           loading={loading}
           pagination={{ pageSize: 10 }}
           style={{ cursor: 'pointer' }}
+          scroll={{ x: 1100 }}
           onRow={(record) => ({
             onClick: () => handleViewDetail(record),
           })}

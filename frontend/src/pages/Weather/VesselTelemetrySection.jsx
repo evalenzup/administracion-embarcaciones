@@ -3,7 +3,8 @@
  * Muestra gráficos históricos de sensores a bordo y tabla de mediciones recientes.
  */
 import { useCallback, useEffect, useState, useMemo } from 'react';
-import { Card, Col, Empty, Row, Segmented, Spin, Table, Tag, Typography, message, DatePicker } from 'antd';
+import { Card, Col, Empty, Row, Segmented, Spin, Table, Tag, Typography, message, DatePicker, Button, Space } from 'antd';
+import { DownloadOutlined } from '@ant-design/icons';
 import {
   CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
@@ -157,7 +158,7 @@ function VesselTelemetrySection({ vesselId, vesselName, range, onRangeChange, on
     let totalTemp = 0, countTemp = 0;
     let totalPressure = 0, countPressure = 0;
     let totalHumidity = 0, countHumidity = 0;
-    let totalWind = 0, countWind = 0;
+    let totalWind = 0, maxWind = 0, countWind = 0, maxWindDir = null;
     let sumCos = 0, sumSin = 0, countWindDir = 0;
     let totalPrecip = 0;
 
@@ -176,11 +177,16 @@ function VesselTelemetrySection({ vesselId, vesselName, range, onRangeChange, on
         countHumidity++;
       }
       const wind = pt.wind_speed_corr != null ? pt.wind_speed_corr : pt.wind_speed;
+      const windDir = pt.wind_dir_corr != null ? pt.wind_dir_corr : pt.wind_dir;
       if (wind != null) {
-        totalWind += wind * 1.94384;
+        const windKts = wind * 1.94384;
+        totalWind += windKts;
+        if (windKts > maxWind) {
+          maxWind = windKts;
+          maxWindDir = windDir;
+        }
         countWind++;
       }
-      const windDir = pt.wind_dir_corr != null ? pt.wind_dir_corr : pt.wind_dir;
       if (windDir != null) {
         const rad = windDir * Math.PI / 180;
         sumCos += Math.cos(rad);
@@ -210,6 +216,8 @@ function VesselTelemetrySection({ vesselId, vesselName, range, onRangeChange, on
       avgPressure: countPressure > 0 ? totalPressure / countPressure : null,
       avgHumidity: countHumidity > 0 ? totalHumidity / countHumidity : null,
       avgWind: countWind > 0 ? totalWind / countWind : null,
+      maxWind: countWind > 0 ? maxWind : null,
+      maxWindDir,
       avgWindDir,
       totalPrecip,
     };
@@ -237,6 +245,79 @@ function VesselTelemetrySection({ vesselId, vesselName, range, onRangeChange, on
   const tickInterval = Math.max(0, Math.ceil(chartData.length / 8) - 1);
   const tableData = [...chartData].reverse();
 
+  const handleDownloadCsv = useCallback(() => {
+    if (!history || history.length === 0) {
+      message.warning('No hay datos de telemetría para exportar en el rango seleccionado.');
+      return;
+    }
+
+    const headers = [
+      'Fecha y Hora (Local)',
+      'Fecha y Hora (UTC)',
+      'Latitud',
+      'Longitud',
+      'Temperatura (C)',
+      'Humedad (%)',
+      'Presion (hPa)',
+      'Punto Rocio (C)',
+      'Viento Relativo (m/s)',
+      'Viento Relativo (nudos)',
+      'Dir Viento Relativo (grados)',
+      'Viento Corregido (m/s)',
+      'Viento Corregido (nudos)',
+      'Dir Viento Corregido (grados)',
+      'Dir Cardinal',
+      'Precipitacion Total (mm)',
+      'Intensidad Precipitacion (mm/h)',
+      'Voltaje Suministro (V)',
+    ];
+
+    const rows = history.map((pt) => {
+      const localTime = pt.timestamp ? dayjs(pt.timestamp).format('YYYY-MM-DD HH:mm:ss') : '';
+      const utcTime = pt.timestamp ? new Date(pt.timestamp).toISOString().replace('T', ' ').substring(0, 19) : '';
+      const windKts = pt.wind_speed != null ? (pt.wind_speed * 1.94384).toFixed(2) : '';
+      const windCorrKts = pt.wind_speed_corr != null ? (pt.wind_speed_corr * 1.94384).toFixed(2) : '';
+      const dirCard = pt.wind_dir_corr != null ? getWindDirectionText(pt.wind_dir_corr) : (pt.wind_dir != null ? getWindDirectionText(pt.wind_dir) : '');
+
+      return [
+        localTime,
+        utcTime,
+        pt.latitude ?? '',
+        pt.longitude ?? '',
+        pt.temp ?? '',
+        pt.humidity ?? '',
+        pt.pressure ?? '',
+        pt.dewpoint ?? '',
+        pt.wind_speed ?? '',
+        windKts,
+        pt.wind_dir ?? '',
+        pt.wind_speed_corr ?? '',
+        windCorrKts,
+        pt.wind_dir_corr ?? '',
+        `"${dirCard}"`,
+        pt.precip_total ?? '',
+        pt.precip_int ?? '',
+        pt.supply_v ?? '',
+      ].join(',');
+    });
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const safeName = (vesselName || `buque_${vesselId}`)
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9_\-]/g, '_');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `telemetria_${safeName}_${dayjs().format('YYYYMMDD')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    message.success('Archivo CSV de telemetría descargado exitosamente');
+  }, [history, vesselName, vesselId]);
+
   return (
     <Card
       title={
@@ -250,18 +331,29 @@ function VesselTelemetrySection({ vesselId, vesselName, range, onRangeChange, on
       style={{ borderRadius: 12, marginTop: 12 }}
       styles={{ body: { padding: 16 } }}
       extra={
-        <RangePicker
-          showTime
-          format="YYYY-MM-DD HH:mm"
-          value={range}
-          onChange={onRangeChange}
-          presets={[
-            { label: 'Últimas 24h', value: [dayjs().subtract(1, 'day'), dayjs()] },
-            { label: '1 Semana', value: [dayjs().subtract(7, 'day'), dayjs()] },
-            { label: '30 Días', value: [dayjs().subtract(30, 'day'), dayjs()] },
-          ]}
-          style={{ width: 320 }}
-        />
+        <Space>
+          <RangePicker
+            showTime
+            format="YYYY-MM-DD HH:mm"
+            value={range}
+            onChange={onRangeChange}
+            presets={[
+              { label: 'Últimas 24h', value: [dayjs().subtract(1, 'day'), dayjs()] },
+              { label: '1 Semana', value: [dayjs().subtract(7, 'day'), dayjs()] },
+              { label: '30 Días', value: [dayjs().subtract(30, 'day'), dayjs()] },
+            ]}
+            style={{ width: 320 }}
+          />
+          {history && history.length > 0 && (
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={handleDownloadCsv}
+              style={{ borderColor: '#13C2C2', color: '#08979c' }}
+            >
+              Exportar CSV
+            </Button>
+          )}
+        </Space>
       }
     >
       {loading ? (
@@ -316,6 +408,13 @@ function VesselTelemetrySection({ vesselId, vesselName, range, onRangeChange, on
                   <strong style={{ color: '#0A2647' }}>
                     {stats.avgWind != null ? `${stats.avgWind.toFixed(1)} kt` : '—'}
                     {stats.avgWindDir != null ? ` (${Math.round(stats.avgWindDir)}° ${getWindDirectionText(stats.avgWindDir)})` : ''}
+                  </strong>
+                </div>
+                <div>
+                  <span style={{ color: '#888' }}>Viento Máximo: </span>
+                  <strong style={{ color: '#0A2647' }}>
+                    {stats.maxWind != null ? `${stats.maxWind.toFixed(1)} kt` : '—'}
+                    {stats.maxWindDir != null ? ` (${Math.round(stats.maxWindDir)}° ${getWindDirectionText(stats.maxWindDir)})` : ''}
                   </strong>
                 </div>
                 <div>

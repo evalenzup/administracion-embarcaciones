@@ -137,6 +137,7 @@
 | `frontend/src/components/common/CanAccess.jsx` | Componente y hook de permisos UI |
 | `frontend/src/styles/theme.js` | Tema Ant Design |
 | `frontend/src/api/client.js` | Cliente Axios centralizado |
+| `documentacion/PLAN_ALERTAS_RECORDATORIOS_BOT.md` | Plan de alertas y recordatorios inteligentes para Telegram Bot |
 
 ---
 
