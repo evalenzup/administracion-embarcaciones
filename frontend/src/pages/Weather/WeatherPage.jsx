@@ -448,8 +448,9 @@ function WeatherPage() {
 
   if (statusLoading) {
     return (
-      <div style={{ textAlign: 'center', padding: 60 }}>
-        <Spin size="large" tip="Cargando estado meteorológico..." />
+      <div style={{ textAlign: 'center', padding: 60, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+        <Spin size="large" />
+        <span style={{ color: '#888' }}>Cargando estado meteorológico...</span>
       </div>
     );
   }

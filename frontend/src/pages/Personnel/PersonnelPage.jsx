@@ -45,10 +45,12 @@ function AlertBadge({ alerts }) {
   const hasExpired = alerts.some(a => a.status === 'vencido');
   return (
     <Tooltip title={alerts.map(a => `${a.doc}: ${a.status === 'vencido' ? 'Vencido' : `Vence en ${a.days}d`}`).join(' | ')}>
-      <Badge status={hasExpired ? 'error' : 'warning'}
-        text={<Text style={{ fontSize: 11, color: hasExpired ? '#F5222D' : '#FAAD14' }}>
-          {hasExpired ? '🔴' : '🟡'} {alerts.length} alerta{alerts.length > 1 ? 's' : ''}
-        </Text>} />
+      <span>
+        <Badge status={hasExpired ? 'error' : 'warning'}
+          text={<Text style={{ fontSize: 11, color: hasExpired ? '#F5222D' : '#FAAD14' }}>
+            {hasExpired ? '🔴' : '🟡'} {alerts.length} alerta{alerts.length > 1 ? 's' : ''}
+          </Text>} />
+      </span>
     </Tooltip>
   );
 }

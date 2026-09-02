@@ -65,8 +65,9 @@ function PointForecastPanel({ open, onClose, pointName, loading, forecast }) {
         )}
       </div>
       {loading ? (
-        <div style={{ textAlign: 'center', padding: 40 }}>
-          <Spin tip="Cargando pronóstico del modelo..." />
+        <div style={{ textAlign: 'center', padding: 40, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+          <Spin />
+          <span style={{ color: '#888', fontSize: 13 }}>Cargando pronóstico del modelo...</span>
         </div>
       ) : !forecast || forecast.length === 0 ? (
         <Empty description="Sin datos de pronóstico para este punto" />

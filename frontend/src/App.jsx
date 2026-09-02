@@ -48,8 +48,9 @@ function ProtectedRoute({ children }) {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
-        <Spin size="large" tip="Cargando..." />
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', gap: 16 }}>
+        <Spin size="large" />
+        <span style={{ color: '#666', fontSize: 14 }}>Cargando...</span>
       </div>
     );
   }
