@@ -9,7 +9,7 @@ import {
   FileTextOutlined, TeamOutlined, UserOutlined, SettingOutlined,
   InboxOutlined, InfoCircleOutlined, SendOutlined, SearchOutlined,
   IdcardOutlined, CalendarOutlined, ArrowRightOutlined, CheckCircleOutlined,
-  FileDoneOutlined
+  FileDoneOutlined, DollarOutlined
 } from '@ant-design/icons';
 import { useAuth } from '../../context/AuthContext';
 
