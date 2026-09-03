@@ -128,6 +128,8 @@ export default function GastosReservaComprobarPage() {
   const [returnFileList, setReturnFileList] = useState([]);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [detailTab, setDetailTab] = useState('signatures');
+  const [downloadingExcel, setDownloadingExcel] = useState(false);
+  const [downloadingZip, setDownloadingZip] = useState(false);
   
   // Buscador de Facturas en modal de detalle
   const [invoiceSearchText, setInvoiceSearchText] = useState('');
@@ -621,6 +623,7 @@ export default function GastosReservaComprobarPage() {
   };
 
   const handleDownloadInvoicesZip = async (id) => {
+    setDownloadingZip(true);
     try {
       const response = await apiClient.get(`/gastos-reserva-comprobar/${id}/invoices/zip`, {
         responseType: 'blob'
@@ -633,8 +636,32 @@ export default function GastosReservaComprobarPage() {
       document.body.appendChild(link);
       link.click();
       link.remove();
+      message.success('Paquete ZIP de facturas descargado correctamente');
     } catch (error) {
       message.error('Error al descargar el archivo ZIP de facturas.');
+    } finally {
+      setDownloadingZip(false);
+    }
+  };
+
+  const handleDownloadInvoicesExcel = async (id) => {
+    setDownloadingExcel(true);
+    try {
+      const response = await apiClient.get(`/gastos-reserva-comprobar/${id}/invoices/excel`, {
+        responseType: 'blob'
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `comprobacion_grc_${selectedGrc.folio_episa}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      message.success('Reporte Excel (.xlsx) descargado correctamente');
+    } catch (error) {
+      message.error('Error al descargar el archivo Excel de comprobación.');
+    } finally {
+      setDownloadingExcel(false);
     }
   };
 
@@ -1095,7 +1122,9 @@ export default function GastosReservaComprobarPage() {
             setInvoiceSearchText('');
           }}>Cerrar</Button>
         ]}
-        width={1100}
+        width={1280}
+        style={{ top: 20 }}
+        styles={{ body: { padding: '16px 24px', maxHeight: 'calc(100vh - 120px)', overflowY: 'auto' } }}
         destroyOnClose
       >
         {selectedGrc && (
@@ -1504,12 +1533,22 @@ export default function GastosReservaComprobarPage() {
                       style={{ width: 280 }}
                     />
                     {selectedGrc.facturas && selectedGrc.facturas.length > 0 && (
-                      <Button
-                        icon={<FileZipOutlined style={{ color: '#E67E22' }} />}
-                        onClick={() => handleDownloadInvoicesZip(selectedGrc.id)}
-                      >
-                        Descargar Facturas (ZIP)
-                      </Button>
+                      <>
+                        <Button
+                          icon={<FileExcelOutlined style={{ color: '#27AE60' }} />}
+                          onClick={() => handleDownloadInvoicesExcel(selectedGrc.id)}
+                          loading={downloadingExcel}
+                        >
+                          Descargar Excel
+                        </Button>
+                        <Button
+                          icon={<FileZipOutlined style={{ color: '#E67E22' }} />}
+                          onClick={() => handleDownloadInvoicesZip(selectedGrc.id)}
+                          loading={downloadingZip}
+                        >
+                          Descargar Facturas (ZIP)
+                        </Button>
+                      </>
                     )}
                     <Button icon={<PlusOutlined />} type="primary" onClick={handleOpenUploadInvoice}>
                       Cargar Factura XML / PDF

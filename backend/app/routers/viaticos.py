@@ -334,6 +334,69 @@ async def download_viatico_invoices_zip(
     )
 
 
+@router.get("/{id}/invoices/excel")
+async def download_viatico_invoices_excel(
+    id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Descargar exclusivamente el archivo Excel (.xlsx) de comprobación de facturas con fórmulas."""
+    import io
+    from fastapi.responses import StreamingResponse
+    from app.utils.invoice_bundle import build_comprobacion_excel
+
+    viatico = db.query(Viatico).filter(Viatico.id == id).first()
+    if not viatico:
+        raise HTTPException(status_code=404, detail="Comisión de viáticos no encontrada")
+
+    # Validar permisos de acceso
+    has_global_view = current_user.has_permission("viaticos", "view")
+    if not has_global_view and (not viatico.personal or viatico.personal.user_id != current_user.id) and viatico.asistente_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permiso para ver esta comisión de viáticos"
+        )
+
+    if not viatico.facturas:
+        raise HTTPException(status_code=400, detail="Esta comisión de viáticos no tiene facturas registradas.")
+
+    facturas_sorted = sorted(
+        viatico.facturas,
+        key=lambda x: (x.fecha_emision or datetime.min)
+    )
+
+    excel_bytes = build_comprobacion_excel(
+        folio_tramite=viatico.folio_comision,
+        facturas_sorted=facturas_sorted,
+        tramite_type="viatico"
+    )
+
+    try:
+        is_telegram = bool(request.headers.get("x-bot-token") or request.headers.get("x-impersonate-telegram-id"))
+        source_str = "Telegram Bot" if is_telegram else "Plataforma Web"
+        log_action(
+            db=db,
+            user_id=current_user.id,
+            username=current_user.username,
+            action="download",
+            module="telegram_bot" if is_telegram else "viaticos",
+            entity_type="Viatico",
+            entity_id=viatico.id,
+            description=f"Descargó reporte Excel de comprobación del Viático Folio {viatico.folio_comision} ({source_str})",
+            details={"source": "telegram_bot" if is_telegram else "web", "folio": viatico.folio_comision, "facturas_count": len(viatico.facturas)}
+        )
+    except Exception:
+        pass
+
+    filename = f"comprobacion_viatico_{viatico.folio_comision}.xlsx"
+    return StreamingResponse(
+        io.BytesIO(excel_bytes),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
 @router.put("/{id}", response_model=ViaticoResponse)
 async def update_viatico(
     id: int,

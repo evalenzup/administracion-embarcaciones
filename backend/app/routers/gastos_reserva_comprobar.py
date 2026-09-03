@@ -473,6 +473,68 @@ async def download_grc_invoices_zip(
     )
 
 
+@router.get("/{id}/invoices/excel")
+async def download_grc_invoices_excel(
+    id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Descargar exclusivamente el archivo Excel (.xlsx) de comprobación de facturas GRC con fórmulas."""
+    import io
+    from fastapi.responses import StreamingResponse
+    from app.utils.invoice_bundle import build_comprobacion_excel
+
+    grc = db.query(GastoReservaComprobar).filter(GastoReservaComprobar.id == id).first()
+    if not grc:
+        raise HTTPException(status_code=404, detail="Solicitud GRC no encontrada")
+
+    has_global_view = current_user.has_permission("gastos_reserva_comprobar", "view")
+    if not has_global_view and grc.solicitante_id != current_user.id and grc.asistente_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permiso para ver este GRC"
+        )
+
+    if not grc.facturas:
+        raise HTTPException(status_code=400, detail="Esta solicitud GRC no tiene facturas registradas.")
+
+    facturas_sorted = sorted(
+        grc.facturas,
+        key=lambda x: (x.fecha_emision or datetime.min)
+    )
+
+    excel_bytes = build_comprobacion_excel(
+        folio_tramite=grc.folio_episa,
+        facturas_sorted=facturas_sorted,
+        tramite_type="grc"
+    )
+
+    try:
+        is_telegram = bool(request.headers.get("x-bot-token") or request.headers.get("x-impersonate-telegram-id"))
+        source_str = "Telegram Bot" if is_telegram else "Plataforma Web"
+        log_action(
+            db=db,
+            user_id=current_user.id,
+            username=current_user.username,
+            action="download",
+            module="telegram_bot" if is_telegram else "gastos_reserva_comprobar",
+            entity_type="GastoReservaComprobar",
+            entity_id=grc.id,
+            description=f"Descargó reporte Excel de comprobación de GRC Folio {grc.folio_episa} ({source_str})",
+            details={"source": "telegram_bot" if is_telegram else "web", "folio": grc.folio_episa, "facturas_count": len(grc.facturas)}
+        )
+    except Exception:
+        pass
+
+    filename = f"comprobacion_grc_{grc.folio_episa}.xlsx"
+    return StreamingResponse(
+        io.BytesIO(excel_bytes),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
 @router.put("/{id}", response_model=GastoReservaComprobarResponse)
 async def update_grc(
     id: int,

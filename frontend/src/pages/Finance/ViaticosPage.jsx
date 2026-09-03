@@ -46,10 +46,12 @@ import {
   InboxOutlined,
   SyncOutlined,
   FileZipOutlined,
+  FileExcelOutlined,
   SearchOutlined,
   InfoCircleOutlined,
   FolderOpenOutlined,
-  SafetyCertificateOutlined
+  SafetyCertificateOutlined,
+  WarningOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import apiClient from '../../api/client';
@@ -111,6 +113,8 @@ export default function ViaticosPage() {
   const [uploadingComprobacion, setUploadingComprobacion] = useState(false);
   const [uploadingReporte, setUploadingReporte] = useState(false);
   const [uploadingDevolucion, setUploadingDevolucion] = useState(false);
+  const [downloadingExcel, setDownloadingExcel] = useState(false);
+  const [downloadingZip, setDownloadingZip] = useState(false);
   const [devolucionForm] = Form.useForm();
 
   const { hasPermission } = useAuth();
@@ -730,6 +734,7 @@ export default function ViaticosPage() {
   };
 
   const handleDownloadInvoicesZip = async (id) => {
+    setDownloadingZip(true);
     try {
       const response = await apiClient.get(`/viaticos/${id}/invoices/zip`, {
         responseType: 'blob'
@@ -742,8 +747,32 @@ export default function ViaticosPage() {
       document.body.appendChild(link);
       link.click();
       link.remove();
+      message.success('Paquete ZIP de facturas descargado correctamente');
     } catch (error) {
       message.error('Error al descargar el archivo ZIP de facturas.');
+    } finally {
+      setDownloadingZip(false);
+    }
+  };
+
+  const handleDownloadInvoicesExcel = async (id) => {
+    setDownloadingExcel(true);
+    try {
+      const response = await apiClient.get(`/viaticos/${id}/invoices/excel`, {
+        responseType: 'blob'
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `comprobacion_viatico_${selectedViatico.folio_comision}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      message.success('Reporte Excel (.xlsx) descargado correctamente');
+    } catch (error) {
+      message.error('Error al descargar el archivo Excel de comprobación.');
+    } finally {
+      setDownloadingExcel(false);
     }
   };
 
@@ -1551,7 +1580,9 @@ export default function ViaticosPage() {
           setInvoiceSearchText('');
         }}
         footer={null}
-        width={1050}
+        width={1280}
+        style={{ top: 20 }}
+        styles={{ body: { padding: '16px 24px', maxHeight: 'calc(100vh - 120px)', overflowY: 'auto' } }}
         destroyOnClose
       >
         {selectedViatico && (
@@ -1829,12 +1860,22 @@ export default function ViaticosPage() {
                         style={{ width: 280 }}
                       />
                       {selectedViatico.facturas && selectedViatico.facturas.length > 0 && (
-                        <Button
-                          icon={<FileZipOutlined style={{ color: '#E67E22' }} />}
-                          onClick={() => handleDownloadInvoicesZip(selectedViatico.id)}
-                        >
-                          Descargar Facturas (ZIP)
-                        </Button>
+                        <>
+                          <Button
+                            icon={<FileExcelOutlined style={{ color: '#27AE60' }} />}
+                            onClick={() => handleDownloadInvoicesExcel(selectedViatico.id)}
+                            loading={downloadingExcel}
+                          >
+                            Descargar Excel
+                          </Button>
+                          <Button
+                            icon={<FileZipOutlined style={{ color: '#E67E22' }} />}
+                            onClick={() => handleDownloadInvoicesZip(selectedViatico.id)}
+                            loading={downloadingZip}
+                          >
+                            Descargar Facturas (ZIP)
+                          </Button>
+                        </>
                       )}
                       {['borrador', 'comprobacion_pendiente', 'aprobado', 'solicitado'].includes(selectedViatico.status) && (
                         <Button
@@ -1853,16 +1894,18 @@ export default function ViaticosPage() {
                     rowKey="id"
                     pagination={false}
                     size="small"
-                    scroll={{ y: 280 }}
+                    scroll={{ y: 350, x: 1050 }}
                     columns={[
                       {
                         title: 'UUID / Emisor',
                         key: 'emisor',
+                        width: 240,
                         render: (_, r) => (
                           <div>
-                            <small><b>{r.emisor_nombre}</b></small>
+                            <small style={{ fontSize: 12 }}><b>{r.emisor_nombre || 'Sin emisor'}</b></small>
                             <br />
-                            <small style={{ color: '#999' }}>
+                            <small style={{ color: '#888' }}>
+                              {r.emisor_rfc && <span>{r.emisor_rfc} • </span>}
                               {r.uuid ? (
                                 <Tooltip title={`UUID: ${r.uuid}`}>
                                   <span style={{ cursor: 'help' }}>{r.uuid.substring(0, 18)}...</span>
@@ -1875,10 +1918,69 @@ export default function ViaticosPage() {
                         )
                       },
                       {
+                        title: 'Fecha Emisión',
+                        dataIndex: 'fecha_emision',
+                        key: 'fecha_emision',
+                        width: 140,
+                        align: 'center',
+                        sorter: (a, b) => dayjs(a.fecha_emision || 0).unix() - dayjs(b.fecha_emision || 0).unix(),
+                        render: (val) => {
+                          if (!val) return <span style={{ color: '#999' }}>—</span>;
+                          const emision = dayjs(val);
+                          const inicio = selectedViatico?.fecha_inicio ? dayjs(selectedViatico.fecha_inicio).startOf('day') : null;
+                          const fin = selectedViatico?.fecha_fin ? dayjs(selectedViatico.fecha_fin).endOf('day') : null;
+                          const isOutOfRange = (inicio && fin) && (emision.isBefore(inicio) || emision.isAfter(fin));
+                          const dateFormatted = emision.format('DD/MM/YYYY');
+                          const timeFormatted = emision.format('HH:mm');
+
+                          if (isOutOfRange) {
+                            return (
+                              <Tooltip
+                                title={
+                                  <div>
+                                    <div style={{ fontWeight: 600, color: '#ffccc7' }}>⚠️ Posible discrepancia de fecha:</div>
+                                    <div>Factura emitida el <b>{dateFormatted} {timeFormatted}</b>.</div>
+                                    <div>Periodo de comisión: <b>{dayjs(selectedViatico.fecha_inicio).format('DD/MM/YYYY')}</b> al <b>{dayjs(selectedViatico.fecha_fin).format('DD/MM/YYYY')}</b>.</div>
+                                    <div style={{ marginTop: 4, fontStyle: 'italic', fontSize: 11, color: '#fff' }}>
+                                      La fecha está fuera del periodo de la solicitud. Probablemente no corresponde a este trámite.
+                                    </div>
+                                  </div>
+                                }
+                              >
+                                <div style={{ 
+                                  color: '#cf1322', 
+                                  fontWeight: 700, 
+                                  display: 'inline-flex', 
+                                  alignItems: 'center', 
+                                  justifyContent: 'center',
+                                  gap: 4, 
+                                  background: '#fff1f0', 
+                                  padding: '2px 8px', 
+                                  borderRadius: 6, 
+                                  border: '1px solid #ffa39e',
+                                  cursor: 'help'
+                                }}>
+                                  <WarningOutlined style={{ color: '#cf1322', fontSize: 13 }} />
+                                  <span>{dateFormatted}</span>
+                                </div>
+                              </Tooltip>
+                            );
+                          }
+
+                          return (
+                            <Tooltip title={`Emitida el ${dateFormatted} a las ${timeFormatted} (Dentro del periodo de comisión)`}>
+                              <div style={{ color: '#1B4F72', fontWeight: 500 }}>
+                                {dateFormatted}
+                              </div>
+                            </Tooltip>
+                          );
+                        }
+                      },
+                      {
                         title: 'Categoría',
                         dataIndex: 'category_id',
                         key: 'category_id',
-                        width: 180,
+                        width: 190,
                         render: (catId, r) => {
                           const viaticoCategories = categories.filter(c =>
                             ['alimentos', 'hospedaje', 'transporte', 'gasolina', 'avión', 'avion', 'paquete hospedaje + comida'].includes(c.name.toLowerCase())
@@ -1905,7 +2007,8 @@ export default function ViaticosPage() {
                         title: 'Estado SAT',
                         dataIndex: 'sat_status',
                         key: 'sat_status',
-                        width: 140,
+                        width: 130,
+                        align: 'center',
                         render: (status, record) => {
                           let color = 'default';
                           let label = status || 'No Verificado';
@@ -1915,7 +2018,7 @@ export default function ViaticosPage() {
                           
                           return (
                             <Tooltip title={record.sat_verified_at ? `Verificado el: ${dayjs(record.sat_verified_at).format('DD-MM-YYYY HH:mm')}` : 'Sin verificación reciente'}>
-                              <Tag color={color}>{label.toUpperCase()}</Tag>
+                              <Tag color={color} style={{ fontWeight: 600 }}>{label.toUpperCase()}</Tag>
                             </Tooltip>
                           );
                         }
@@ -1924,38 +2027,45 @@ export default function ViaticosPage() {
                         title: 'Total',
                         dataIndex: 'total',
                         key: 'total',
-                        render: (t) => `$${t.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
+                        width: 120,
+                        align: 'right',
+                        render: (t) => <strong style={{ color: '#0A2647' }}>${t.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</strong>
                       },
                       {
                         title: 'Archivos',
                         key: 'archivos',
+                        width: 130,
+                        align: 'center',
                         render: (_, r) => (
-                          <Space>
+                          <Space size="small">
                             {r.xml_filename && (
-                              <Button
-                                size="small"
-                                icon={<FileTextOutlined />}
-                                href={getFileUrl(r.xml_filename)}
-                                target="_blank"
-                                title="Ver XML"
-                              />
+                              <Tooltip title="Ver XML">
+                                <Button
+                                  size="small"
+                                  icon={<FileTextOutlined />}
+                                  href={getFileUrl(r.xml_filename)}
+                                  target="_blank"
+                                />
+                              </Tooltip>
                             )}
                             {r.pdf_filename && (
-                              <Button
-                                size="small"
-                                icon={<FilePdfOutlined />}
-                                href={getFileUrl(r.pdf_filename)}
-                                target="_blank"
-                                title="Ver PDF"
-                              />
+                              <Tooltip title="Ver PDF">
+                                <Button
+                                  size="small"
+                                  icon={<FilePdfOutlined style={{ color: '#cf1322' }} />}
+                                  href={getFileUrl(r.pdf_filename)}
+                                  target="_blank"
+                                />
+                              </Tooltip>
                             )}
                             {r.uuid && (
-                              <Button
-                                icon={<SyncOutlined />}
-                                size="small"
-                                onClick={() => handleVerifySat(r.id)}
-                                title="Verificar ante el SAT"
-                              />
+                              <Tooltip title="Re-verificar ante el SAT">
+                                <Button
+                                  icon={<SyncOutlined />}
+                                  size="small"
+                                  onClick={() => handleVerifySat(r.id)}
+                                />
+                              </Tooltip>
                             )}
                           </Space>
                         )
@@ -1963,6 +2073,8 @@ export default function ViaticosPage() {
                       {
                         title: 'Acciones',
                         key: 'delete',
+                        width: 70,
+                        align: 'center',
                         render: (_, r) => (
                           <Popconfirm
                             title="¿Eliminar esta factura?"
@@ -1970,7 +2082,9 @@ export default function ViaticosPage() {
                             okText="Sí"
                             cancelText="No"
                           >
-                            <Button icon={<DeleteOutlined />} size="small" danger type="text" />
+                            <Tooltip title="Eliminar factura">
+                              <Button icon={<DeleteOutlined />} size="small" danger type="text" />
+                            </Tooltip>
                           </Popconfirm>
                         )
                       }
