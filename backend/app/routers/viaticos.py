@@ -1437,4 +1437,170 @@ async def delete_viatico_invoice_ticket(
     return invoice
 
 
+@router.post("/invoices/{inv_id}/pdf", response_model=ViaticoFacturaResponse)
+async def upload_viatico_invoice_pdf(
+    inv_id: int,
+    file: UploadFile = File(...),
+    request: Request = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Subir y validar el archivo PDF de una factura existente, verificando que coincida con los datos fiscales."""
+    import shutil
+    from pypdf import PdfReader
+
+    invoice = db.query(ViaticoFactura).filter(ViaticoFactura.id == inv_id).first()
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Factura de viáticos no encontrada")
+
+    viatico = db.query(Viatico).filter(Viatico.id == invoice.viatico_id).first()
+    if not viatico:
+        raise HTTPException(status_code=404, detail="Comisión de viáticos no encontrada")
+
+    has_global_edit = current_user.has_permission("viaticos", "edit")
+    if not has_global_edit and (not viatico.personal or viatico.personal.user_id != current_user.id) and viatico.asistente_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permiso para modificar facturas de esta comisión"
+        )
+
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="El archivo adjunto debe ser un documento PDF válido (.pdf)")
+
+    # Validar correspondencia XML vs PDF
+    try:
+        pdf_reader = PdfReader(file.file)
+        pdf_text = ""
+        for page in pdf_reader.pages:
+            pdf_text += page.extract_text() or ""
+
+        file.file.seek(0)
+
+        if len(pdf_text.strip()) > 30:
+            pdf_text_lower = pdf_text.lower()
+            clean_pdf_text = pdf_text_lower.replace("-", "").replace(" ", "")
+
+            uuid_found = False
+            if invoice.uuid:
+                clean_uuid = invoice.uuid.lower().replace("-", "").strip()
+                uuid_found = clean_uuid in clean_pdf_text
+
+            emisor_rfc_found = bool(invoice.emisor_rfc and invoice.emisor_rfc.lower() in pdf_text_lower)
+
+            total_val = invoice.total or 0.0
+            total_str_plain = f"{total_val:.2f}"
+            total_str_comma = f"{total_val:,.2f}"
+            total_found = (total_str_plain in pdf_text) or (total_str_comma in pdf_text)
+
+            if not (uuid_found or (emisor_rfc_found and total_found)):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"El PDF no corresponde a esta factura ({invoice.emisor_nombre}, RFC {invoice.emisor_rfc}, ${total_val:,.2f}). Por favor verifica el archivo."
+                )
+    except HTTPException:
+        raise
+    except Exception as e:
+        pass
+
+    pdf_dir = "uploads/viaticos/pdf"
+    os.makedirs(pdf_dir, exist_ok=True)
+
+    safe_name = invoice.uuid or f"inv_{invoice.id}"
+    pdf_filename = f"{safe_name}.pdf"
+    saved_path = os.path.join(pdf_dir, pdf_filename)
+
+    with open(saved_path, "wb") as f:
+        file.file.seek(0)
+        shutil.copyfileobj(file.file, f)
+
+    invoice.pdf_filename = f"/uploads/viaticos/pdf/{pdf_filename}"
+    db.commit()
+    db.refresh(invoice)
+
+    try:
+        log_action(
+            db=db,
+            user_id=current_user.id,
+            username=current_user.username,
+            action="upload",
+            module="viaticos",
+            entity_type="ViaticoFactura",
+            entity_id=invoice.id,
+            description=f"Adjuntó y validó PDF para la factura {invoice.emisor_nombre} (${invoice.total:,.2f}) del Viático {viatico.folio_comision}",
+            details={"invoice_id": invoice.id, "uuid": invoice.uuid, "pdf_file": invoice.pdf_filename}
+        )
+    except Exception:
+        pass
+
+    return invoice
+
+
+@router.post("/invoices/{inv_id}/xml", response_model=ViaticoFacturaResponse)
+async def upload_viatico_invoice_xml(
+    inv_id: int,
+    file: UploadFile = File(...),
+    request: Request = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Subir y validar el archivo XML de una factura."""
+    from app.utils.cfdi_validator import parse_and_validate_cfdi
+
+    invoice = db.query(ViaticoFactura).filter(ViaticoFactura.id == inv_id).first()
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Factura de viáticos no encontrada")
+
+    viatico = db.query(Viatico).filter(Viatico.id == invoice.viatico_id).first()
+    if not viatico:
+        raise HTTPException(status_code=404, detail="Comisión de viáticos no encontrada")
+
+    has_global_edit = current_user.has_permission("viaticos", "edit")
+    if not has_global_edit and (not viatico.personal or viatico.personal.user_id != current_user.id) and viatico.asistente_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permiso para modificar facturas de esta comisión"
+        )
+
+    if not file.filename.lower().endswith(".xml"):
+        raise HTTPException(status_code=400, detail="El archivo principal debe ser un XML válido (.xml)")
+
+    xml_content = await file.read()
+    parsed = parse_and_validate_cfdi(xml_content)
+
+    if not parsed["is_valid"]:
+        errors = [
+            e for e in parsed["errors"]
+            if not ("limite" in e.lower() or "límite" in e.lower() or "5000" in e or "5,000" in e)
+        ]
+        if errors:
+            raise HTTPException(status_code=400, detail=f"El XML no cumple con las reglas fiscales: {', '.join(errors)}")
+
+    xml_dir = "uploads/viaticos/xml"
+    os.makedirs(xml_dir, exist_ok=True)
+
+    uuid_str = parsed["uuid"]
+    xml_filename = f"{uuid_str}.xml"
+    saved_path = os.path.join(xml_dir, xml_filename)
+
+    with open(saved_path, "wb") as f:
+        f.write(xml_content)
+
+    invoice.xml_filename = f"/uploads/viaticos/xml/{xml_filename}"
+    invoice.uuid = uuid_str
+    invoice.emisor_rfc = parsed["emisor_rfc"]
+    invoice.emisor_nombre = parsed["emisor_nombre"]
+    invoice.total = parsed["total"]
+    invoice.subtotal = parsed["subtotal"]
+    invoice.iva = parsed["iva"]
+    invoice.fecha_emision = parsed["fecha_emision"]
+    invoice.folio = parsed["folio"]
+    invoice.serie = parsed["serie"]
+    invoice.is_manual = 0
+
+    db.commit()
+    db.refresh(invoice)
+    return invoice
+
+
+
 

@@ -119,6 +119,8 @@ export default function ViaticosPage() {
   const [downloadingExcel, setDownloadingExcel] = useState(false);
   const [downloadingZip, setDownloadingZip] = useState(false);
   const [uploadingTicketForInv, setUploadingTicketForInv] = useState(null);
+  const [uploadingPdfForInv, setUploadingPdfForInv] = useState(null);
+  const [uploadingXmlForInv, setUploadingXmlForInv] = useState(null);
   const [devolucionForm] = Form.useForm();
 
   const { hasPermission } = useAuth();
@@ -825,6 +827,64 @@ export default function ViaticosPage() {
     } finally {
       setUploadingTicketForInv(null);
     }
+  };
+
+  const handleUploadInvoicePdf = async (invoiceId, file) => {
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      message.error('El archivo debe ser un documento PDF (.pdf)');
+      return false;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    setUploadingPdfForInv(invoiceId);
+
+    try {
+      const res = await apiClient.post(`/viaticos/invoices/${invoiceId}/pdf`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      message.success('Archivo PDF validado y vinculado con éxito a la factura');
+
+      if (selectedViatico && selectedViatico.facturas) {
+        const updatedFacturas = selectedViatico.facturas.map(f => f.id === invoiceId ? res.data : f);
+        setSelectedViatico({ ...selectedViatico, facturas: updatedFacturas });
+      }
+      fetchViaticos();
+    } catch (err) {
+      message.error(err.response?.data?.detail || 'Error al subir y validar el archivo PDF');
+    } finally {
+      setUploadingPdfForInv(null);
+    }
+    return false;
+  };
+
+  const handleUploadInvoiceXml = async (invoiceId, file) => {
+    if (!file.name.toLowerCase().endsWith('.xml')) {
+      message.error('El archivo debe ser un XML fiscal (.xml)');
+      return false;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    setUploadingXmlForInv(invoiceId);
+
+    try {
+      const res = await apiClient.post(`/viaticos/invoices/${invoiceId}/xml`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      message.success('Archivo XML validado y vinculado con éxito');
+
+      if (selectedViatico && selectedViatico.facturas) {
+        const updatedFacturas = selectedViatico.facturas.map(f => f.id === invoiceId ? res.data : f);
+        setSelectedViatico({ ...selectedViatico, facturas: updatedFacturas });
+      }
+      fetchViaticos();
+    } catch (err) {
+      message.error(err.response?.data?.detail || 'Error al subir el archivo XML');
+    } finally {
+      setUploadingXmlForInv(null);
+    }
+    return false;
   };
 
   const handleUploadComprobacionPdf = async (file) => {
@@ -2125,11 +2185,11 @@ export default function ViaticosPage() {
                       {
                         title: 'Archivos',
                         key: 'archivos',
-                        width: 130,
+                        width: 155,
                         align: 'center',
                         render: (_, r) => (
-                          <Space size="small" wrap>
-                            {r.xml_filename && (
+                          <Space size="small" wrap style={{ justifyContent: 'center' }}>
+                            {r.xml_filename ? (
                               <Tooltip title="Ver XML">
                                 <Button
                                   size="small"
@@ -2138,8 +2198,36 @@ export default function ViaticosPage() {
                                   target="_blank"
                                 />
                               </Tooltip>
+                            ) : (
+                              <Tooltip title="⚠️ Falta archivo XML fiscal. Haz clic para subirlo y validarlo">
+                                <Upload
+                                  showUploadList={false}
+                                  beforeUpload={(file) => handleUploadInvoiceXml(r.id, file)}
+                                  accept=".xml"
+                                >
+                                  <Button
+                                    size="small"
+                                    type="dashed"
+                                    danger
+                                    icon={<FileTextOutlined style={{ color: '#ff4d4f' }} />}
+                                    loading={uploadingXmlForInv === r.id}
+                                    style={{
+                                      color: '#cf1322',
+                                      borderColor: '#ffa39e',
+                                      background: '#fff1f0',
+                                      padding: '0 6px',
+                                      height: 24,
+                                      fontSize: 11,
+                                      fontWeight: 600
+                                    }}
+                                  >
+                                    + XML
+                                  </Button>
+                                </Upload>
+                              </Tooltip>
                             )}
-                            {r.pdf_filename && (
+
+                            {r.pdf_filename ? (
                               <Tooltip title="Ver PDF">
                                 <Button
                                   size="small"
@@ -2148,7 +2236,35 @@ export default function ViaticosPage() {
                                   target="_blank"
                                 />
                               </Tooltip>
+                            ) : (
+                              <Tooltip title="⚠️ Falta archivo PDF. Haz clic para subirlo y verificar correspondencia">
+                                <Upload
+                                  showUploadList={false}
+                                  beforeUpload={(file) => handleUploadInvoicePdf(r.id, file)}
+                                  accept=".pdf"
+                                >
+                                  <Button
+                                    size="small"
+                                    type="dashed"
+                                    danger
+                                    icon={<FilePdfOutlined style={{ color: '#ff4d4f' }} />}
+                                    loading={uploadingPdfForInv === r.id}
+                                    style={{
+                                      color: '#cf1322',
+                                      borderColor: '#ffa39e',
+                                      background: '#fff1f0',
+                                      padding: '0 6px',
+                                      height: 24,
+                                      fontSize: 11,
+                                      fontWeight: 600
+                                    }}
+                                  >
+                                    + PDF
+                                  </Button>
+                                </Upload>
+                              </Tooltip>
                             )}
+
                             {r.ticket_filename && (
                               <Space size={1}>
                                 <Tooltip title="Ver Ticket / Justificante adjunto">
