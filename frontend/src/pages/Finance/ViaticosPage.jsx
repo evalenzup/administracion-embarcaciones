@@ -2125,7 +2125,7 @@ export default function ViaticosPage() {
                       {
                         title: 'Archivos',
                         key: 'archivos',
-                        width: 160,
+                        width: 130,
                         align: 'center',
                         render: (_, r) => (
                           <Space size="small" wrap>
@@ -2149,9 +2149,9 @@ export default function ViaticosPage() {
                                 />
                               </Tooltip>
                             )}
-                            {r.ticket_filename ? (
+                            {r.ticket_filename && (
                               <Space size={1}>
-                                <Tooltip title="Ver Ticket / Comprobante adjunto">
+                                <Tooltip title="Ver Ticket / Justificante adjunto">
                                   <Button
                                     size="small"
                                     icon={<FileImageOutlined style={{ color: '#0958d9' }} />}
@@ -2177,20 +2177,6 @@ export default function ViaticosPage() {
                                   </Tooltip>
                                 </Popconfirm>
                               </Space>
-                            ) : (
-                              <Tooltip title="Adjuntar foto o PDF del ticket">
-                                <Upload
-                                  showUploadList={false}
-                                  beforeUpload={(file) => handleUploadInvoiceTicket(r.id, file)}
-                                  accept="image/*,.pdf"
-                                >
-                                  <Button
-                                    size="small"
-                                    icon={<CameraOutlined style={{ color: '#722ed1' }} />}
-                                    loading={uploadingTicketForInv === r.id}
-                                  />
-                                </Upload>
-                              </Tooltip>
                             )}
                             {r.uuid && (
                               <Tooltip title="Re-verificar ante el SAT">
