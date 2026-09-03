@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 from io import BytesIO
 from aiogram import Router, F, Bot
 from aiogram.fsm.state import StatesGroup, State
@@ -375,17 +376,49 @@ async def callback_skip_pdf(callback: CallbackQuery, state: FSMContext):
 
 
 async def handle_upload_response(message: Message, res: dict, tramite_id: int, tramite_type: str, telegram_id: str, state: FSMContext):
-    """Procesar respuesta de la subida."""
+    """Procesar respuesta de la subida con advertencia inteligente de fechas si aplica."""
     if res.get("success"):
         invoice = res["data"]
         emisor = invoice.get("emisor_nombre")
         total = invoice.get("total", 0.0)
+        fecha_emision_raw = invoice.get("fecha_emision")
         
+        # Validar periodo si es comisión de viáticos
+        period_warning = ""
+        if tramite_type == "viatico":
+            try:
+                v_res = await api_client.get_viatico_details(telegram_id, tramite_id)
+                if v_res.get("success") and v_res.get("data"):
+                    v_data = v_res["data"]
+                    f_inicio_str = v_data.get("fecha_inicio")
+                    f_fin_str = v_data.get("fecha_fin")
+                    folio_str = v_data.get("folio_comision", str(tramite_id))
+                    
+                    if fecha_emision_raw and f_inicio_str and f_fin_str:
+                        # Extraer fechas
+                        emision_date = (
+                            datetime.fromisoformat(str(fecha_emision_raw).replace("Z", "")).date()
+                            if "T" in str(fecha_emision_raw)
+                            else datetime.strptime(str(fecha_emision_raw)[:10], "%Y-%m-%d").date()
+                        )
+                        inicio_date = datetime.strptime(str(f_inicio_str)[:10], "%Y-%m-%d").date()
+                        fin_date = datetime.strptime(str(f_fin_str)[:10], "%Y-%m-%d").date()
+
+                        if emision_date < inicio_date or emision_date > fin_date:
+                            period_warning = (
+                                f"\n\n⚠️ *ADVERTENCIA DE PERIODO:*\n"
+                                f"La fecha de emisión de esta factura (*{emision_date.strftime('%d/%m/%Y')}*) está *FUERA* del periodo oficial de la comisión (*{inicio_date.strftime('%d/%m/%Y')} al {fin_date.strftime('%d/%m/%Y')}*).\n"
+                                f"👉 _La factura se cargó con éxito, pero por favor verifica si realmente corresponde a la Comisión {folio_str}._"
+                            )
+            except Exception as e:
+                logger.error(f"Error al verificar fechas de viático en bot: {e}")
+
         await message.answer(
             f"✅ *Factura cargada con éxito*\n\n"
             f"• *Emisor:* {emisor}\n"
             f"• *Monto:* ${total:,.2f} MXN\n"
-            f"• *UUID:* `{invoice.get('uuid') or 'N/A'}`\n\n"
+            f"• *UUID:* `{invoice.get('uuid') or 'N/A'}`"
+            f"{period_warning}\n\n"
             f"La factura ha sido vinculada al trámite en SIAE. Los administradores ya pueden verla.",
             parse_mode="Markdown"
         )
