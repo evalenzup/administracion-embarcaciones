@@ -313,6 +313,14 @@ def create_invoices_zip_bundle(
                     arc_pdf = f"{prefix}_{base_pdf}"
                     zip_file.write(pdf_path, arcname=arc_pdf)
 
+            # Ticket / Justificante de Fecha o Consumo
+            if getattr(invoice, "ticket_filename", None):
+                ticket_path = _get_existing_path(invoice.ticket_filename, f"uploads/{default_folder}/tickets")
+                if ticket_path and os.path.exists(ticket_path):
+                    base_ticket = os.path.basename(ticket_path)
+                    arc_ticket = f"{prefix}_TICKET_{base_ticket}"
+                    zip_file.write(ticket_path, arcname=arc_ticket)
+
         # C. Anexos / Comprobantes de Devolución
         if extra_files:
             for file_path, arc_subpath in extra_files:

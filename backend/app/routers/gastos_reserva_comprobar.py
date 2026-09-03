@@ -1422,3 +1422,112 @@ async def verify_grc_invoice_sat(
         )
 
 
+@router.post("/invoices/{inv_id}/ticket", response_model=GastoReservaComprobarFacturaResponse)
+async def upload_grc_invoice_ticket(
+    inv_id: int,
+    file: UploadFile = File(...),
+    request: Request = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Subir foto o PDF del ticket o comprobante de consumo para justificar gasto en GRC."""
+    import shutil
+
+    invoice = db.query(GastoReservaComprobarFactura).filter(GastoReservaComprobarFactura.id == inv_id).first()
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Factura GRC no encontrada")
+
+    grc = db.query(GastoReservaComprobar).filter(GastoReservaComprobar.id == invoice.gasto_id).first()
+    if not grc:
+        raise HTTPException(status_code=404, detail="Solicitud GRC no encontrada")
+
+    has_global_edit = current_user.has_permission("gastos_reserva_comprobar", "edit")
+    if not has_global_edit and grc.solicitante_id != current_user.id and grc.asistente_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permiso para modificar facturas de este GRC"
+        )
+
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in [".pdf", ".jpg", ".jpeg", ".png", ".webp"]:
+        raise HTTPException(status_code=400, detail="El ticket debe ser una imagen (JPG, PNG, WebP) o un documento PDF")
+
+    tickets_dir = "uploads/gastos_reserva_comprobar/tickets"
+    os.makedirs(tickets_dir, exist_ok=True)
+
+    if invoice.ticket_filename:
+        prev_path = invoice.ticket_filename.lstrip("/")
+        if os.path.exists(prev_path):
+            try:
+                os.remove(prev_path)
+            except Exception:
+                pass
+
+    safe_name = invoice.uuid or f"inv_{invoice.id}"
+    saved_filename = f"{safe_name}_ticket_{int(datetime.now().timestamp())}{ext}"
+    saved_path = os.path.join(tickets_dir, saved_filename)
+
+    with open(saved_path, "wb") as f:
+        file.file.seek(0)
+        shutil.copyfileobj(file.file, f)
+
+    invoice.ticket_filename = f"/uploads/gastos_reserva_comprobar/tickets/{saved_filename}"
+    db.commit()
+    db.refresh(invoice)
+
+    try:
+        log_action(
+            db=db,
+            user_id=current_user.id,
+            username=current_user.username,
+            action="upload",
+            module="gastos_reserva_comprobar",
+            entity_type="GastoReservaComprobarFactura",
+            entity_id=invoice.id,
+            description=f"Subió ticket/justificante para la factura {invoice.emisor_nombre} (${invoice.total:,.2f}) del GRC Folio {grc.folio_episa}",
+            details={"invoice_id": invoice.id, "ticket_file": invoice.ticket_filename}
+        )
+    except Exception:
+        pass
+
+    return invoice
+
+
+@router.delete("/invoices/{inv_id}/ticket", response_model=GastoReservaComprobarFacturaResponse)
+async def delete_grc_invoice_ticket(
+    inv_id: int,
+    request: Request = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Eliminar el ticket/justificante de gasto de una factura en GRC."""
+    invoice = db.query(GastoReservaComprobarFactura).filter(GastoReservaComprobarFactura.id == inv_id).first()
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Factura GRC no encontrada")
+
+    grc = db.query(GastoReservaComprobar).filter(GastoReservaComprobar.id == invoice.gasto_id).first()
+    if not grc:
+        raise HTTPException(status_code=404, detail="Solicitud GRC no encontrada")
+
+    has_global_edit = current_user.has_permission("gastos_reserva_comprobar", "edit")
+    if not has_global_edit and grc.solicitante_id != current_user.id and grc.asistente_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permiso para modificar facturas de este GRC"
+        )
+
+    if invoice.ticket_filename:
+        prev_path = invoice.ticket_filename.lstrip("/")
+        if os.path.exists(prev_path):
+            try:
+                os.remove(prev_path)
+            except Exception:
+                pass
+        invoice.ticket_filename = None
+        db.commit()
+        db.refresh(invoice)
+
+    return invoice
+
+
+

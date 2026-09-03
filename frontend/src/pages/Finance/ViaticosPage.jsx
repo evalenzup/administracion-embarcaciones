@@ -47,6 +47,9 @@ import {
   SyncOutlined,
   FileZipOutlined,
   FileExcelOutlined,
+  FileImageOutlined,
+  CameraOutlined,
+  CloseCircleOutlined,
   SearchOutlined,
   InfoCircleOutlined,
   FolderOpenOutlined,
@@ -115,6 +118,7 @@ export default function ViaticosPage() {
   const [uploadingDevolucion, setUploadingDevolucion] = useState(false);
   const [downloadingExcel, setDownloadingExcel] = useState(false);
   const [downloadingZip, setDownloadingZip] = useState(false);
+  const [uploadingTicketForInv, setUploadingTicketForInv] = useState(null);
   const [devolucionForm] = Form.useForm();
 
   const { hasPermission } = useAuth();
@@ -773,6 +777,53 @@ export default function ViaticosPage() {
       message.error('Error al descargar el archivo Excel de comprobación.');
     } finally {
       setDownloadingExcel(false);
+    }
+  };
+
+  const handleUploadInvoiceTicket = async (invoiceId, file) => {
+    const isImageOrPdf = file.type.startsWith('image/') || file.type === 'application/pdf' || file.name.match(/\.(jpg|jpeg|png|webp|pdf)$/i);
+    if (!isImageOrPdf) {
+      message.error('El comprobante debe ser una imagen (JPG, PNG, WebP) o un archivo PDF.');
+      return false;
+    }
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    setUploadingTicketForInv(invoiceId);
+
+    try {
+      const res = await apiClient.post(`/viaticos/invoices/${invoiceId}/ticket`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      message.success('Ticket / Justificante de consumo adjuntado con éxito');
+      
+      if (selectedViatico && selectedViatico.facturas) {
+        const updatedFacturas = selectedViatico.facturas.map(f => f.id === invoiceId ? res.data : f);
+        setSelectedViatico({ ...selectedViatico, facturas: updatedFacturas });
+      }
+      fetchViaticos();
+    } catch (err) {
+      message.error(err.response?.data?.detail || 'Error al subir el ticket');
+    } finally {
+      setUploadingTicketForInv(null);
+    }
+    return false;
+  };
+
+  const handleDeleteInvoiceTicket = async (invoiceId) => {
+    setUploadingTicketForInv(invoiceId);
+    try {
+      const res = await apiClient.delete(`/viaticos/invoices/${invoiceId}/ticket`);
+      message.success('Ticket / Justificante eliminado');
+      if (selectedViatico && selectedViatico.facturas) {
+        const updatedFacturas = selectedViatico.facturas.map(f => f.id === invoiceId ? res.data : f);
+        setSelectedViatico({ ...selectedViatico, facturas: updatedFacturas });
+      }
+      fetchViaticos();
+    } catch (err) {
+      message.error(err.response?.data?.detail || 'Error al eliminar el ticket');
+    } finally {
+      setUploadingTicketForInv(null);
     }
   };
 
@@ -1921,10 +1972,10 @@ export default function ViaticosPage() {
                         title: 'Fecha Emisión',
                         dataIndex: 'fecha_emision',
                         key: 'fecha_emision',
-                        width: 140,
+                        width: 170,
                         align: 'center',
                         sorter: (a, b) => dayjs(a.fecha_emision || 0).unix() - dayjs(b.fecha_emision || 0).unix(),
-                        render: (val) => {
+                        render: (val, r) => {
                           if (!val) return <span style={{ color: '#999' }}>—</span>;
                           const emision = dayjs(val);
                           const inicio = selectedViatico?.fecha_inicio ? dayjs(selectedViatico.fecha_inicio).startOf('day') : null;
@@ -1934,36 +1985,76 @@ export default function ViaticosPage() {
                           const timeFormatted = emision.format('HH:mm');
 
                           if (isOutOfRange) {
+                            const hasTicket = Boolean(r.ticket_filename);
                             return (
-                              <Tooltip
-                                title={
-                                  <div>
-                                    <div style={{ fontWeight: 600, color: '#ffccc7' }}>⚠️ Posible discrepancia de fecha:</div>
-                                    <div>Factura emitida el <b>{dateFormatted} {timeFormatted}</b>.</div>
-                                    <div>Periodo de comisión: <b>{dayjs(selectedViatico.fecha_inicio).format('DD/MM/YYYY')}</b> al <b>{dayjs(selectedViatico.fecha_fin).format('DD/MM/YYYY')}</b>.</div>
-                                    <div style={{ marginTop: 4, fontStyle: 'italic', fontSize: 11, color: '#fff' }}>
-                                      La fecha está fuera del periodo de la solicitud. Probablemente no corresponde a este trámite.
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                                <Tooltip
+                                  title={
+                                    <div>
+                                      <div style={{ fontWeight: 600, color: hasTicket ? '#ffe58f' : '#ffccc7' }}>
+                                        {hasTicket ? 'ℹ️ Fecha fuera de periodo (Justificada con ticket):' : '⚠️ Factura emitida fuera de periodo:'}
+                                      </div>
+                                      <div>Factura emitida el <b>{dateFormatted} {timeFormatted}</b>.</div>
+                                      <div>Periodo de comisión: <b>{dayjs(selectedViatico.fecha_inicio).format('DD/MM/YYYY')}</b> al <b>{dayjs(selectedViatico.fecha_fin).format('DD/MM/YYYY')}</b>.</div>
+                                      {hasTicket ? (
+                                        <div style={{ marginTop: 4, color: '#87e8de', fontWeight: 600 }}>
+                                          ✅ Cuenta con ticket o nota de consumo adjunto para justificar que el gasto se efectuó durante el viaje.
+                                        </div>
+                                      ) : (
+                                        <div style={{ marginTop: 4, fontStyle: 'italic', fontSize: 11, color: '#fff' }}>
+                                          Si el consumo fue durante la comisión, sube la foto o PDF del ticket para justificarlo.
+                                        </div>
+                                      )}
                                     </div>
+                                  }
+                                >
+                                  <div style={{ 
+                                    color: hasTicket ? '#d46b08' : '#cf1322', 
+                                    fontWeight: 700, 
+                                    display: 'inline-flex', 
+                                    alignItems: 'center', 
+                                    justifyContent: 'center',
+                                    gap: 4, 
+                                    background: hasTicket ? '#fffbe6' : '#fff1f0', 
+                                    padding: '2px 8px', 
+                                    borderRadius: 6, 
+                                    border: `1px solid ${hasTicket ? '#ffe58f' : '#ffa39e'}`,
+                                    cursor: 'help'
+                                  }}>
+                                    <WarningOutlined style={{ color: hasTicket ? '#d46b08' : '#cf1322', fontSize: 13 }} />
+                                    <span>{dateFormatted}</span>
                                   </div>
-                                }
-                              >
-                                <div style={{ 
-                                  color: '#cf1322', 
-                                  fontWeight: 700, 
-                                  display: 'inline-flex', 
-                                  alignItems: 'center', 
-                                  justifyContent: 'center',
-                                  gap: 4, 
-                                  background: '#fff1f0', 
-                                  padding: '2px 8px', 
-                                  borderRadius: 6, 
-                                  border: '1px solid #ffa39e',
-                                  cursor: 'help'
-                                }}>
-                                  <WarningOutlined style={{ color: '#cf1322', fontSize: 13 }} />
-                                  <span>{dateFormatted}</span>
-                                </div>
-                              </Tooltip>
+                                </Tooltip>
+
+                                {hasTicket ? (
+                                  <Tooltip title="Ver ticket / nota justificante">
+                                    <a href={getFileUrl(r.ticket_filename)} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
+                                      <Tag color="cyan" style={{ fontSize: 11, margin: 0, padding: '1px 6px', borderRadius: 4, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                        <FileImageOutlined /> Ticket Adjunto
+                                      </Tag>
+                                    </a>
+                                  </Tooltip>
+                                ) : (
+                                  <Upload
+                                    showUploadList={false}
+                                    beforeUpload={(file) => handleUploadInvoiceTicket(r.id, file)}
+                                    accept="image/*,.pdf"
+                                  >
+                                    <Tooltip title="Subir foto o PDF del ticket de compra para comprobar fecha del gasto">
+                                      <Button 
+                                        size="small" 
+                                        type="dashed" 
+                                        danger 
+                                        icon={<CameraOutlined />} 
+                                        loading={uploadingTicketForInv === r.id}
+                                        style={{ fontSize: 11, height: 22, padding: '0 6px', borderRadius: 4 }}
+                                      >
+                                        Subir Ticket
+                                      </Button>
+                                    </Tooltip>
+                                  </Upload>
+                                )}
+                              </div>
                             );
                           }
 
@@ -2034,10 +2125,10 @@ export default function ViaticosPage() {
                       {
                         title: 'Archivos',
                         key: 'archivos',
-                        width: 130,
+                        width: 160,
                         align: 'center',
                         render: (_, r) => (
-                          <Space size="small">
+                          <Space size="small" wrap>
                             {r.xml_filename && (
                               <Tooltip title="Ver XML">
                                 <Button
@@ -2056,6 +2147,49 @@ export default function ViaticosPage() {
                                   href={getFileUrl(r.pdf_filename)}
                                   target="_blank"
                                 />
+                              </Tooltip>
+                            )}
+                            {r.ticket_filename ? (
+                              <Space size={1}>
+                                <Tooltip title="Ver Ticket / Comprobante adjunto">
+                                  <Button
+                                    size="small"
+                                    icon={<FileImageOutlined style={{ color: '#0958d9' }} />}
+                                    href={getFileUrl(r.ticket_filename)}
+                                    target="_blank"
+                                    style={{ borderColor: '#91caff', background: '#e6f4ff' }}
+                                  />
+                                </Tooltip>
+                                <Popconfirm
+                                  title="¿Eliminar el ticket adjunto?"
+                                  onConfirm={() => handleDeleteInvoiceTicket(r.id)}
+                                  okText="Sí"
+                                  cancelText="No"
+                                >
+                                  <Tooltip title="Quitar ticket adjunto">
+                                    <Button
+                                      size="small"
+                                      type="text"
+                                      danger
+                                      icon={<CloseCircleOutlined style={{ fontSize: 11 }} />}
+                                      style={{ width: 14, minWidth: 14, padding: 0 }}
+                                    />
+                                  </Tooltip>
+                                </Popconfirm>
+                              </Space>
+                            ) : (
+                              <Tooltip title="Adjuntar foto o PDF del ticket">
+                                <Upload
+                                  showUploadList={false}
+                                  beforeUpload={(file) => handleUploadInvoiceTicket(r.id, file)}
+                                  accept="image/*,.pdf"
+                                >
+                                  <Button
+                                    size="small"
+                                    icon={<CameraOutlined style={{ color: '#722ed1' }} />}
+                                    loading={uploadingTicketForInv === r.id}
+                                  />
+                                </Upload>
                               </Tooltip>
                             )}
                             {r.uuid && (

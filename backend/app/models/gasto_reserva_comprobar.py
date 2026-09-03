@@ -140,6 +140,7 @@ class GastoReservaComprobarFactura(Base):
     
     xml_filename = Column(String(300), nullable=True)
     pdf_filename = Column(String(300), nullable=True)
+    ticket_filename = Column(String(300), nullable=True)  # Foto o PDF del ticket para justificar fecha/gasto
     
     is_manual = Column(Integer, default=0, nullable=True)  # 1 si es carga manual sin XML, 0/None si es XML
     category_id = Column(Integer, ForeignKey("financial_categories.id", ondelete="RESTRICT"), nullable=True)

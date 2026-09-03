@@ -51,6 +51,7 @@ class GastoReservaComprobarFacturaResponse(GastoReservaComprobarFacturaBase):
     fecha_emision: datetime | None
     xml_filename: str | None
     pdf_filename: str | None
+    ticket_filename: str | None = None
     is_manual: int | None
     registered_by_id: int | None
     created_at: datetime

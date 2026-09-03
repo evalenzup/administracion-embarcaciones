@@ -40,6 +40,8 @@ async def lifespan(app: FastAPI):
         conn.execute(text("ALTER TABLE account_transactions ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'completado' NOT NULL;"))
         conn.execute(text("ALTER TABLE account_transactions ADD COLUMN IF NOT EXISTS service_request_id INTEGER REFERENCES service_requests(id) ON DELETE SET NULL;"))
         conn.execute(text("ALTER TABLE gastos_reserva_comprobar ADD COLUMN IF NOT EXISTS comprobante_devolucion_path VARCHAR(500);"))
+        conn.execute(text("ALTER TABLE viaticos_facturas ADD COLUMN IF NOT EXISTS ticket_filename VARCHAR(300);"))
+        conn.execute(text("ALTER TABLE gastos_reserva_comprobar_facturas ADD COLUMN IF NOT EXISTS ticket_filename VARCHAR(300);"))
 
     # Crear directorios de subida
     os.makedirs("uploads/documents", exist_ok=True)
@@ -54,10 +56,12 @@ async def lifespan(app: FastAPI):
     os.makedirs("uploads/weather_archive", exist_ok=True)
     os.makedirs("uploads/gastos_reserva_comprobar/pdf", exist_ok=True)
     os.makedirs("uploads/gastos_reserva_comprobar/xml", exist_ok=True)
+    os.makedirs("uploads/gastos_reserva_comprobar/tickets", exist_ok=True)
     os.makedirs("uploads/gastos_reserva_comprobar/reports", exist_ok=True)
     os.makedirs("uploads/gastos_reserva_comprobar/devoluciones", exist_ok=True)
     os.makedirs("uploads/viaticos/pdf", exist_ok=True)
     os.makedirs("uploads/viaticos/xml", exist_ok=True)
+    os.makedirs("uploads/viaticos/tickets", exist_ok=True)
     os.makedirs("uploads/viaticos/solicitudes", exist_ok=True)
 
     # Ejecutar seed
