@@ -49,6 +49,7 @@ import {
   FileExcelOutlined,
   FileImageOutlined,
   CameraOutlined,
+  CloseOutlined,
   CloseCircleOutlined,
   SearchOutlined,
   InfoCircleOutlined,
