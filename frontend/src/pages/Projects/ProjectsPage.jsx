@@ -51,6 +51,7 @@ import { useAuth } from '../../context/AuthContext';
 
 const { Title, Text } = Typography;
 const { TabPane } = Tabs;
+const { Option } = Select;
 
 export default function ProjectsPage() {
   const { hasPermission } = useAuth();
