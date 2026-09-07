@@ -404,12 +404,28 @@ async def handle_upload_response(message: Message, res: dict, tramite_id: int, t
                         inicio_date = datetime.strptime(str(f_inicio_str)[:10], "%Y-%m-%d").date()
                         fin_date = datetime.strptime(str(f_fin_str)[:10], "%Y-%m-%d").date()
 
+                        concept_dates_raw = invoice.get("concept_dates") or []
+                        valid_concept_dates = []
+                        for cd_str in concept_dates_raw:
+                            try:
+                                cd = datetime.strptime(str(cd_str)[:10], "%Y-%m-%d").date()
+                                if inicio_date <= cd <= fin_date:
+                                    valid_concept_dates.append(cd)
+                            except Exception:
+                                pass
+
                         if emision_date < inicio_date or emision_date > fin_date:
-                            period_warning = (
-                                f"\n\n⚠️ *ADVERTENCIA DE PERIODO:*\n"
-                                f"La fecha de emisión de esta factura (*{emision_date.strftime('%d/%m/%Y')}*) está *FUERA* del periodo oficial de la comisión (*{inicio_date.strftime('%d/%m/%Y')} al {fin_date.strftime('%d/%m/%Y')}*).\n"
-                                f"👉 _La factura se cargó con éxito, pero por favor verifica si realmente corresponde a la Comisión {folio_str}._"
-                            )
+                            if valid_concept_dates:
+                                cd_formatted = valid_concept_dates[0].strftime('%d/%m/%Y')
+                                period_warning = (
+                                    f"\n\n📅 *Fecha de servicio en XML:* {cd_formatted} (Dentro del periodo de comisión)."
+                                )
+                            else:
+                                period_warning = (
+                                    f"\n\n⚠️ *ADVERTENCIA DE PERIODO:*\n"
+                                    f"La fecha de emisión de esta factura (*{emision_date.strftime('%d/%m/%Y')}*) está *FUERA* del periodo oficial de la comisión (*{inicio_date.strftime('%d/%m/%Y')} al {fin_date.strftime('%d/%m/%Y')}*).\n"
+                                    f"👉 _La factura se cargó con éxito, pero por favor verifica si realmente corresponde a la Comisión {folio_str}._"
+                                )
             except Exception as e:
                 logger.error(f"Error al verificar fechas de viático en bot: {e}")
 

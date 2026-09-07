@@ -3,7 +3,7 @@ SIAE — Modelo de Base de Datos para Viáticos.
 Permite gestionar comisiones de viaje, montos solicitados, viáticos, comprobación de facturas.
 """
 
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Text, ForeignKey, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -133,6 +133,7 @@ class ViaticoFactura(Base):
     xml_filename = Column(String(300), nullable=True)
     pdf_filename = Column(String(300), nullable=True)
     ticket_filename = Column(String(300), nullable=True)  # Foto o PDF del ticket para justificar fecha/gasto
+    concept_dates = Column(JSON, nullable=True)  # Fechas de servicio/consumo detectadas en los conceptos del XML
     
     is_manual = Column(Integer, default=0, nullable=True)  # 1 si es carga manual sin XML, 0/None si es XML
     category_id = Column(Integer, ForeignKey("financial_categories.id", ondelete="RESTRICT"), nullable=True)

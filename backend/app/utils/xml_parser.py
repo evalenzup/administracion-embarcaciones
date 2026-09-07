@@ -19,6 +19,96 @@ VALID_METODO_PAGO = "PUE"
 VALID_USO_CFDI = "G03"
 VALID_FORMAS_PAGO = ["01", "03", "04", "28"]  # 01: Efectivo, 03: Transferencia, 04: Tarjeta de Crédito, 28: Tarjeta de Débito
 
+MESES_ES = {
+    "ene": 1, "enero": 1, "jan": 1, "january": 1,
+    "feb": 2, "febrero": 2, "february": 2,
+    "mar": 3, "marzo": 3, "march": 3,
+    "abr": 4, "abril": 4, "april": 4,
+    "may": 5, "mayo": 5,
+    "jun": 6, "junio": 6, "june": 6,
+    "jul": 7, "julio": 7, "july": 7,
+    "ago": 8, "agosto": 8, "aug": 8, "august": 8,
+    "sep": 9, "sept": 9, "septiembre": 9, "september": 9,
+    "oct": 10, "octubre": 10, "october": 10,
+    "nov": 11, "noviembre": 11, "november": 11,
+    "dic": 12, "diciembre": 12, "dec": 12, "december": 12
+}
+
+
+def extract_dates_from_text(text: str) -> list[str]:
+    """
+    Extract all valid service/trip/consumption dates found in concept or addenda text.
+    Returns a sorted list of unique ISO date strings (YYYY-MM-DD).
+    """
+    if not text:
+        return []
+
+    found_dates = []
+
+    # 1. DD/MM/YYYY or DD-MM-YYYY
+    for m in re.finditer(r"\b(\d{1,2})[/-](\d{1,2})[/-](\d{4})\b", text):
+        d, m_num, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        try:
+            from datetime import date
+            dt = date(y, m_num, d)
+            if 2020 <= y <= 2040:
+                found_dates.append(dt)
+        except ValueError:
+            pass
+
+    # 2. YYYY-MM-DD or YYYY/MM/DD
+    for m in re.finditer(r"\b(\d{4})[/-](\d{1,2})[/-](\d{1,2})\b", text):
+        y, m_num, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        try:
+            from datetime import date
+            dt = date(y, m_num, d)
+            if 2020 <= y <= 2040:
+                found_dates.append(dt)
+        except ValueError:
+            pass
+
+    # 3. DD/MM/YY or DD-MM-YY
+    for m in re.finditer(r"\b(\d{1,2})[/-](\d{1,2})[/-](\d{2})\b", text):
+        d, m_num, y_short = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        y = 2000 + y_short
+        try:
+            from datetime import date
+            dt = date(y, m_num, d)
+            if 2020 <= y <= 2040:
+                found_dates.append(dt)
+        except ValueError:
+            pass
+
+    # 4. Textual in Spanish/English: "26 de agosto de 2026", "26-AGO-2026", "26/AGO/2026", "26 AGO 2026"
+    for m in re.finditer(r"\b(\d{1,2})\s*(?:de|\/|-)?\s*([a-zA-Z]{3,12})\s*(?:de|\/|-)?\s*(\d{4}|\d{2})\b", text):
+        d_str, mes_str, y_str = m.group(1), m.group(2).lower(), m.group(3)
+        mes_num = None
+        for k, v in MESES_ES.items():
+            if mes_str.startswith(k):
+                mes_num = v
+                break
+        if mes_num:
+            d = int(d_str)
+            y = int(y_str) if len(y_str) == 4 else (2000 + int(y_str))
+            try:
+                from datetime import date
+                dt = date(y, mes_num, d)
+                if 2020 <= y <= 2040:
+                    found_dates.append(dt)
+            except ValueError:
+                pass
+
+    # Unique and sorted
+    seen = set()
+    unique_str = []
+    for dt in sorted(found_dates):
+        iso_str = dt.strftime("%Y-%m-%d")
+        if iso_str not in seen:
+            seen.add(iso_str)
+            unique_str.append(iso_str)
+
+    return unique_str
+
 
 def parse_and_validate_cfdi(xml_content: bytes) -> dict:
     """
@@ -51,6 +141,9 @@ def parse_and_validate_cfdi(xml_content: bytes) -> dict:
             "uso_cfdi": None,
             "fecha_emision": None,
             "fecha_timbrado": None,
+            "conceptos": [],
+            "concept_dates": [],
+            "concept_summary": None,
             "is_valid": False,
             "errors": [f"Error al parsear archivo XML: {str(e)}"]
         }
@@ -240,6 +333,39 @@ def parse_and_validate_cfdi(xml_content: bytes) -> dict:
     else:
         errors.append("No se encontró el Timbre Fiscal Digital (factura no timbrada).")
 
+    # Extraer Conceptos y Fechas de Servicio/Consumo
+    conceptos = []
+    concept_descriptions = []
+    for elem in root.iter():
+        local_tag = elem.tag.split('}')[-1]
+        if local_tag == 'Concepto':
+            desc = elem.attrib.get('Descripcion') or elem.attrib.get('descripcion') or ""
+            clave = elem.attrib.get('ClaveProdServ') or elem.attrib.get('claveProdServ')
+            cant = elem.attrib.get('Cantidad') or elem.attrib.get('cantidad')
+            val_unit = elem.attrib.get('ValorUnitario') or elem.attrib.get('valorUnitario')
+            imp = elem.attrib.get('Importe') or elem.attrib.get('importe')
+            conceptos.append({
+                "descripcion": desc,
+                "clave_prod_serv": clave,
+                "cantidad": cant,
+                "valor_unitario": val_unit,
+                "importe": imp
+            })
+            if desc:
+                concept_descriptions.append(desc)
+        elif local_tag == 'Addenda':
+            # Extraer textos y atributos relevantes de Addendas si existen
+            for sub in elem.iter():
+                for attr_val in sub.attrib.values():
+                    if isinstance(attr_val, str) and len(attr_val) > 4:
+                        concept_descriptions.append(attr_val)
+                if sub.text and len(sub.text.strip()) > 4:
+                    concept_descriptions.append(sub.text.strip())
+
+    all_concepts_text = " | ".join(concept_descriptions)
+    concept_dates = extract_dates_from_text(all_concepts_text)
+    concept_summary = concept_descriptions[0] if concept_descriptions else None
+
     # VALIDACIONES DE REGLAS DE NEGOCIO (FISCALES Y DE CAJA CHICA)
 
     # Regla 1: Receptor RFC = CIC7309189G8
@@ -299,6 +425,9 @@ def parse_and_validate_cfdi(xml_content: bytes) -> dict:
         "uso_cfdi": uso_cfdi,
         "fecha_emision": fecha_emision,
         "fecha_timbrado": fecha_timbrado,
+        "conceptos": conceptos,
+        "concept_dates": concept_dates,
+        "concept_summary": concept_summary,
         "is_valid": is_valid,
         "errors": errors
     }

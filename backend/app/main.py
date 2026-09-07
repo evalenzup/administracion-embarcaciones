@@ -41,7 +41,9 @@ async def lifespan(app: FastAPI):
         conn.execute(text("ALTER TABLE account_transactions ADD COLUMN IF NOT EXISTS service_request_id INTEGER REFERENCES service_requests(id) ON DELETE SET NULL;"))
         conn.execute(text("ALTER TABLE gastos_reserva_comprobar ADD COLUMN IF NOT EXISTS comprobante_devolucion_path VARCHAR(500);"))
         conn.execute(text("ALTER TABLE viaticos_facturas ADD COLUMN IF NOT EXISTS ticket_filename VARCHAR(300);"))
+        conn.execute(text("ALTER TABLE viaticos_facturas ADD COLUMN IF NOT EXISTS concept_dates JSON;"))
         conn.execute(text("ALTER TABLE gastos_reserva_comprobar_facturas ADD COLUMN IF NOT EXISTS ticket_filename VARCHAR(300);"))
+        conn.execute(text("ALTER TABLE gastos_reserva_comprobar_facturas ADD COLUMN IF NOT EXISTS concept_dates JSON;"))
 
     # Crear directorios de subida
     os.makedirs("uploads/documents", exist_ok=True)
@@ -64,13 +66,47 @@ async def lifespan(app: FastAPI):
     os.makedirs("uploads/viaticos/tickets", exist_ok=True)
     os.makedirs("uploads/viaticos/solicitudes", exist_ok=True)
 
-    # Ejecutar seed
+    # Ejecutar seed y sincronización retroactiva de fechas en XML
     from app.services.seed import seed_database
     db = SessionLocal()
     try:
         seed_database(db)
+
+        # Sincronización retroactiva de concept_dates
+        from app.models.viatico import ViaticoFactura
+        from app.models.gasto_reserva_comprobar import GastoReservaComprobarFactura
+        from app.utils.xml_parser import parse_and_validate_cfdi
+
+        v_invoices = db.query(ViaticoFactura).filter(ViaticoFactura.xml_filename.isnot(None), ViaticoFactura.concept_dates.is_(None)).all()
+        for inv in v_invoices:
+            if inv.xml_filename:
+                xml_path = inv.xml_filename.lstrip("/")
+                if os.path.exists(xml_path):
+                    try:
+                        with open(xml_path, "rb") as f:
+                            p = parse_and_validate_cfdi(f.read())
+                            inv.concept_dates = p.get("concept_dates", [])
+                            if not inv.description and p.get("concept_summary"):
+                                inv.description = p.get("concept_summary")
+                    except Exception:
+                        pass
+
+        grc_invoices = db.query(GastoReservaComprobarFactura).filter(GastoReservaComprobarFactura.xml_filename.isnot(None), GastoReservaComprobarFactura.concept_dates.is_(None)).all()
+        for inv in grc_invoices:
+            if inv.xml_filename:
+                xml_path = inv.xml_filename.lstrip("/")
+                if os.path.exists(xml_path):
+                    try:
+                        with open(xml_path, "rb") as f:
+                            p = parse_and_validate_cfdi(f.read())
+                            inv.concept_dates = p.get("concept_dates", [])
+                            if not inv.description and p.get("concept_summary"):
+                                inv.description = p.get("concept_summary")
+                    except Exception:
+                        pass
+        db.commit()
     except Exception as e:
-        print(f"⚠️ Error en seed: {e}")
+        print(f"⚠️ Error en seed o sync de XML: {e}")
         db.rollback()
     finally:
         db.close()

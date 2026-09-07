@@ -1076,7 +1076,8 @@ async def upload_viatico_invoice(
         xml_filename=f"/uploads/viaticos/xml/{xml_filename}",
         pdf_filename=f"/uploads/viaticos/pdf/{pdf_filename}" if pdf_filename else None,
         category_id=category_id,
-        description=description,
+        description=description or parsed.get("concept_summary"),
+        concept_dates=parsed.get("concept_dates", []),
         sat_status=sat_status,
         sat_verified_at=datetime.now() if sat_status != "Desconocido" else None,
         registered_by_id=current_user.id
@@ -1595,6 +1596,9 @@ async def upload_viatico_invoice_xml(
     invoice.fecha_emision = parsed["fecha_emision"]
     invoice.folio = parsed["folio"]
     invoice.serie = parsed["serie"]
+    invoice.concept_dates = parsed.get("concept_dates", [])
+    if not invoice.description:
+        invoice.description = parsed.get("concept_summary")
     invoice.is_manual = 0
 
     db.commit()

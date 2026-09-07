@@ -23,6 +23,8 @@ class ViaticoFacturaBase(BaseModel):
     moneda: str = "MXN"
     description: str | None = None
     category_id: int | None = None
+    concept_dates: list[str] | None = None
+    concept_summary: str | None = None
 
 
 class ViaticoFacturaCreate(ViaticoFacturaBase):
@@ -43,6 +45,8 @@ class ViaticoFacturaResponse(ViaticoFacturaBase):
     xml_filename: str | None
     pdf_filename: str | None
     ticket_filename: str | None = None
+    concept_dates: list[str] | None = None
+    concept_summary: str | None = None
     is_manual: int | None
     registered_by_id: int | None
     created_at: datetime

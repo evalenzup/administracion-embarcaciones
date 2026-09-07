@@ -1190,7 +1190,8 @@ async def upload_grc_invoice(
         pdf_filename=f"/uploads/gastos_reserva_comprobar/pdf/{pdf_filename}" if pdf_filename else None,
         is_manual=0,
         category_id=category_id,
-        description=description,
+        description=description or parsed.get("concept_summary"),
+        concept_dates=parsed.get("concept_dates", []),
         sat_status=sat_status,
         sat_verified_at=datetime.now() if sat_status != "Desconocido" else None,
         registered_by_id=current_user.id

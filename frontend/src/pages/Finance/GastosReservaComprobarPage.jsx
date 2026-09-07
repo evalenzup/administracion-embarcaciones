@@ -1637,7 +1637,25 @@ export default function GastosReservaComprobarPage() {
                       title: 'Fecha Emisión',
                       dataIndex: 'fecha_emision',
                       key: 'fecha_emision',
-                      render: (val) => val ? dayjs(val).format('DD-MM-YYYY') : 'N/A'
+                      width: 160,
+                      align: 'center',
+                      render: (val, r) => {
+                        if (!val) return <span style={{ color: '#999' }}>—</span>;
+                        const emision = dayjs(val);
+                        const dateFormatted = emision.format('DD/MM/YYYY');
+                        const conceptDates = (r.concept_dates || []).map(d => dayjs(d)).filter(d => d.isValid());
+                        const hasConceptDate = conceptDates.length > 0;
+                        return (
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                            <span style={{ color: '#1B4F72', fontWeight: 500 }}>{dateFormatted}</span>
+                            {hasConceptDate && (
+                              <Tag color="green" style={{ fontSize: 10, margin: 0, padding: '0 4px', lineHeight: '15px' }}>
+                                📅 Servicio: {conceptDates[0].format('DD/MM/YYYY')}
+                              </Tag>
+                            )}
+                          </div>
+                        );
+                      }
                     },
                     {
                       title: 'Acciones',

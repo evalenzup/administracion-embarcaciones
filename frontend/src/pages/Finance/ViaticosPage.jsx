@@ -2041,90 +2041,145 @@ export default function ViaticosPage() {
                           const emision = dayjs(val);
                           const inicio = selectedViatico?.fecha_inicio ? dayjs(selectedViatico.fecha_inicio).startOf('day') : null;
                           const fin = selectedViatico?.fecha_fin ? dayjs(selectedViatico.fecha_fin).endOf('day') : null;
-                          const isOutOfRange = (inicio && fin) && (emision.isBefore(inicio) || emision.isAfter(fin));
+                          const isEmisionInRange = (inicio && fin) ? (!emision.isBefore(inicio) && !emision.isAfter(fin)) : true;
+
+                          // Fechas detectadas en conceptos de XML
+                          const conceptDates = (r.concept_dates || []).map(d => dayjs(d)).filter(d => d.isValid());
+                          const matchingServiceDates = (inicio && fin)
+                            ? conceptDates.filter(d => (!d.isBefore(inicio) && !d.isAfter(fin)))
+                            : [];
+                          const isServiceInRange = matchingServiceDates.length > 0;
+
                           const dateFormatted = emision.format('DD/MM/YYYY');
                           const timeFormatted = emision.format('HH:mm');
 
-                          if (isOutOfRange) {
-                            const hasTicket = Boolean(r.ticket_filename);
+                          // Caso 1: Emisión en periodo
+                          if (isEmisionInRange) {
                             return (
-                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                              <Tooltip title={`Factura emitida el ${dateFormatted} a las ${timeFormatted} (Dentro del periodo de comisión)`}>
+                                <div style={{ color: '#1B4F72', fontWeight: 500 }}>
+                                  {dateFormatted}
+                                </div>
+                              </Tooltip>
+                            );
+                          }
+
+                          // Caso 2: Emisión fuera de periodo, pero fecha de servicio/consumo detectada en XML SÍ está en periodo
+                          if (isServiceInRange) {
+                            const serviceDateFormatted = matchingServiceDates[0].format('DD/MM/YYYY');
+                            return (
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
                                 <Tooltip
                                   title={
                                     <div>
-                                      <div style={{ fontWeight: 600, color: hasTicket ? '#ffe58f' : '#ffccc7' }}>
-                                        {hasTicket ? 'ℹ️ Fecha fuera de periodo (Justificada con ticket):' : '⚠️ Factura emitida fuera de periodo:'}
+                                      <div style={{ fontWeight: 600, color: '#87e8de' }}>
+                                        ✅ Fecha de servicio en XML amparada en periodo:
                                       </div>
                                       <div>Factura emitida el <b>{dateFormatted} {timeFormatted}</b>.</div>
+                                      <div style={{ marginTop: 2 }}>
+                                        Fecha de servicio/consumo detectada en XML: <b>{serviceDateFormatted}</b>.
+                                      </div>
                                       <div>Periodo de comisión: <b>{dayjs(selectedViatico.fecha_inicio).format('DD/MM/YYYY')}</b> al <b>{dayjs(selectedViatico.fecha_fin).format('DD/MM/YYYY')}</b>.</div>
-                                      {hasTicket ? (
-                                        <div style={{ marginTop: 4, color: '#87e8de', fontWeight: 600 }}>
-                                          ✅ Cuenta con ticket o nota de consumo adjunto para justificar que el gasto se efectuó durante el viaje.
-                                        </div>
-                                      ) : (
-                                        <div style={{ marginTop: 4, fontStyle: 'italic', fontSize: 11, color: '#fff' }}>
-                                          Si el consumo fue durante la comisión, sube la foto o PDF del ticket para justificarlo.
-                                        </div>
-                                      )}
+                                      <div style={{ marginTop: 4, fontStyle: 'italic', fontSize: 11, color: '#e6fffb' }}>
+                                        El servicio o consumo se efectuó durante el viaje según el XML, por lo que no requiere ticket justificante.
+                                      </div>
                                     </div>
                                   }
                                 >
                                   <div style={{ 
-                                    color: hasTicket ? '#d46b08' : '#cf1322', 
-                                    fontWeight: 700, 
+                                    color: '#0958d9', 
+                                    fontWeight: 600, 
                                     display: 'inline-flex', 
                                     alignItems: 'center', 
                                     justifyContent: 'center',
                                     gap: 4, 
-                                    background: hasTicket ? '#fffbe6' : '#fff1f0', 
+                                    background: '#e6f4ff', 
                                     padding: '2px 8px', 
                                     borderRadius: 6, 
-                                    border: `1px solid ${hasTicket ? '#ffe58f' : '#ffa39e'}`,
+                                    border: '1px solid #91caff',
                                     cursor: 'help'
                                   }}>
-                                    <WarningOutlined style={{ color: hasTicket ? '#d46b08' : '#cf1322', fontSize: 13 }} />
                                     <span>{dateFormatted}</span>
                                   </div>
                                 </Tooltip>
-
-                                {hasTicket ? (
-                                  <Tooltip title="Ver ticket / nota justificante">
-                                    <a href={getFileUrl(r.ticket_filename)} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
-                                      <Tag color="cyan" style={{ fontSize: 11, margin: 0, padding: '1px 6px', borderRadius: 4, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                                        <FileImageOutlined /> Ticket Adjunto
-                                      </Tag>
-                                    </a>
-                                  </Tooltip>
-                                ) : (
-                                  <Upload
-                                    showUploadList={false}
-                                    beforeUpload={(file) => handleUploadInvoiceTicket(r.id, file)}
-                                    accept="image/*,.pdf"
-                                  >
-                                    <Tooltip title="Subir foto o PDF del ticket de compra para comprobar fecha del gasto">
-                                      <Button 
-                                        size="small" 
-                                        type="dashed" 
-                                        danger 
-                                        icon={<CameraOutlined />} 
-                                        loading={uploadingTicketForInv === r.id}
-                                        style={{ fontSize: 11, height: 22, padding: '0 6px', borderRadius: 4 }}
-                                      >
-                                        Subir Ticket
-                                      </Button>
-                                    </Tooltip>
-                                  </Upload>
-                                )}
+                                <Tag color="green" style={{ fontSize: 10, margin: 0, padding: '0 5px', borderRadius: 4, lineHeight: '16px' }}>
+                                  📅 Servicio: {serviceDateFormatted}
+                                </Tag>
                               </div>
                             );
                           }
 
+                          // Caso 3: Fuera de periodo sin fecha de concepto válida -> Requiere ticket justificante
+                          const hasTicket = Boolean(r.ticket_filename);
                           return (
-                            <Tooltip title={`Emitida el ${dateFormatted} a las ${timeFormatted} (Dentro del periodo de comisión)`}>
-                              <div style={{ color: '#1B4F72', fontWeight: 500 }}>
-                                {dateFormatted}
-                              </div>
-                            </Tooltip>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                              <Tooltip
+                                title={
+                                  <div>
+                                    <div style={{ fontWeight: 600, color: hasTicket ? '#ffe58f' : '#ffccc7' }}>
+                                      {hasTicket ? 'ℹ️ Fecha fuera de periodo (Justificada con ticket):' : '⚠️ Factura emitida fuera de periodo:'}
+                                    </div>
+                                    <div>Factura emitida el <b>{dateFormatted} {timeFormatted}</b>.</div>
+                                    <div>Periodo de comisión: <b>{dayjs(selectedViatico.fecha_inicio).format('DD/MM/YYYY')}</b> al <b>{dayjs(selectedViatico.fecha_fin).format('DD/MM/YYYY')}</b>.</div>
+                                    {hasTicket ? (
+                                      <div style={{ marginTop: 4, color: '#87e8de', fontWeight: 600 }}>
+                                        ✅ Cuenta con ticket o nota de consumo adjunto para justificar que el gasto se efectuó durante el viaje.
+                                      </div>
+                                    ) : (
+                                      <div style={{ marginTop: 4, fontStyle: 'italic', fontSize: 11, color: '#fff' }}>
+                                        Si el consumo fue durante la comisión, sube la foto o PDF del ticket para justificarlo.
+                                      </div>
+                                    )}
+                                  </div>
+                                }
+                              >
+                                <div style={{ 
+                                  color: hasTicket ? '#d46b08' : '#cf1322', 
+                                  fontWeight: 700, 
+                                  display: 'inline-flex', 
+                                  alignItems: 'center', 
+                                  justifyContent: 'center',
+                                  gap: 4, 
+                                  background: hasTicket ? '#fffbe6' : '#fff1f0', 
+                                  padding: '2px 8px', 
+                                  borderRadius: 6, 
+                                  border: `1px solid ${hasTicket ? '#ffe58f' : '#ffa39e'}`,
+                                  cursor: 'help'
+                                }}>
+                                  <WarningOutlined style={{ color: hasTicket ? '#d46b08' : '#cf1322', fontSize: 13 }} />
+                                  <span>{dateFormatted}</span>
+                                </div>
+                              </Tooltip>
+
+                              {hasTicket ? (
+                                <Tooltip title="Ver ticket / nota justificante">
+                                  <a href={getFileUrl(r.ticket_filename)} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
+                                    <Tag color="cyan" style={{ fontSize: 11, margin: 0, padding: '1px 6px', borderRadius: 4, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                      <FileImageOutlined /> Ticket Adjunto
+                                    </Tag>
+                                  </a>
+                                </Tooltip>
+                              ) : (
+                                <Upload
+                                  showUploadList={false}
+                                  beforeUpload={(file) => handleUploadInvoiceTicket(r.id, file)}
+                                  accept="image/*,.pdf"
+                                >
+                                  <Tooltip title="Subir foto o PDF del ticket de compra para comprobar fecha del gasto">
+                                    <Button 
+                                      size="small" 
+                                      type="dashed" 
+                                      danger 
+                                      icon={<CameraOutlined />} 
+                                      loading={uploadingTicketForInv === r.id}
+                                      style={{ fontSize: 11, height: 22, padding: '0 6px', borderRadius: 4 }}
+                                    >
+                                      Subir Ticket
+                                    </Button>
+                                  </Tooltip>
+                                </Upload>
+                              )}
+                            </div>
                           );
                         }
                       },
