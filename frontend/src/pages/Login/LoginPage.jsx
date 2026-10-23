@@ -4,7 +4,7 @@
 
 import { useState } from 'react';
 import { Form, Input, Button, Typography, Card, Space, Divider } from 'antd';
-import { UserOutlined, LockOutlined, LoginOutlined, CalendarOutlined } from '@ant-design/icons';
+import { UserOutlined, LockOutlined, LoginOutlined, CalendarOutlined, CloudOutlined } from '@ant-design/icons';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -92,15 +92,26 @@ function LoginPage() {
             </Form.Item>
           </Form>
           <Divider style={{ margin: '16px 0' }} />
-          <Button
-            type="link"
-            block
-            icon={<CalendarOutlined />}
-            onClick={() => navigate('/agenda')}
-            style={{ color: '#1B4F72', fontWeight: 500 }}
-          >
-            Ver Agenda de Embarcaciones
-          </Button>
+          <Space direction="vertical" style={{ width: '100%' }} size={4}>
+            <Button
+              type="link"
+              block
+              icon={<CalendarOutlined />}
+              onClick={() => navigate('/agenda')}
+              style={{ color: '#1B4F72', fontWeight: 500 }}
+            >
+              Ver Agenda de Embarcaciones
+            </Button>
+            <Button
+              type="link"
+              block
+              icon={<CloudOutlined />}
+              onClick={() => navigate('/weather')}
+              style={{ color: '#1B4F72', fontWeight: 500 }}
+            >
+              Ver Módulo de Meteorología
+            </Button>
+          </Space>
         </Card>
 
         <Text style={styles.footer}>

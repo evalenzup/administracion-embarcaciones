@@ -17,6 +17,8 @@ import RolesPage from './pages/Admin/RolesPage';
 import PortsPage from './pages/Admin/PortsPage';
 import AuditPage from './pages/Admin/AuditPage';
 import VesselsPage from './pages/Vessels/VesselsPage';
+import TankSoundingsPage from './pages/Vessels/TankSoundingsPage';
+import StabilityPage from './pages/Vessels/StabilityPage';
 import DocumentsPage from './pages/Documents/DocumentsPage';
 import MaintenancePage from './pages/Maintenance/MaintenancePage';
 import InventoryPage from './pages/Inventory/InventoryPage';
@@ -113,6 +115,8 @@ function AppRoutes() {
       >
         <Route path="/" element={<DashboardPage />} />
         <Route path="/vessels" element={<VesselsPage />} />
+        <Route path="/soundings" element={<TankSoundingsPage />} />
+        <Route path="/stability" element={<StabilityPage />} />
         <Route path="/documents" element={<DocumentsPage />} />
         <Route path="/maintenance" element={<MaintenancePage />} />
         <Route path="/inventory" element={<InventoryPage />} />

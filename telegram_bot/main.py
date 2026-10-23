@@ -8,6 +8,7 @@ from aiogram.client.session.aiohttp import AiohttpSession
 from config import settings
 from handlers.nav import router as nav_router
 from handlers.comprobacion import router as comp_router
+from handlers.admin import router as admin_router
 
 # Configurar logs
 logging.basicConfig(
@@ -33,6 +34,7 @@ async def main():
     dp = Dispatcher()
 
     # 3. Registrar routers
+    dp.include_router(admin_router)
     dp.include_router(nav_router)
     dp.include_router(comp_router)
 

@@ -34,13 +34,23 @@ from app.models.ema import EmaStation, EmaMeasurement
 from app.models.gasto_reserva_comprobar import GastoReservaComprobar, GastoReservaComprobarFactura
 from app.models.vessel_telemetry import VesselTelemetry
 from app.models.viatico import Viatico, ViaticoFactura
+from app.models.notification_log import NotificationLog
+from app.models.vessel_tank import VesselTank, TankFluidType
+from app.models.tank_sounding import TankSounding, TankSoundingItem, SoundingType
+from app.models.stability_condition import (
+    StabilityCondition,
+    DeckCargoItem,
+    EvaluationType,
+    ComplianceStatus,
+    DeckLocation,
+)
 
 __all__ = [
     "Permission", "Role", "role_permissions", "User", "UserRole",
     "ServiceRequest", "ServiceStageHistory", "ServiceObservation",
     "Provider",
     "Project",
-    "AuditLog", "Vessel", "VesselRate", "VesselRateClientType", "Document",
+    "AuditLog", "NotificationLog", "Vessel", "VesselRate", "VesselRateClientType", "Document",
     "Port",
     "MaintenanceCategory", "MaintenanceRecord",
     "InventoryItem", "InventoryMovement",
@@ -76,5 +86,15 @@ __all__ = [
     "VesselTelemetry",
     "Viatico",
     "ViaticoFactura",
+    "VesselTank",
+    "TankFluidType",
+    "TankSounding",
+    "TankSoundingItem",
+    "SoundingType",
+    "StabilityCondition",
+    "DeckCargoItem",
+    "EvaluationType",
+    "ComplianceStatus",
+    "DeckLocation",
 ]
 

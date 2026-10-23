@@ -4,6 +4,7 @@ Define las embarcaciones administradas por el sistema.
 """
 
 from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Text, Enum as SAEnum
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
 import enum
@@ -45,6 +46,14 @@ class Vessel(Base):
     year_built = Column(Integer, nullable=True)
     hull_material = Column(String(50), nullable=True)
 
+    # Parámetros hidrostáticos y de estabilidad naval
+    lpp_m = Column(Float, nullable=True)                    # Eslora entre perpendiculares LPP (m)
+    lightship_weight_tons = Column(Float, nullable=True)    # Desplazamiento en rosca Δ₀ (ton)
+    lightship_kg_m = Column(Float, nullable=True)           # Centro de gravedad vertical en rosca KG₀ (m sobre LB)
+    main_deck_height_m = Column(Float, nullable=True)       # Altura base de Cubierta Principal sobre LB (m)
+    upper_deck_height_m = Column(Float, nullable=True)      # Altura base de Cubierta Superior sobre LB (m)
+    max_displacement_tons = Column(Float, nullable=True)    # Desplazamiento máximo admisible (ton)
+
     # Propulsión
     engine_type = Column(String(100), nullable=True)
     engine_power_hp = Column(Float, nullable=True)
@@ -70,5 +79,33 @@ class Vessel(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
+    # Relaciones de Estabilidad y Tanques
+    tanks = relationship("VesselTank", back_populates="vessel", cascade="all, delete-orphan", order_by="VesselTank.order_index")
+    soundings = relationship("TankSounding", back_populates="vessel", cascade="all, delete-orphan", order_by="desc(TankSounding.sounding_datetime)")
+    stability_conditions = relationship("StabilityCondition", back_populates="vessel", cascade="all, delete-orphan", order_by="desc(StabilityCondition.created_at)")
+
+    @property
+    def default_captain(self) -> dict | None:
+        """Obtiene el capitán asignado como tripulación base a esta embarcación."""
+        if not hasattr(self, "crew_assignments") or not self.crew_assignments:
+            return None
+        for assignment in self.crew_assignments:
+            role_val = assignment.role.value if hasattr(assignment.role, "value") else str(assignment.role)
+            if assignment.is_active and role_val == "capitan" and assignment.personnel:
+                return {
+                    "id": assignment.personnel.id,
+                    "full_name": assignment.personnel.full_name,
+                    "phone": assignment.personnel.phone,
+                    "email": assignment.personnel.email,
+                }
+        return None
+
+    @property
+    def default_captain_name(self) -> str | None:
+        """Nombre completo del capitán base predeterminado."""
+        cap = self.default_captain
+        return cap["full_name"] if cap else None
+
     def __repr__(self):
         return f"<Vessel {self.name} ({self.vessel_type.value})>"
+

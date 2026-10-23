@@ -296,6 +296,22 @@ function VesselsPage() {
                 />
               </Tooltip>
             </CanAccess>
+            <Tooltip title="Sondeo de tanques e inventario de líquidos">
+              <Button
+                type="text"
+                icon={<span style={{ fontSize: 14 }}>💧</span>}
+                onClick={() => navigate('/soundings')}
+                style={{ color: '#2980B9' }}
+              />
+            </Tooltip>
+            <Tooltip title="Cálculo de Estabilidad y Pesos en Cubiertas">
+              <Button
+                type="text"
+                icon={<span style={{ fontSize: 14 }}>⚖️</span>}
+                onClick={() => navigate('/stability')}
+                style={{ color: '#27AE60' }}
+              />
+            </Tooltip>
             <CanAccess module="vessels" action="edit">
               <Tooltip title="Editar">
                 <Button type="text" icon={<EditOutlined />} onClick={() => openEditModal(record)} />
@@ -599,6 +615,28 @@ function VesselsPage() {
                 Ver Telemetría y Posición en Mapa
               </Button>
             )}
+
+            <Button 
+              icon={<span style={{ marginRight: 6 }}>⛽</span>} 
+              onClick={() => {
+                setDrawerOpen(false);
+                navigate('/soundings');
+              }}
+              style={{ width: '100%', marginBottom: 8 }}
+            >
+              Sondeo de Tanques e Inventario de Líquidos
+            </Button>
+
+            <Button 
+              icon={<span style={{ marginRight: 6 }}>⚖️</span>} 
+              onClick={() => {
+                setDrawerOpen(false);
+                navigate('/stability');
+              }}
+              style={{ width: '100%', marginBottom: 16 }}
+            >
+              Cálculo de Estabilidad y Pesos en Cubiertas
+            </Button>
 
             {/* ── Tripulación Base ── */}
             <Divider orientation="left" style={{ color: '#7b2d00', borderColor: '#7b2d00' }}>

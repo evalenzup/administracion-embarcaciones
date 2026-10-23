@@ -251,5 +251,103 @@ class SIAEAPIClient:
                 logger.error(f"Error al subir factura a viáticos: {e}")
                 return {"success": False, "error": f"Error al subir archivos al servidor: {str(e)}"}
 
+    async def get_admin_digest(self, telegram_id: str) -> dict:
+        """
+        Obtener el resumen global operativo para administradores y asistentes.
+        Llama a: GET /api/v1/notifications/admin-digest
+        """
+        url = f"{self.base_url}/api/v1/notifications/admin-digest"
+        headers = self._get_headers(impersonate_tg_id=telegram_id)
+
+        async with httpx.AsyncClient() as client:
+            try:
+                resp = await client.get(url, headers=headers, timeout=12.0)
+                if resp.status_code == 200:
+                    return {"success": True, "data": resp.json()}
+                else:
+                    detail = "No autorizado o error al obtener resumen."
+                    try:
+                        detail = resp.json().get("detail", detail)
+                    except Exception:
+                        pass
+                    return {"success": False, "error": detail}
+            except Exception as e:
+                logger.error(f"Error al obtener admin digest: {e}")
+                return {"success": False, "error": "Error de conexión con el servidor."}
+
+    async def get_admin_overdue(self, telegram_id: str) -> dict:
+        """
+        Obtener la lista de trámites vencidos.
+        Llama a: GET /api/v1/notifications/admin-overdue
+        """
+        url = f"{self.base_url}/api/v1/notifications/admin-overdue"
+        headers = self._get_headers(impersonate_tg_id=telegram_id)
+
+        async with httpx.AsyncClient() as client:
+            try:
+                resp = await client.get(url, headers=headers, timeout=12.0)
+                if resp.status_code == 200:
+                    return {"success": True, "data": resp.json()}
+                else:
+                    detail = "No autorizado o error al obtener vencidos."
+                    try:
+                        detail = resp.json().get("detail", detail)
+                    except Exception:
+                        pass
+                    return {"success": False, "error": detail}
+            except Exception as e:
+                logger.error(f"Error al obtener admin overdue: {e}")
+                return {"success": False, "error": "Error de conexión con el servidor."}
+
+    async def get_admin_pending(self, telegram_id: str) -> dict:
+        """
+        Obtener la lista de trámites pendientes.
+        Llama a: GET /api/v1/notifications/admin-pending
+        """
+        url = f"{self.base_url}/api/v1/notifications/admin-pending"
+        headers = self._get_headers(impersonate_tg_id=telegram_id)
+
+        async with httpx.AsyncClient() as client:
+            try:
+                resp = await client.get(url, headers=headers, timeout=12.0)
+                if resp.status_code == 200:
+                    return {"success": True, "data": resp.json()}
+                else:
+                    detail = "No autorizado o error al obtener pendientes."
+                    try:
+                        detail = resp.json().get("detail", detail)
+                    except Exception:
+                        pass
+                    return {"success": False, "error": detail}
+            except Exception as e:
+                logger.error(f"Error al obtener admin pending: {e}")
+                return {"success": False, "error": "Error de conexión con el servidor."}
+
+    async def send_reminder_by_folio(self, telegram_id: str, folio: str, custom_note: str | None = None) -> dict:
+        """
+        Enviar recordatorio formal directo al titular de un folio.
+        Llama a: POST /api/v1/notifications/send-reminder-by-folio
+        """
+        url = f"{self.base_url}/api/v1/notifications/send-reminder-by-folio"
+        headers = self._get_headers(impersonate_tg_id=telegram_id)
+        payload = {"folio": folio, "custom_note": custom_note}
+
+        async with httpx.AsyncClient() as client:
+            try:
+                resp = await client.post(url, json=payload, headers=headers, timeout=15.0)
+                if resp.status_code == 200:
+                    return {"success": True, "data": resp.json()}
+                else:
+                    detail = "Error al enviar recordatorio."
+                    try:
+                        detail = resp.json().get("detail", detail)
+                    except Exception:
+                        pass
+                    return {"success": False, "error": detail}
+            except Exception as e:
+                logger.error(f"Error al enviar recordatorio por folio: {e}")
+                return {"success": False, "error": "Error de conexión con el servidor."}
+
 
 api_client = SIAEAPIClient()
+

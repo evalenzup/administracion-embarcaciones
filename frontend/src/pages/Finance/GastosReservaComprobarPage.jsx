@@ -49,11 +49,13 @@ import {
   CloseOutlined,
   FileZipOutlined,
   SearchOutlined,
-  ReloadOutlined
+  ReloadOutlined,
+  SendOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import apiClient from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
+import TelegramAnnouncementModal from '../../components/Finance/TelegramAnnouncementModal';
 
 const { TabPane } = Tabs;
 const { TextArea } = Input;
@@ -72,6 +74,11 @@ const STATUS_MAP = {
 export default function GastosReservaComprobarPage() {
   const { user } = useAuth();
   const [grcList, setGrcList] = useState([]);
+  
+  // Modal de Aviso Telegram
+  const [telegramModalOpen, setTelegramModalOpen] = useState(false);
+  const [telegramTramite, setTelegramTramite] = useState(null);
+
   const getFileUrl = (path) => {
     if (!path) return '';
     if (path.startsWith('http://') || path.startsWith('https://')) return path;
@@ -126,6 +133,8 @@ export default function GastosReservaComprobarPage() {
   // Modal de Carga de Devolución
   const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
   const [returnFileList, setReturnFileList] = useState([]);
+  const [parsingReturnReceipt, setParsingReturnReceipt] = useState(false);
+  const [detectedGrcReceipt, setDetectedGrcReceipt] = useState(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [detailTab, setDetailTab] = useState('signatures');
   const [downloadingExcel, setDownloadingExcel] = useState(false);
@@ -665,6 +674,32 @@ export default function GastosReservaComprobarPage() {
     }
   };
 
+  const handleReturnReceiptFileChange = async (file) => {
+    if (!file) return false;
+    setReturnFileList([file]);
+    
+    // Auto-parsear comprobante bancario
+    const formData = new FormData();
+    formData.append('file', file);
+    setParsingReturnReceipt(true);
+    try {
+      const res = await apiClient.post('/gastos-reserva-comprobar/parse-return-receipt', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      if (res.data?.monto && res.data.monto > 0) {
+        setDetectedGrcReceipt(res.data);
+        message.success(`Comprobante ${res.data.banco || ''} detectado: $${Number(res.data.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN.`);
+      } else if (res.data?.banco) {
+        setDetectedGrcReceipt(res.data);
+      }
+    } catch (err) {
+      console.warn('No se pudo parsear comprobante de devolución GRC:', err);
+    } finally {
+      setParsingReturnReceipt(false);
+    }
+    return false;
+  };
+
   const handleUploadReturnReceipt = async () => {
     if (!returnFileList.length) {
       message.error('Debe seleccionar el comprobante de devolución');
@@ -672,6 +707,9 @@ export default function GastosReservaComprobarPage() {
     }
     const formData = new FormData();
     formData.append('file', returnFileList[0]);
+    if (detectedGrcReceipt?.monto) {
+      formData.append('monto_devuelto', detectedGrcReceipt.monto);
+    }
 
     try {
       await apiClient.post(`/gastos-reserva-comprobar/${selectedGrc.id}/upload-return-receipt`, formData, {
@@ -680,6 +718,7 @@ export default function GastosReservaComprobarPage() {
       message.success('Comprobante de devolución guardado y estado actualizado');
       setIsReturnModalOpen(false);
       setReturnFileList([]);
+      setDetectedGrcReceipt(null);
       reloadDetail(selectedGrc.id);
       fetchGrcs(); // actualizar lista principal
     } catch (err) {
@@ -802,6 +841,17 @@ export default function GastosReservaComprobarPage() {
       render: (_, record) => (
         <Space>
           <Button icon={<EyeOutlined />} size="small" onClick={() => handleOpenDetail(record)}>Detalles</Button>
+          <Tooltip title="Enviar Aviso por Telegram">
+            <Button
+              icon={<SendOutlined />}
+              size="small"
+              style={{ color: '#0088cc', borderColor: '#0088cc' }}
+              onClick={() => {
+                setTelegramTramite(record);
+                setTelegramModalOpen(true);
+              }}
+            />
+          </Tooltip>
           <Button icon={<EditOutlined />} size="small" onClick={() => handleOpenEdit(record)}>Editar</Button>
           <Popconfirm
             title="¿Eliminar esta solicitud GRC?"
@@ -1952,42 +2002,70 @@ export default function GastosReservaComprobarPage() {
 
       {/* MODAL DE REGISTRO DE DEVOLUCIÓN */}
       <Modal
-        title={<span style={{ color: '#0A2647', fontWeight: 600 }}>Registrar Comprobante de Devolución</span>}
+        title={<span style={{ color: '#0A2647', fontWeight: 600 }}>💳 Registrar Comprobante de Devolución / Reintegro</span>}
         open={isReturnModalOpen}
         onOk={handleUploadReturnReceipt}
         onCancel={() => {
           setIsReturnModalOpen(false);
           setReturnFileList([]);
+          setDetectedGrcReceipt(null);
         }}
         okText="Registrar Devolución"
         cancelText="Cancelar"
         destroyOnClose
-        width={450}
+        width={480}
       >
         <div style={{ marginTop: 16, marginBottom: 16 }}>
           <p style={{ color: '#555' }}>
-            Suba el comprobante de transferencia o depósito correspondiente al reintegro del saldo del anticipo de este GRC por un monto de:
+            Adjunta la ficha de depósito bancario o transferencia (BBVA, Banorte, Santander, SPEI, etc.) para acreditar la devolución del remanente:
             <strong style={{ display: 'block', fontSize: 18, color: '#E67E22', marginTop: 8 }}>
-              $ {selectedGrc?.monto_devuelto?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+              $ {(selectedGrc?.monto_devuelto != null && selectedGrc?.monto_devuelto > 0 ? selectedGrc.monto_devuelto : Math.max(0, (selectedGrc?.monto_solicitado || 0) - (selectedGrc?.monto_comprobado || 0))).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN
             </strong>
           </p>
+
+          {detectedGrcReceipt?.monto && (
+            <Alert
+              type="success"
+              showIcon
+              message={
+                <span>
+                  <b>Comprobante {detectedGrcReceipt.banco || 'Bancario'} Detectado:</b> Monto transferido de <b>${Number(detectedGrcReceipt.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN</b>.
+                  {detectedGrcReceipt.folio_operacion && <span style={{ display: 'block', fontSize: 12, marginTop: 2 }}>• Folio Operación: {detectedGrcReceipt.folio_operacion}</span>}
+                </span>
+              }
+              style={{ marginTop: 12, marginBottom: 12 }}
+            />
+          )}
           
-          <div style={{ marginTop: 24 }}>
+          <div style={{ marginTop: 16 }}>
             <label style={{ display: 'block', fontWeight: 500, marginBottom: 8, color: '#333' }}>Comprobante de Devolución (PDF o Imagen) *</label>
-            <Upload
-              accept=".pdf,.jpg,.jpeg,.png"
-              fileList={returnFileList}
-              beforeUpload={(file) => {
-                setReturnFileList([file]);
-                return false;
-              }}
-              onRemove={() => setReturnFileList([])}
-            >
-              <Button icon={<UploadOutlined />}>Seleccionar Archivo</Button>
-            </Upload>
+            <Spin spinning={parsingReturnReceipt} tip="Analizando comprobante...">
+              <Upload
+                accept=".pdf,.jpg,.jpeg,.png"
+                fileList={returnFileList}
+                beforeUpload={handleReturnReceiptFileChange}
+                onRemove={() => {
+                  setReturnFileList([]);
+                  setDetectedGrcReceipt(null);
+                }}
+              >
+                <Button icon={<UploadOutlined />}>Seleccionar o Arrastrar Archivo</Button>
+              </Upload>
+            </Spin>
           </div>
         </div>
       </Modal>
+
+      {/* Modal de Aviso / Anuncio vía Telegram Bot */}
+      <TelegramAnnouncementModal
+        open={telegramModalOpen}
+        onClose={() => {
+          setTelegramModalOpen(false);
+          setTelegramTramite(null);
+        }}
+        tramite={telegramTramite}
+        tramiteType="grc"
+      />
     </div>
   );
 }

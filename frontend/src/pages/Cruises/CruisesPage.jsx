@@ -3,6 +3,7 @@
  * Planes de crucero con mapa Leaflet para visualizar waypoints.
  */
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Table, Button, Space, Tag, Modal, Form, Input, Select, DatePicker,
   Typography, Card, message, Popconfirm, Tooltip, Row, Col, Statistic,
@@ -15,7 +16,8 @@ import {
   FilePdfOutlined, FileWordOutlined, CheckOutlined, CloseOutlined,
   DownOutlined, RightOutlined, ExperimentOutlined, InfoCircleOutlined,
   UploadOutlined, LoadingOutlined, DollarOutlined, SyncOutlined, CheckCircleOutlined,
-  EyeOutlined, ArrowUpOutlined, ArrowDownOutlined, DownloadOutlined
+  EyeOutlined, ArrowUpOutlined, ArrowDownOutlined, DownloadOutlined,
+  SaveOutlined, ArrowRightOutlined
 } from '@ant-design/icons';
 import {
   MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents, useMap, Tooltip as MapTooltip
@@ -23,15 +25,18 @@ import {
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import dayjs from 'dayjs';
+import JSZip from 'jszip';
 import { PDFDownloadLink, PDFViewer } from '@react-pdf/renderer';
 import apiClient from '../../api/client';
 import { CanAccess } from '../../components/common/CanAccess';
 import { useAuth } from '../../context/AuthContext';
 import ParticipantsDrawer from './ParticipantsDrawer';
 import { CampaignPlanDocument } from './CampaignPlanDocument';
+import CruiseWeatherReportDocument from './CruiseWeatherReportDocument';
 import { BillingFormModal, CLIENT_TYPE_LABELS, STATUS_CONFIG } from '../Billing/BillingPage';
+import CruiseTelemetryCharts from '../../components/Cruises/CruiseTelemetryCharts';
 
-const { Title, Text } = Typography;
+const { Title, Text, Paragraph } = Typography;
 const { Search, TextArea } = Input;
 
 // Fix Leaflet default icons in webpack/vite bundles
@@ -54,6 +59,11 @@ const endIcon = new L.Icon({
 });
 const scienceIcon = new L.Icon({
   iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-violet.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+  iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
+});
+const warningIcon = new L.Icon({
+  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-orange.png',
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
   iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
 });
@@ -462,10 +472,20 @@ function TelemetryTrackLayer({ track, show }) {
     const intervalMs = totalMs / (maxMarkers + 1);
     const result = [];
     let nextTarget = new Date(tList[0].timestamp).getTime() + intervalMs;
-    for (const pt of tList) {
+    for (let i = 0; i < tList.length; i++) {
+      const pt = tList[i];
       const t = new Date(pt.timestamp).getTime();
       if (t >= nextTarget) {
-        result.push({ ...pt, _label: result.length + 1 });
+        let speedKnots = null;
+        if (i > 0) {
+          const prev = tList[i - 1];
+          const dtHours = (t - new Date(prev.timestamp).getTime()) / 3600000;
+          if (dtHours > 0) {
+            const distNm = L.latLng(prev.latitude, prev.longitude).distanceTo(L.latLng(pt.latitude, pt.longitude)) / 1852;
+            speedKnots = distNm / dtHours;
+          }
+        }
+        result.push({ ...pt, _label: result.length + 1, _speedKnots: speedKnots });
         nextTarget += intervalMs;
         if (result.length >= maxMarkers) break;
       }
@@ -486,7 +506,19 @@ function TelemetryTrackLayer({ track, show }) {
       const d = L.latLng(pt.latitude, pt.longitude).distanceTo(e.latlng);
       if (d < minDist) { minDist = d; nearest = pt; }
     }
-    if (nearest) setClickedInfo({ point: nearest, latlng: e.latlng });
+    if (nearest) {
+      let speedKnots = null;
+      const idx = validTrack.indexOf(nearest);
+      if (idx > 0) {
+        const prev = validTrack[idx - 1];
+        const dtHours = (new Date(nearest.timestamp) - new Date(prev.timestamp)) / 3600000;
+        if (dtHours > 0) {
+          const distNm = L.latLng(prev.latitude, prev.longitude).distanceTo(L.latLng(nearest.latitude, nearest.longitude)) / 1852;
+          speedKnots = distNm / dtHours;
+        }
+      }
+      setClickedInfo({ point: nearest, latlng: e.latlng, speedKnots });
+    }
   };
 
   return (
@@ -505,17 +537,18 @@ function TelemetryTrackLayer({ track, show }) {
         return (
           <Marker key={`tel-ms-${i}`} position={[m.latitude, m.longitude]} icon={makeTelemetryMilestoneIcon(m._label)}>
             <Popup>
-              <div style={{ fontSize: 12, minWidth: 160 }}>
+              <div style={{ fontSize: 12, minWidth: 175 }}>
                 <div style={{ fontWeight: 700, color: '#13C2C2', marginBottom: 4 }}>📡 Hito de Telemetría {m._label}</div>
                 <div>🕐 {new Date(m.timestamp).toLocaleString('es-MX', {
                   day: '2-digit', month: '2-digit', year: 'numeric',
                   hour: '2-digit', minute: '2-digit'
                 })}</div>
                 <div style={{ margin: '4px 0', borderTop: '1px solid #eee', paddingTop: 4 }}>
-                  🌡️ Temp: {m.temp != null ? `${m.temp.toFixed(1)}°C` : '—'}<br />
-                  💧 Humedad: {m.humidity != null ? `${Math.round(m.humidity)}%` : '—'}<br />
-                  📐 Presión: {m.pressure != null ? `${m.pressure.toFixed(1)} hPa` : '—'}<br />
-                  💨 Viento: {windKts != null ? `${windKts.toFixed(1)} kt` : '—'}{windDir != null ? ` (${Math.round(windDir)}°)` : ''}
+                  🚢 <b>Vel. Barco:</b> {m._speedKnots != null ? `${m._speedKnots.toFixed(1)} kt` : '—'}<br />
+                  💨 <b>Viento:</b> {windKts != null ? `${windKts.toFixed(1)} kt` : '—'}{windDir != null ? ` (${Math.round(windDir)}° ${getWindDirectionText(windDir)})` : ''}<br />
+                  🌡️ <b>Temp:</b> {m.temp != null ? `${m.temp.toFixed(1)}°C` : '—'}<br />
+                  💧 <b>Humedad:</b> {m.humidity != null ? `${Math.round(m.humidity)}%` : '—'}<br />
+                  📐 <b>Presión:</b> {m.pressure != null ? `${m.pressure.toFixed(1)} hPa` : '—'}
                 </div>
                 <div style={{ fontSize: 10, color: '#888', borderTop: '1px solid #eee', paddingTop: 4 }}>
                   Lat: {m.latitude.toFixed(5)}, Lon: {m.longitude.toFixed(5)}
@@ -556,17 +589,18 @@ function TelemetryTrackLayer({ track, show }) {
         const windDir = pt.wind_dir_corr != null ? pt.wind_dir_corr : pt.wind_dir;
         return (
           <Popup position={[clickedInfo.latlng.lat, clickedInfo.latlng.lng]} onClose={() => setClickedInfo(null)}>
-            <div style={{ fontSize: 12, minWidth: 160 }}>
+            <div style={{ fontSize: 12, minWidth: 175 }}>
               <div style={{ fontWeight: 700, color: '#13C2C2', marginBottom: 4 }}>📡 Punto de Telemetría</div>
               <div>🕐 {new Date(pt.timestamp).toLocaleString('es-MX', {
                 day: '2-digit', month: '2-digit', year: 'numeric',
                 hour: '2-digit', minute: '2-digit'
               })}</div>
               <div style={{ margin: '4px 0', borderTop: '1px solid #eee', paddingTop: 4 }}>
-                🌡️ Temp: {pt.temp != null ? `${pt.temp.toFixed(1)}°C` : '—'}<br />
-                💧 Humedad: {pt.humidity != null ? `${Math.round(pt.humidity)}%` : '—'}<br />
-                📐 Presión: {pt.pressure != null ? `${pt.pressure.toFixed(1)} hPa` : '—'}<br />
-                💨 Viento: {windKts != null ? `${windKts.toFixed(1)} kt` : '—'}{windDir != null ? ` (${Math.round(windDir)}°)` : ''}
+                🚢 <b>Vel. Barco:</b> {clickedInfo.speedKnots != null ? `${clickedInfo.speedKnots.toFixed(1)} kt` : '—'}<br />
+                💨 <b>Viento:</b> {windKts != null ? `${windKts.toFixed(1)} kt` : '—'}{windDir != null ? ` (${Math.round(windDir)}° ${getWindDirectionText(windDir)})` : ''}<br />
+                🌡️ <b>Temp:</b> {pt.temp != null ? `${pt.temp.toFixed(1)}°C` : '—'}<br />
+                💧 <b>Humedad:</b> {pt.humidity != null ? `${Math.round(pt.humidity)}%` : '—'}<br />
+                📐 <b>Presión:</b> {pt.pressure != null ? `${pt.pressure.toFixed(1)} hPa` : '—'}
               </div>
               <div style={{ fontSize: 10, color: '#888', borderTop: '1px solid #eee', paddingTop: 4 }}>
                 Lat: {pt.latitude.toFixed(5)}<br />
@@ -580,7 +614,58 @@ function TelemetryTrackLayer({ track, show }) {
   );
 }
 
-function WaypointMapModal({ cruise, open, onClose, onSave, onConfigureSamples, inline = false }) {
+function UnsavedCruiseNotice({ tabTitle, description, onSave, saving }) {
+  return (
+    <div style={{
+      textAlign: 'center',
+      padding: '48px 24px',
+      background: 'linear-gradient(135deg, #f8fafd 0%, #f0f5ff 100%)',
+      borderRadius: 12,
+      border: '1px dashed #adc6ff',
+      margin: '20px 0',
+      boxShadow: '0 2px 8px rgba(0, 32, 96, 0.04)'
+    }}>
+      <div style={{
+        width: 56,
+        height: 56,
+        borderRadius: '50%',
+        background: '#e6f4ff',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        margin: '0 auto 16px',
+        border: '1px solid #91caff'
+      }}>
+        <CompassOutlined style={{ fontSize: 28, color: '#1677ff' }} />
+      </div>
+      <Title level={4} style={{ color: '#0A2647', marginBottom: 8 }}>
+        {tabTitle}
+      </Title>
+      <Paragraph type="secondary" style={{ maxWidth: 540, margin: '0 auto 20px', fontSize: 13, lineHeight: '1.6' }}>
+        {description}
+      </Paragraph>
+      <Button
+        type="primary"
+        size="large"
+        loading={saving}
+        icon={<SaveOutlined />}
+        onClick={onSave}
+        style={{
+          background: '#0A2647',
+          borderColor: '#0A2647',
+          fontWeight: 600,
+          borderRadius: 8,
+          height: 40,
+          padding: '0 24px'
+        }}
+      >
+        Guardar Datos y Habilitar Pestaña
+      </Button>
+    </div>
+  );
+}
+
+function WaypointMapModal({ cruise, open, onClose, onSave, onConfigureSamples, inline = false, defaultDepartureDate = null }) {
   const [waypoints, setWaypoints] = useState([]);
   const [saving, setSaving] = useState(false);
   const [activeWaypoint, setActiveWaypoint] = useState(null);
@@ -601,6 +686,100 @@ function WaypointMapModal({ cruise, open, onClose, onSave, onConfigureSamples, i
 
   const markerRefs = useRef({});
   const maxSpeed = cruise?.vessel?.max_speed_knots || null;
+
+  // ── Estados de Pronóstico Meteorológico y Ruteo Espacio-Temporal ──
+  // Determinar la fecha y hora almacenada en Datos Generales (departure_date)
+  const getSavedDeparture = useCallback(() => {
+    if (defaultDepartureDate && dayjs(defaultDepartureDate).isValid()) {
+      return dayjs(defaultDepartureDate);
+    }
+    if (cruise?.departure_date && dayjs(cruise.departure_date).isValid()) {
+      return dayjs(cruise.departure_date);
+    }
+    if (cruise?.start_date && dayjs(cruise.start_date).isValid()) {
+      return dayjs(cruise.start_date);
+    }
+    return null;
+  }, [cruise?.departure_date, cruise?.start_date, defaultDepartureDate]);
+
+  const [departureDatetime, setDepartureDatetime] = useState(() => {
+    const saved = getSavedDeparture();
+    return saved || dayjs().hour(8).minute(0).second(0);
+  });
+  const [defaultSpeedKnots, setDefaultSpeedKnots] = useState(() => {
+    return cruise?.vessel?.max_speed_knots ? Math.min(cruise.vessel.max_speed_knots, 10.0) : 10.0;
+  });
+  const [defaultDurationHours, setDefaultDurationHours] = useState(1.5);
+  const [weatherModel, setWeatherModel] = useState(() => {
+    const vesselName = (cruise?.vessel?.name || '').toLowerCase();
+    return vesselName.includes('rigel') ? 'ecmwf' : 'gfs';
+  });
+  const [routeForecast, setRouteForecast] = useState(null);
+  const [loadingForecast, setLoadingForecast] = useState(false);
+  const [activeSideTab, setActiveSideTab] = useState('points'); // 'points' | 'itinerary'
+  const [weatherReportModalOpen, setWeatherReportModalOpen] = useState(false);
+
+  // Si la embarcación es La Rigel, predeterminar automáticamente modelo ECMWF
+  useEffect(() => {
+    if (cruise?.vessel?.name) {
+      const vName = cruise.vessel.name.toLowerCase();
+      if (vName.includes('rigel')) {
+        setWeatherModel('ecmwf');
+      }
+    }
+  }, [cruise?.vessel?.name]);
+
+  // Consulta al backend para calcular cronología y cruzar con mallas meteorológicas (GFS/WW3 o ECMWF IFS)
+  const fetchRouteForecast = useCallback(async (wpList, depDt, defSpeed, defDur, model) => {
+    const list = (wpList || waypoints).filter(
+      w => w.latitude != null && w.longitude != null && isFinite(w.latitude) && isFinite(w.longitude)
+    );
+    if (list.length === 0) {
+      setRouteForecast(null);
+      return;
+    }
+
+    setLoadingForecast(true);
+    try {
+      const payload = {
+        departure_datetime: (depDt || departureDatetime).toISOString(),
+        default_speed_knots: Number(defSpeed || defaultSpeedKnots) || 10.0,
+        default_duration_hours: Number(defDur || defaultDurationHours) || 1.0,
+        model: model || weatherModel,
+        waypoints: list.map((w, idx) => ({
+          order_index: idx,
+          name: w.name || `Estación ${idx + 1}`,
+          latitude: Number(w.latitude),
+          longitude: Number(w.longitude),
+          speed_knots: w.speed_knots ? Number(w.speed_knots) : (Number(defSpeed || defaultSpeedKnots) || 10.0),
+          duration_hours: w.duration_hours !== undefined && w.duration_hours !== null && w.duration_hours !== ''
+            ? Number(w.duration_hours)
+            : (Number(defDur || defaultDurationHours) || 1.0),
+          activity: w.activity,
+        })),
+      };
+
+      const res = await apiClient.post('/weather/route-forecast', payload);
+      setRouteForecast(res.data);
+    } catch {
+      // Ignorar error si no hay datos
+    } finally {
+      setLoadingForecast(false);
+    }
+  }, [waypoints, departureDatetime, defaultSpeedKnots, defaultDurationHours, weatherModel]);
+
+  // Actualizar automáticamente el pronóstico al cambiar waypoints o parámetros
+  useEffect(() => {
+    const validCount = waypoints.filter(w => w.latitude != null && w.longitude != null && isFinite(w.latitude) && isFinite(w.longitude)).length;
+    if (validCount > 0) {
+      const timer = setTimeout(() => {
+        fetchRouteForecast(waypoints, departureDatetime, defaultSpeedKnots, defaultDurationHours, weatherModel);
+      }, 400);
+      return () => clearTimeout(timer);
+    } else {
+      setRouteForecast(null);
+    }
+  }, [waypoints, departureDatetime, defaultSpeedKnots, defaultDurationHours, weatherModel, fetchRouteForecast]);
 
   const resetNewSample = () => {
     setNewSample({
@@ -624,8 +803,14 @@ function WaypointMapModal({ cruise, open, onClose, onSave, onConfigureSamples, i
                isFinite(w.latitude) && isFinite(w.longitude)
         )
       );
+
+      // Cargar por defecto la fecha y hora guardada en Datos Generales
+      const saved = getSavedDeparture();
+      if (saved) {
+        setDepartureDatetime(saved);
+      }
     }
-  }, [open, inline, cruise]);
+  }, [open, inline, cruise?.id, cruise?.departure_date, cruise?.start_date, defaultDepartureDate, getSavedDeparture]);
 
   useEffect(() => {
     if (inline) {
@@ -660,141 +845,184 @@ function WaypointMapModal({ cruise, open, onClose, onSave, onConfigureSamples, i
     }]);
   };
 
-  const handleKmlUpload = (file) => {
+  const handleKmlUpload = async (file) => {
     const cleanHtmlText = (html) => {
       if (!html) return '';
       const doc = new DOMParser().parseFromString(html, 'text/html');
-      let text = doc.body.textContent || "";
+      let text = doc.body.textContent || '';
       text = text.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
       return text;
     };
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const text = e.target.result;
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(text, 'text/xml');
-        
-        const parserError = xmlDoc.querySelector('parsererror');
-        if (parserError) {
-          message.error('El archivo KML no es válido o tiene errores de estructura XML.');
+    try {
+      let kmlText = '';
+      const fileName = file.name || 'archivo';
+      const isKmz = fileName.toLowerCase().endsWith('.kmz');
+
+      if (isKmz) {
+        // Descomprimir archivo KMZ (ZIP)
+        const buffer = await file.arrayBuffer();
+        const zip = await JSZip.loadAsync(buffer);
+
+        // Buscar archivos .kml dentro del KMZ (preferir doc.kml)
+        const kmlFileNames = Object.keys(zip.files).filter(name => name.toLowerCase().endsWith('.kml'));
+        if (kmlFileNames.length === 0) {
+          message.error('El archivo KMZ no contiene ningún archivo KML válido en su interior.');
           return;
         }
 
-        const placemarks = xmlDoc.getElementsByTagName('Placemark');
-        if (placemarks.length === 0) {
-          message.warning('No se encontraron puntos de ruta (Placemarks) en el archivo KML.');
-          return;
-        }
-
-        const parsedWaypoints = [];
-        let orderIdx = 0;
-
-        for (let i = 0; i < placemarks.length; i++) {
-          const pm = placemarks[i];
-          const nameEl = pm.getElementsByTagName('name')[0];
-          const name = nameEl ? nameEl.textContent.trim() : `Punto KML ${i + 1}`;
-
-          // Parsear descripción y limpiar etiquetas HTML
-          let descText = '';
-          const descEl = pm.getElementsByTagName('description')[0];
-          if (descEl) {
-            descText = cleanHtmlText(descEl.textContent);
-          }
-
-          // Parsear ExtendedData si existe
-          const extendedEl = pm.getElementsByTagName('ExtendedData')[0];
-          if (extendedEl) {
-            const extParts = [];
-            const dataNodes = extendedEl.getElementsByTagName('Data');
-            for (let d = 0; d < dataNodes.length; d++) {
-              const node = dataNodes[d];
-              const dataName = node.getAttribute('name');
-              const valEl = node.getElementsByTagName('value')[0];
-              if (dataName && valEl) {
-                extParts.push(`${dataName}: ${valEl.textContent.trim()}`);
-              }
-            }
-            const simpleDataNodes = extendedEl.getElementsByTagName('SimpleData');
-            for (let s = 0; s < simpleDataNodes.length; s++) {
-              const node = simpleDataNodes[s];
-              const dataName = node.getAttribute('name');
-              if (dataName) {
-                extParts.push(`${dataName}: ${node.textContent.trim()}`);
-              }
-            }
-            if (extParts.length > 0) {
-              const extStr = extParts.join(' | ');
-              descText = descText ? `${descText} (${extStr})` : extStr;
-            }
-          }
-
-          // Truncar para cumplir con límite de la base de datos (max 300 caracteres)
-          if (descText.length > 300) {
-            descText = descText.substring(0, 297) + '...';
-          }
-          
-
-
-          // 2. LineString
-          const lineEl = pm.getElementsByTagName('LineString')[0];
-          if (lineEl) {
-            const coordEl = lineEl.getElementsByTagName('coordinates')[0];
-            if (coordEl) {
-              const coordsStr = coordEl.textContent.trim();
-              const coordPairs = coordsStr.split(/[\s\n\r]+/);
-              coordPairs.forEach((pair) => {
-                if (!pair.trim()) return;
-                const parts = pair.split(',');
-                if (parts.length >= 2) {
-                  const lng = parseFloat(parts[0]);
-                  const lat = parseFloat(parts[1]);
-                  if (!isNaN(lat) && !isNaN(lng)) {
-                    parsedWaypoints.push({
-                      order_index: orderIdx++,
-                      latitude: parseFloat(lat.toFixed(5)),
-                      longitude: parseFloat(lng.toFixed(5)),
-                      name: `${name} - Pt ${orderIdx}`,
-                      description: descText || null,
-                      waypoint_type: orderIdx === 1 ? 'salida' : 'estacion',
-                      speed_knots: null,
-                      activity: '',
-                      duration_hours: null,
-                    });
-                  }
-                }
-              });
-            }
-          }
-        }
-
-        if (parsedWaypoints.length === 0) {
-          message.warning('No se encontraron coordenadas válidas (Point o LineString) en el KML.');
-          return;
-        }
-
-        Modal.confirm({
-          title: 'Cargar Puntos desde KML',
-          content: `Se encontraron ${parsedWaypoints.length} puntos de ruta en el archivo KML. ¿Deseas reemplazar todos los puntos de la ruta actual con estos puntos?`,
-          okText: 'Reemplazar',
-          cancelText: 'Cancelar',
-          onOk: () => {
-            const cleaned = parsedWaypoints.map((wp, idx) => ({
-              ...wp,
-              order_index: idx,
-              waypoint_type: idx === 0 ? 'salida' : 'estacion'
-            }));
-            setWaypoints(cleaned);
-            message.success(`Se cargó la ruta con ${cleaned.length} puntos desde el KML.`);
-          }
-        });
-      } catch (err) {
-        console.error(err);
-        message.error('Error al procesar el archivo KML.');
+        const targetKmlName = kmlFileNames.find(n => n.toLowerCase() === 'doc.kml') || kmlFileNames[0];
+        kmlText = await zip.files[targetKmlName].async('text');
+      } else {
+        // Archivo KML directo en texto plano
+        kmlText = await file.text();
       }
-    };
-    reader.readAsText(file);
+
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(kmlText, 'text/xml');
+
+      const parserError = xmlDoc.querySelector('parsererror');
+      if (parserError) {
+        message.error('El archivo KML/KMZ no es válido o tiene errores de estructura XML.');
+        return;
+      }
+
+      const placemarks = xmlDoc.getElementsByTagName('Placemark');
+      if (placemarks.length === 0) {
+        message.warning('No se encontraron puntos de ruta (Placemarks) en el archivo KML/KMZ.');
+        return;
+      }
+
+      const parsedWaypoints = [];
+      let orderIdx = 0;
+
+      for (let i = 0; i < placemarks.length; i++) {
+        const pm = placemarks[i];
+        const nameEl = pm.getElementsByTagName('name')[0];
+        const name = nameEl ? nameEl.textContent.trim() : `Estación ${i + 1}`;
+
+        // Parsear descripción y limpiar etiquetas HTML
+        let descText = '';
+        const descEl = pm.getElementsByTagName('description')[0];
+        if (descEl) {
+          descText = cleanHtmlText(descEl.textContent);
+        }
+
+        // Parsear ExtendedData si existe
+        const extendedEl = pm.getElementsByTagName('ExtendedData')[0];
+        if (extendedEl) {
+          const extParts = [];
+          const dataNodes = extendedEl.getElementsByTagName('Data');
+          for (let d = 0; d < dataNodes.length; d++) {
+            const node = dataNodes[d];
+            const dataName = node.getAttribute('name');
+            const valEl = node.getElementsByTagName('value')[0];
+            if (dataName && valEl) {
+              extParts.push(`${dataName}: ${valEl.textContent.trim()}`);
+            }
+          }
+          const simpleDataNodes = extendedEl.getElementsByTagName('SimpleData');
+          for (let s = 0; s < simpleDataNodes.length; s++) {
+            const node = simpleDataNodes[s];
+            const dataName = node.getAttribute('name');
+            if (dataName) {
+              extParts.push(`${dataName}: ${node.textContent.trim()}`);
+            }
+          }
+          if (extParts.length > 0) {
+            const extStr = extParts.join(' | ');
+            descText = descText ? `${descText} (${extStr})` : extStr;
+          }
+        }
+
+        // Truncar para cumplir con límite de la base de datos (max 300 caracteres)
+        if (descText.length > 300) {
+          descText = descText.substring(0, 297) + '...';
+        }
+
+        // 1. Extraer Point si existe
+        const pointEl = pm.getElementsByTagName('Point')[0];
+        if (pointEl) {
+          const coordEl = pointEl.getElementsByTagName('coordinates')[0];
+          if (coordEl) {
+            const coordsStr = coordEl.textContent.trim();
+            const parts = coordsStr.split(',');
+            if (parts.length >= 2) {
+              const lng = parseFloat(parts[0]);
+              const lat = parseFloat(parts[1]);
+              if (!isNaN(lat) && !isNaN(lng)) {
+                parsedWaypoints.push({
+                  order_index: orderIdx++,
+                  latitude: parseFloat(lat.toFixed(5)),
+                  longitude: parseFloat(lng.toFixed(5)),
+                  name: name,
+                  description: descText || null,
+                  waypoint_type: orderIdx === 1 ? 'salida' : 'estacion',
+                  speed_knots: null,
+                  activity: '',
+                  duration_hours: null,
+                });
+              }
+            }
+          }
+        }
+
+        // 2. Extraer LineString si existe
+        const lineEl = pm.getElementsByTagName('LineString')[0];
+        if (lineEl) {
+          const coordEl = lineEl.getElementsByTagName('coordinates')[0];
+          if (coordEl) {
+            const coordsStr = coordEl.textContent.trim();
+            const coordPairs = coordsStr.split(/[\s\n\r]+/);
+            coordPairs.forEach((pair) => {
+              if (!pair.trim()) return;
+              const parts = pair.split(',');
+              if (parts.length >= 2) {
+                const lng = parseFloat(parts[0]);
+                const lat = parseFloat(parts[1]);
+                if (!isNaN(lat) && !isNaN(lng)) {
+                  parsedWaypoints.push({
+                    order_index: orderIdx++,
+                    latitude: parseFloat(lat.toFixed(5)),
+                    longitude: parseFloat(lng.toFixed(5)),
+                    name: `${name} - Pt ${orderIdx}`,
+                    description: descText || null,
+                    waypoint_type: orderIdx === 1 ? 'salida' : 'estacion',
+                    speed_knots: null,
+                    activity: '',
+                    duration_hours: null,
+                  });
+                }
+              }
+            });
+          }
+        }
+      }
+
+      if (parsedWaypoints.length === 0) {
+        message.warning('No se encontraron coordenadas válidas (Point o LineString) en el archivo KML/KMZ.');
+        return;
+      }
+
+      Modal.confirm({
+        title: isKmz ? 'Cargar Puntos desde KMZ' : 'Cargar Puntos desde KML',
+        content: `Se encontraron ${parsedWaypoints.length} puntos de ruta en el archivo "${fileName}". ¿Deseas reemplazar todos los puntos de la ruta actual con estos puntos?`,
+        okText: 'Reemplazar',
+        cancelText: 'Cancelar',
+        onOk: () => {
+          const cleaned = parsedWaypoints.map((wp, idx) => ({
+            ...wp,
+            order_index: idx,
+            waypoint_type: idx === 0 ? 'salida' : 'estacion',
+          }));
+          setWaypoints(cleaned);
+          message.success(`Se cargó la ruta con ${cleaned.length} puntos desde "${fileName}".`);
+        },
+      });
+    } catch (err) {
+      console.error(err);
+      message.error('Error al procesar el archivo KML/KMZ.');
+    }
   };
 
   const removeWaypoint = (i) => {
@@ -1104,8 +1332,14 @@ function WaypointMapModal({ cruise, open, onClose, onSave, onConfigureSamples, i
                 const isStart = i === 0 && !departurePort;
                 const isEnd = i === validWaypoints.length - 1 && !returnPort && validWaypoints.length > 1;
                 const isScience = wp.samples && wp.samples.length > 0;
+                
+                // Pronóstico meteorológico calculado para este waypoint
+                const wf = routeForecast?.waypoints?.[i];
+                const hasWarn = wf?.is_warning;
+
                 const markerProps = { position: [wp.latitude, wp.longitude] };
-                if (isStart) markerProps.icon = startIcon;
+                if (hasWarn) markerProps.icon = warningIcon;
+                else if (isStart) markerProps.icon = startIcon;
                 else if (isEnd) markerProps.icon = endIcon;
                 else if (isScience) markerProps.icon = scienceIcon;
 
@@ -1134,11 +1368,49 @@ function WaypointMapModal({ cruise, open, onClose, onSave, onConfigureSamples, i
                       {i + 1}
                     </MapTooltip>
                     <Popup>
-                      <div style={{ minWidth: 180 }}>
-                        <strong style={{ fontSize: 14 }}>{wp.name}</strong><br />
+                      <div style={{ minWidth: 230, maxWidth: 280 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                          <strong style={{ fontSize: 14, color: '#0A2647' }}>{i + 1}. {wp.name}</strong>
+                          {hasWarn && <Tag color="error" style={{ margin: 0, fontSize: 10 }}>⚠️ Alerta Mar</Tag>}
+                        </div>
                         <span style={{ fontSize: 11, color: '#666' }}>
-                          Lat: {wp.latitude.toFixed(4)} | Lng: {wp.longitude.toFixed(4)}
+                          Lat: {wp.latitude.toFixed(4)}° | Lng: {wp.longitude.toFixed(4)}°
                         </span>
+
+                        {/* Bloque de ETA y Distancia Náutica */}
+                        {wf && (
+                          <div style={{ marginTop: 6, padding: '5px 8px', background: '#F0F7FF', borderRadius: 6, fontSize: 11, border: '1px solid #BAE0FF' }}>
+                            <div>🕒 <b>ETA Arribo:</b> {dayjs(wf.eta).format('DD/MMM HH:mm')}</div>
+                            <div>🏁 <b>ETD Salida:</b> {dayjs(wf.etd).format('DD/MMM HH:mm')} ({wf.station_duration_hours}h lance)</div>
+                            <div>📏 <b>Distancia:</b> {wf.distance_from_prev_nm} nm (Acum: {wf.cumulative_distance_nm} nm)</div>
+                          </div>
+                        )}
+
+                        {/* Pronóstico Meteorológico en ETA */}
+                        {wf?.has_weather ? (
+                          <div style={{ marginTop: 6, padding: '6px 8px', background: wf.is_warning ? '#FFFBE6' : '#F6FFED', borderRadius: 6, fontSize: 11, border: wf.is_warning ? '1px solid #FFE58F' : '1px solid #B7EB8F' }}>
+                            <div style={{ fontWeight: 600, color: wf.is_warning ? '#D46B08' : '#389E0D', marginBottom: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span>🌊 Pronóstico al arribo ({dayjs(wf.weather_time || wf.eta).format('DD/MMM HH:mm')}):</span>
+                              <span style={{ fontSize: 9, fontWeight: 500, color: '#444', background: '#FFF', padding: '1px 5px', borderRadius: 3, border: '1px solid #D9D9D9' }}>
+                                {routeForecast?.model_name?.includes('ECMWF') ? '🇪🇺 ECMWF' : '🌐 GFS'}
+                              </span>
+                            </div>
+                            <div>💨 <b>Viento:</b> {wf.wind_speed_kt} kt {wf.wind_gust_kt ? `(Ráf: ${wf.wind_gust_kt} kt)` : ''} · {wf.wind_dir_deg}° {wf.beaufort_description ? `(${wf.beaufort_description})` : ''}</div>
+                            {wf.wave_height_m !== null && <div>🌊 <b>Oleaje:</b> {wf.wave_height_m} m {wf.wave_period_s ? `· ${wf.wave_period_s}s` : ''} {wf.wave_dir_deg !== null ? `· ${wf.wave_dir_deg}°` : ''}</div>}
+                            {wf.sea_temp_c !== null && <div>🌡️ <b>Temp:</b> Mar {wf.sea_temp_c}°C {wf.air_temp_c !== null ? `· Aire ${wf.air_temp_c}°C` : ''}</div>}
+                            {wf.precip_rate_mmh > 0 && <div>🌧️ <b>Lluvia:</b> {wf.precip_rate_mmh} mm/h</div>}
+                            {wf.is_warning && (
+                              <div style={{ marginTop: 4, color: '#CF1322', fontWeight: 600, fontSize: 10 }}>
+                                ⚠️ {wf.warning_reasons.join(' · ')}
+                              </div>
+                            )}
+                          </div>
+                        ) : wf ? (
+                          <div style={{ marginTop: 4, fontSize: 10, color: '#888', fontStyle: 'italic', padding: '4px 6px', background: '#F5F5F5', borderRadius: 4 }}>
+                            ℹ️ Arribo fuera de ventana del modelo ({routeForecast?.model_name?.includes('ECMWF') ? 'ECMWF 7-10 días' : 'GFS/WW3 5-7 días'}).
+                          </div>
+                        ) : null}
+
                         {wp.description && (
                           <div style={{ marginTop: 6, fontSize: 11, background: '#eaf4ff', padding: 4, borderRadius: 4 }}>
                             <strong>Notas / Info:</strong> {wp.description}
@@ -1187,20 +1459,37 @@ function WaypointMapModal({ cruise, open, onClose, onSave, onConfigureSamples, i
         </Col>
 
         <Col span={8} style={{ height: inline ? 'calc(100vh - 280px)' : '85vh', minHeight: inline ? 480 : 600, display: 'flex', flexDirection: 'column', background: '#f5f5f5', borderLeft: '1px solid #eee', overflow: 'hidden' }}>
-          <div style={{ padding: '12px 16px 10px', borderBottom: '1px solid #e8e8e8', flexShrink: 0 }}>
+          {/* Header Superior con KML y Guardar */}
+          <div style={{ padding: '10px 14px 8px', borderBottom: '1px solid #e8e8e8', background: '#ffffff', flexShrink: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-              <Text strong style={{ fontSize: 15 }}>🗺️ Puntos de Ruta ({waypoints.length})</Text>
-              <Space>
+              <Text strong style={{ fontSize: 14 }}>🗺️ Derrota ({waypoints.length} puntos)</Text>
+              <Space size={6}>
                 <Upload
-                  accept=".kml"
+                  accept=".kml,.kmz"
                   showUploadList={false}
                   beforeUpload={(file) => {
                     handleKmlUpload(file);
                     return false;
                   }}
                 >
-                  <Button size="small" icon={<UploadOutlined />}>Cargar KML</Button>
+                  <Button size="small" icon={<UploadOutlined />}>KML / KMZ</Button>
                 </Upload>
+                <Tooltip title={!routeForecast?.waypoints?.length ? 'Genera o actualiza el itinerario con pronóstico para activar el reporte' : 'Generar reporte meteorológico oficial en PDF'}>
+                  <Button
+                    size="small"
+                    icon={<FilePdfOutlined />}
+                    disabled={!routeForecast?.waypoints?.length}
+                    onClick={() => setWeatherReportModalOpen(true)}
+                    style={{
+                      background: routeForecast?.waypoints?.length ? '#E74C3C' : undefined,
+                      borderColor: routeForecast?.waypoints?.length ? '#E74C3C' : undefined,
+                      color: routeForecast?.waypoints?.length ? '#ffffff' : undefined,
+                      fontWeight: 600,
+                    }}
+                  >
+                    Reporte Clima PDF
+                  </Button>
+                </Tooltip>
                 {inline && (
                   <Button
                     type="primary"
@@ -1210,284 +1499,610 @@ function WaypointMapModal({ cruise, open, onClose, onSave, onConfigureSamples, i
                     icon={<CompassOutlined />}
                     style={{ background: '#0A2647', borderColor: '#0A2647', fontWeight: 600, flexShrink: 0 }}
                   >
-                    Guardar Ruta
+                    Guardar
                   </Button>
                 )}
               </Space>
             </div>
-            {maxSpeed && <div style={{ fontSize: 11, color: '#d48806', marginTop: 4 }}>⚠️ Velocidad máxima: {maxSpeed} nudos</div>}
-            <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>💡 Haz clic en el mapa para agregar puntos.</div>
+            {maxSpeed && <div style={{ fontSize: 10, color: '#d48806', marginTop: 2 }}>⚠️ Velocidad máxima buque: {maxSpeed} nudos</div>}
           </div>
-          <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px 16px' }}>
 
-          {waypoints.map((wp, i) => (
-            <Card
-              id={`waypoint-card-${i}`}
-              size="small"
-              key={i}
-              style={{
-                marginBottom: 12,
-                borderRadius: 8,
-                border: i === 0 ? '1px solid #52C41A' : undefined,
-                boxShadow: expandedIndex === i ? '0 2px 8px rgba(0,0,0,0.1)' : undefined
-              }}
-              title={
-                <div
-                  onClick={() => toggleExpand(i)}
-                  style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '4px 0', gap: 8 }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
-                    {expandedIndex === i ? <DownOutlined style={{ fontSize: 12, color: '#666', flexShrink: 0 }} /> : <RightOutlined style={{ fontSize: 12, color: '#666', flexShrink: 0 }} />}
-                    <Badge status={i === 0 ? 'success' : 'processing'} />
-                    <Input
-                      value={wp.name}
-                      onChange={e => { e.stopPropagation(); updateWaypoint(i, 'name', e.target.value); }}
-                      onClick={e => e.stopPropagation()}
-                      variant="borderless"
-                      style={{ padding: 0, fontWeight: 'bold', width: 110, minWidth: 0 }}
-                    />
-                    {wp.samples && wp.samples.length > 0 && (
-                      <Tag color="purple" style={{ margin: 0, fontSize: 10, flexShrink: 0 }}>🧪 {wp.samples.length}</Tag>
-                    )}
-                  </div>
+          {/* ── PARÁMETROS DE NAVEGACIÓN Y ESTIMACIÓN ETA ── */}
+          <div style={{ padding: '8px 14px', background: '#FFFFFF', borderBottom: '1px solid #E8E8E8', flexShrink: 0 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <Text strong style={{ fontSize: 11, color: '#0A2647' }}>⚓ Plan de Navegación (Zarpe y Tránsito)</Text>
+              <Button
+                type="text"
+                size="small"
+                icon={<ReloadOutlined spin={loadingForecast} />}
+                onClick={() => fetchRouteForecast(waypoints, departureDatetime, defaultSpeedKnots, defaultDurationHours)}
+                title="Recalcular pronóstico"
+                style={{ fontSize: 11, padding: 0, height: 20 }}
+              >
+                Actualizar
+              </Button>
+            </div>
+            <Row gutter={[6, 6]}>
+              <Col span={12}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text type="secondary" style={{ fontSize: 10 }}>Fecha y Hora Zarpe:</Text>
+                  {(() => {
+                    const saved = getSavedDeparture();
+                    if (saved && !departureDatetime.isSame(saved, 'minute')) {
+                      return (
+                        <a
+                          onClick={() => setDepartureDatetime(saved)}
+                          style={{ fontSize: 10, color: '#1890FF' }}
+                          title="Restablecer a la fecha guardada en Datos Generales"
+                        >
+                          ↺ Restablecer guardada
+                        </a>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
-              }
-              extra={
-                <Space size={2}>
-                  <Tooltip title="Subir orden">
-                    <Button 
-                      type="text" 
-                      size="small" 
-                      disabled={i === 0} 
-                      style={{ padding: '0 4px' }}
-                      icon={<ArrowUpOutlined style={{ fontSize: 13 }} />} 
-                      onClick={e => { e.stopPropagation(); moveWaypoint(i, 'up'); }} 
-                    />
-                  </Tooltip>
-                  <Tooltip title="Bajar orden">
-                    <Button 
-                      type="text" 
-                      size="small" 
-                      disabled={i === waypoints.length - 1} 
-                      style={{ padding: '0 4px' }}
-                      icon={<ArrowDownOutlined style={{ fontSize: 13 }} />} 
-                      onClick={e => { e.stopPropagation(); moveWaypoint(i, 'down'); }} 
-                    />
-                  </Tooltip>
-                  <Tooltip title="Ver en el mapa">
-                    <Button type="text" size="small" style={{ color: '#1677FF', padding: '0 4px' }} icon={<AimOutlined />} onClick={e => { e.stopPropagation(); focusOnMap(i); }} />
-                  </Tooltip>
-                  <Button type="text" size="small" danger style={{ padding: '0 4px' }} icon={<DeleteOutlined />} onClick={e => { e.stopPropagation(); removeWaypoint(i); }} />
-                </Space>
-              }>
+                <DatePicker
+                  showTime
+                  size="small"
+                  style={{ width: '100%', fontSize: 11 }}
+                  format="DD/MM/YYYY HH:mm"
+                  value={departureDatetime}
+                  onChange={(val) => val && setDepartureDatetime(val)}
+                />
+              </Col>
+              <Col span={6}>
+                <Text type="secondary" style={{ fontSize: 10, display: 'block' }}>Velocidad:</Text>
+                <InputNumber
+                  size="small"
+                  style={{ width: '100%' }}
+                  min={1}
+                  max={25}
+                  step={0.5}
+                  value={defaultSpeedKnots}
+                  addonAfter="nd"
+                  onChange={(val) => setDefaultSpeedKnots(val || 10)}
+                />
+              </Col>
+              <Col span={6}>
+                <Text type="secondary" style={{ fontSize: 10, display: 'block' }}>Permanencia:</Text>
+                <InputNumber
+                  size="small"
+                  style={{ width: '100%' }}
+                  min={0}
+                  max={48}
+                  step={0.5}
+                  value={defaultDurationHours}
+                  addonAfter="h"
+                  onChange={(val) => setDefaultDurationHours(val ?? 1.5)}
+                />
+              </Col>
+            </Row>
 
-              {expandedIndex === i && (
-                <div style={{ marginTop: 8 }}>
-                  <Row gutter={[8, 12]}>
-                    <Col span={12}>
-                      <Text type="secondary" style={{ fontSize: 11 }}>Latitud</Text>
-                      <InputNumber
-                        size="small"
-                        style={{ width: '100%' }}
-                        value={wp.latitude}
-                        onChange={(val) => updateWaypoint(i, 'latitude', val)}
-                        step={0.0001}
-                        precision={5}
-                        placeholder="Lat"
-                      />
-                    </Col>
-                    <Col span={12}>
-                      <Text type="secondary" style={{ fontSize: 11 }}>Longitud</Text>
-                      <InputNumber
-                        size="small"
-                        style={{ width: '100%' }}
-                        value={wp.longitude}
-                        onChange={(val) => updateWaypoint(i, 'longitude', val)}
-                        step={0.0001}
-                        precision={5}
-                        placeholder="Lng"
-                      />
-                    </Col>
-                    {i > 0 && (
-                      <Col span={24}>
-                        <Text type="secondary" style={{ fontSize: 11 }}>Velocidad hacia aquí (nudos)</Text>
-                        <InputNumber size="small" style={{ width: '100%' }} value={wp.speed_knots} onChange={v => updateWaypoint(i, 'speed_knots', v)} max={maxSpeed || undefined} min={0} step={0.5} placeholder={maxSpeed ? `Máx ${maxSpeed}` : ''} />
-                      </Col>
-                    )}
-                    <Col span={24}>
-                      <Text type="secondary" style={{ fontSize: 11 }}>Descripción / Notas de Ruta</Text>
-                      <TextArea size="small" rows={2} value={wp.description || ''} onChange={e => updateWaypoint(i, 'description', e.target.value)} placeholder="Ej: Puntos de control, info del KML..." maxLength={300} />
-                    </Col>
-                    <Col span={24}>
-                      <Text type="secondary" style={{ fontSize: 11 }}>Actividad / Tareas</Text>
-                      <TextArea size="small" rows={2} value={wp.activity} onChange={e => updateWaypoint(i, 'activity', e.target.value)} placeholder="Ej: Lance de CTD, arrastre..." />
-                    </Col>
-                    <Col span={24}>
-                      <Text type="secondary" style={{ fontSize: 11 }}>Duración estimada (horas)</Text>
-                      <InputNumber size="small" style={{ width: '100%' }} value={wp.duration_hours} onChange={v => updateWaypoint(i, 'duration_hours', v)} min={0} step={0.5} placeholder="Ej: 2.5" />
-                    </Col>
-                  </Row>
+            {/* Selector de Modelo Meteorológico */}
+            <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+              <Text type="secondary" style={{ fontSize: 10 }}>Modelo Meteorológico:</Text>
+              <Segmented
+                size="small"
+                value={weatherModel}
+                onChange={setWeatherModel}
+                options={[
+                  {
+                    label: (
+                      <span title="Modelo GFS/WaveWatch III (NOAA 0.25°) — Estándar global para mar abierto (B/O Alpha Helix)">
+                        🌐 GFS (NOAA)
+                      </span>
+                    ),
+                    value: 'gfs',
+                  },
+                  {
+                    label: (
+                      <span title="Modelo ECMWF IFS Europeo (0.25°) — Alta fidelidad costera y bahías (La Rigel / Windy)">
+                        🇪🇺 ECMWF (Europeo / Rigel)
+                      </span>
+                    ),
+                    value: 'ecmwf',
+                  },
+                ]}
+              />
+            </div>
 
-                  <Divider style={{ margin: '12px 0' }} />
+            {/* Resumen de Derrota si hay pronóstico */}
+            {routeForecast && (
+              <div style={{ marginTop: 6, padding: '5px 8px', background: '#F0F7FF', borderRadius: 6, border: '1px solid #D6E4FF', fontSize: 11 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>📏 <b>{routeForecast.total_distance_nm} nm</b> ({(routeForecast.total_duration_hours / 24).toFixed(1)} días)</span>
+                  <span>🏁 <b>Retorno:</b> {dayjs(routeForecast.arrival_datetime).format('DD/MMM HH:mm')}</span>
+                </div>
+                <div style={{ marginTop: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 10, color: '#555' }}>
+                  <span>Modelo: <b>{routeForecast.model_name || (weatherModel === 'ecmwf' ? 'ECMWF (IFS Europeo)' : 'GFS (NOAA)')}</b></span>
+                  {weatherModel === 'ecmwf' ? (
+                    <Tag color="purple" style={{ margin: 0, fontSize: 9, lineHeight: '16px', padding: '0 4px' }}>🇪🇺 Costero / Rigel</Tag>
+                  ) : (
+                    <Tag color="blue" style={{ margin: 0, fontSize: 9, lineHeight: '16px', padding: '0 4px' }}>🌐 Global / Alpha Helix</Tag>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
 
-                  {/* SECCIÓN DE MUESTRAS CIENTÍFICAS */}
-                  <div style={{ background: '#fafafa', padding: 8, borderRadius: 6, border: '1px dashed #d9d9d9' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                      <Text strong style={{ fontSize: 12 }}><ExperimentOutlined /> Muestras / Lances</Text>
-                      {wp.id && !showAddSampleForm && (
-                        <Button type="link" size="small" style={{ padding: 0 }} onClick={() => setShowAddSampleForm(true)}>
-                          + Agregar
-                        </Button>
+          {/* Selector de Pestaña Lateral */}
+          <div style={{ padding: '6px 14px', background: '#FAFAFA', borderBottom: '1px solid #E8E8E8', flexShrink: 0 }}>
+            <Segmented
+              block
+              size="small"
+              value={activeSideTab}
+              onChange={setActiveSideTab}
+              options={[
+                { label: `📍 Puntos & Muestras (${waypoints.length})`, value: 'points' },
+                {
+                  label: (
+                    <span>
+                      🌊 Itinerario & Clima
+                      {routeForecast?.waypoints?.some(w => w.is_warning) && (
+                        <Badge status="error" style={{ marginLeft: 6 }} />
+                      )}
+                    </span>
+                  ),
+                  value: 'itinerary'
+                },
+              ]}
+            />
+          </div>
+
+          <div style={{ flex: 1, overflowY: 'auto', padding: '10px 14px 14px' }}>
+            {activeSideTab === 'points' ? (
+              // ── VISTA 1: LISTA DE ESTACIONES Y CONFIGURACIÓN DE MUESTRAS ──
+              <>
+                {waypoints.map((wp, i) => {
+                  const wf = routeForecast?.waypoints?.[i];
+                  return (
+                    <Card
+                      id={`waypoint-card-${i}`}
+                      size="small"
+                      key={i}
+                      style={{
+                        marginBottom: 10,
+                        borderRadius: 8,
+                        border: i === 0 ? '1px solid #52C41A' : wf?.is_warning ? '1px solid #FAAD14' : undefined,
+                        boxShadow: expandedIndex === i ? '0 2px 8px rgba(0,0,0,0.1)' : undefined
+                      }}
+                      title={
+                        <div
+                          onClick={() => toggleExpand(i)}
+                          style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '4px 0', gap: 6 }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+                            {expandedIndex === i ? <DownOutlined style={{ fontSize: 12, color: '#666', flexShrink: 0 }} /> : <RightOutlined style={{ fontSize: 12, color: '#666', flexShrink: 0 }} />}
+                            <Badge status={i === 0 ? 'success' : wf?.is_warning ? 'warning' : 'processing'} />
+                            <Input
+                              value={wp.name}
+                              onChange={e => { e.stopPropagation(); updateWaypoint(i, 'name', e.target.value); }}
+                              onClick={e => e.stopPropagation()}
+                              variant="borderless"
+                              style={{ padding: 0, fontWeight: 'bold', width: 110, minWidth: 0 }}
+                            />
+                            {wf && (
+                              <Text type="secondary" style={{ fontSize: 10, marginLeft: 2 }}>
+                                {dayjs(wf.eta).format('DD/MM HH:mm')}
+                              </Text>
+                            )}
+                            {wp.samples && wp.samples.length > 0 && (
+                              <Tag color="purple" style={{ margin: 0, fontSize: 10, flexShrink: 0 }}>🧪 {wp.samples.length}</Tag>
+                            )}
+                          </div>
+                        </div>
+                      }
+                      extra={
+                        <Space size={2}>
+                          <Tooltip title="Subir orden">
+                            <Button 
+                              type="text" 
+                              size="small" 
+                              disabled={i === 0} 
+                              style={{ padding: '0 4px' }}
+                              icon={<ArrowUpOutlined style={{ fontSize: 13 }} />} 
+                              onClick={e => { e.stopPropagation(); moveWaypoint(i, 'up'); }} 
+                            />
+                          </Tooltip>
+                          <Tooltip title="Bajar orden">
+                            <Button 
+                              type="text" 
+                              size="small" 
+                              disabled={i === waypoints.length - 1} 
+                              style={{ padding: '0 4px' }}
+                              icon={<ArrowDownOutlined style={{ fontSize: 13 }} />} 
+                              onClick={e => { e.stopPropagation(); moveWaypoint(i, 'down'); }} 
+                            />
+                          </Tooltip>
+                          <Tooltip title="Ver en el mapa">
+                            <Button type="text" size="small" style={{ color: '#1677FF', padding: '0 4px' }} icon={<AimOutlined />} onClick={e => { e.stopPropagation(); focusOnMap(i); }} />
+                          </Tooltip>
+                          <Button type="text" size="small" danger style={{ padding: '0 4px' }} icon={<DeleteOutlined />} onClick={e => { e.stopPropagation(); removeWaypoint(i); }} />
+                        </Space>
+                      }>
+
+                      {/* Mini resumen de meteorología si está disponible */}
+                      {wf?.has_weather && (
+                        <div style={{ fontSize: 10, color: '#555', background: '#FAFAFA', padding: '3px 6px', borderRadius: 4, marginBottom: 6, display: 'flex', justifyContent: 'space-between' }}>
+                          <span>💨 {wf.wind_speed_kt} kt {wf.wind_gust_kt ? `(ráf ${wf.wind_gust_kt})` : ''}</span>
+                          <span>🌊 Ola: {wf.wave_height_m !== null ? `${wf.wave_height_m}m` : '—'}</span>
+                          {wf.is_warning && <Tag color="warning" style={{ fontSize: 9, padding: '0 4px', margin: 0 }}>⚠️ Alerta</Tag>}
+                        </div>
+                      )}
+
+                      {expandedIndex === i && (
+                        <div style={{ marginTop: 8 }}>
+                          <Row gutter={[8, 12]}>
+                            <Col span={12}>
+                              <Text type="secondary" style={{ fontSize: 11 }}>Latitud</Text>
+                              <InputNumber
+                                size="small"
+                                style={{ width: '100%' }}
+                                value={wp.latitude}
+                                onChange={(val) => updateWaypoint(i, 'latitude', val)}
+                                step={0.0001}
+                                precision={5}
+                                placeholder="Lat"
+                              />
+                            </Col>
+                            <Col span={12}>
+                              <Text type="secondary" style={{ fontSize: 11 }}>Longitud</Text>
+                              <InputNumber
+                                size="small"
+                                style={{ width: '100%' }}
+                                value={wp.longitude}
+                                onChange={(val) => updateWaypoint(i, 'longitude', val)}
+                                step={0.0001}
+                                precision={5}
+                                placeholder="Lng"
+                              />
+                            </Col>
+                            {i > 0 && (
+                              <Col span={24}>
+                                <Text type="secondary" style={{ fontSize: 11 }}>Velocidad hacia aquí (nudos)</Text>
+                                <InputNumber size="small" style={{ width: '100%' }} value={wp.speed_knots} onChange={v => updateWaypoint(i, 'speed_knots', v)} max={maxSpeed || undefined} min={0} step={0.5} placeholder={maxSpeed ? `Máx ${maxSpeed}` : ''} />
+                              </Col>
+                            )}
+                            <Col span={24}>
+                              <Text type="secondary" style={{ fontSize: 11 }}>Descripción / Notas de Ruta</Text>
+                              <TextArea size="small" rows={2} value={wp.description || ''} onChange={e => updateWaypoint(i, 'description', e.target.value)} placeholder="Ej: Puntos de control, info del KML/KMZ..." maxLength={300} />
+                            </Col>
+                            <Col span={24}>
+                              <Text type="secondary" style={{ fontSize: 11 }}>Actividad / Tareas</Text>
+                              <TextArea size="small" rows={2} value={wp.activity} onChange={e => updateWaypoint(i, 'activity', e.target.value)} placeholder="Ej: Lance de CTD, arrastre..." />
+                            </Col>
+                            <Col span={24}>
+                              <Text type="secondary" style={{ fontSize: 11 }}>Duración estimada (horas)</Text>
+                              <InputNumber size="small" style={{ width: '100%' }} value={wp.duration_hours} onChange={v => updateWaypoint(i, 'duration_hours', v)} min={0} step={0.5} placeholder="Ej: 2.5" />
+                            </Col>
+                          </Row>
+
+                          <Divider style={{ margin: '12px 0' }} />
+
+                          {/* SECCIÓN DE MUESTRAS CIENTÍFICAS */}
+                          <div style={{ background: '#fafafa', padding: 8, borderRadius: 6, border: '1px dashed #d9d9d9' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                              <Text strong style={{ fontSize: 12 }}><ExperimentOutlined /> Muestras / Lances</Text>
+                              {wp.id && !showAddSampleForm && (
+                                <Button type="link" size="small" style={{ padding: 0 }} onClick={() => setShowAddSampleForm(true)}>
+                                  + Agregar
+                                </Button>
+                              )}
+                            </div>
+
+                            {!wp.id ? (
+                              <div style={{ fontSize: 11, color: '#faad14', padding: '4px 0' }}>
+                                ⚠️ Guarda la ruta para habilitar el registro de muestras en este punto.
+                              </div>
+                            ) : (
+                              <>
+                                {(!wp.samples || wp.samples.length === 0) ? (
+                                  <div style={{ fontSize: 11, color: '#999', textAlign: 'center', padding: '4px 0' }}>
+                                    Sin muestras en esta estación.
+                                  </div>
+                                ) : (
+                                  <div style={{ maxHeight: 150, overflowY: 'auto', marginBottom: 8 }}>
+                                    {wp.samples.map((s) => (
+                                      <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', background: '#fff', padding: 6, borderRadius: 4, marginBottom: 4, border: '1px solid #f0f0f0', fontSize: 11 }}>
+                                        <div style={{ flex: 1, paddingRight: 4 }}>
+                                          <div style={{ fontWeight: 'bold' }}>{s.variable_name} <span style={{ color: '#888', fontWeight: 'normal' }}>(#{s.sampling_order})</span></div>
+                                          <div style={{ fontSize: 10, color: '#555' }}>
+                                            {s.responsible_name && `Resp: ${s.responsible_name}`}
+                                            {s.volume_needed && ` | Vol: ${s.volume_needed}`}
+                                          </div>
+                                          <div style={{ marginTop: 2 }}>
+                                            {s.depth_surface && <Tag size="small" style={{ fontSize: 9, padding: '0 4px', margin: 0, marginRight: 2 }}>Sup</Tag>}
+                                            {s.depth_mid_water && <Tag size="small" style={{ fontSize: 9, padding: '0 4px', margin: 0, marginRight: 2 }}>Med</Tag>}
+                                            {s.depth_bottom && <Tag size="small" style={{ fontSize: 9, padding: '0 4px', margin: 0, marginRight: 2 }}>Fon</Tag>}
+                                            {s.depth_custom && <Tag color="blue" size="small" style={{ fontSize: 9, padding: '0 4px', margin: 0 }}>{s.depth_custom} m</Tag>}
+                                          </div>
+                                          {s.notes && <div style={{ fontSize: 10, color: '#888', fontStyle: 'italic', marginTop: 2 }}>Nota: {s.notes}</div>}
+                                        </div>
+                                        <Button
+                                          type="text"
+                                          danger
+                                          size="small"
+                                          icon={<DeleteOutlined style={{ fontSize: 10 }} />}
+                                          style={{ padding: 0, width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                          onClick={() => handleDeleteSampleInline(wp.id, s.id)}
+                                        />
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {showAddSampleForm && (
+                                  <div style={{ background: '#fff', padding: 8, borderRadius: 4, border: '1px solid #e8e8e8', marginTop: 8 }}>
+                                    <div style={{ fontWeight: 'bold', fontSize: 11, marginBottom: 6 }}>Nueva Muestra</div>
+                                    <Row gutter={[4, 6]}>
+                                      <Col span={16}>
+                                        <Input
+                                          size="small"
+                                          placeholder="Variable (ej: CID)"
+                                          value={newSample.variable_name}
+                                          onChange={e => setNewSample(prev => ({ ...prev, variable_name: e.target.value }))}
+                                        />
+                                      </Col>
+                                      <Col span={8}>
+                                        <InputNumber
+                                          size="small"
+                                          placeholder="Orden"
+                                          style={{ width: '100%' }}
+                                          min={1}
+                                          value={newSample.sampling_order}
+                                          onChange={v => setNewSample(prev => ({ ...prev, sampling_order: v }))}
+                                        />
+                                      </Col>
+                                      <Col span={12}>
+                                        <Input
+                                          size="small"
+                                          placeholder="Responsable"
+                                          value={newSample.responsible_name}
+                                          onChange={e => setNewSample(prev => ({ ...prev, responsible_name: e.target.value }))}
+                                        />
+                                      </Col>
+                                      <Col span={12}>
+                                        <Input
+                                          size="small"
+                                          placeholder="Volumen"
+                                          value={newSample.volume_needed}
+                                          onChange={e => setNewSample(prev => ({ ...prev, volume_needed: e.target.value }))}
+                                        />
+                                      </Col>
+                                      <Col span={24}>
+                                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 10, margin: '2px 0' }}>
+                                          <Checkbox checked={newSample.depth_surface} onChange={e => setNewSample(prev => ({ ...prev, depth_surface: e.target.checked }))}>Sup</Checkbox>
+                                          <Checkbox checked={newSample.depth_mid_water} onChange={e => setNewSample(prev => ({ ...prev, depth_mid_water: e.target.checked }))}>Med</Checkbox>
+                                          <Checkbox checked={newSample.depth_bottom} onChange={e => setNewSample(prev => ({ ...prev, depth_bottom: e.target.checked }))}>Fon</Checkbox>
+                                        </div>
+                                      </Col>
+                                      <Col span={24}>
+                                        <Input
+                                          size="small"
+                                          placeholder="Profundidad esp. (m/notas)"
+                                          value={newSample.depth_custom}
+                                          onChange={e => setNewSample(prev => ({ ...prev, depth_custom: e.target.value }))}
+                                        />
+                                      </Col>
+                                      <Col span={24}>
+                                        <Input
+                                          size="small"
+                                          placeholder="Notas/Especificaciones"
+                                          value={newSample.notes}
+                                          onChange={e => setNewSample(prev => ({ ...prev, notes: e.target.value }))}
+                                        />
+                                      </Col>
+                                      <Col span={24} style={{ display: 'flex', justifyContent: 'flex-end', gap: 4, marginTop: 4 }}>
+                                        <Button size="small" onClick={() => { setShowAddSampleForm(false); resetNewSample(); }}>
+                                          Cancelar
+                                        </Button>
+                                        <Button type="primary" size="small" style={{ background: '#8E44AD', borderColor: '#8E44AD' }} onClick={() => handleSaveSampleInline(wp.id)}>
+                                          Guardar
+                                        </Button>
+                                      </Col>
+                                    </Row>
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </div>
+                          {/* Navegación entre Waypoints */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 14 }}>
+                            <Button
+                              size="small"
+                              disabled={i === 0}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                scrollToWaypoint(i - 1);
+                              }}
+                            >
+                              ← Anterior
+                            </Button>
+                            <Button
+                              size="small"
+                              disabled={i === waypoints.length - 1}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                scrollToWaypoint(i + 1);
+                              }}
+                            >
+                              Siguiente →
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </Card>
+                  );
+                })}
+                {waypoints.length === 0 && <div style={{ textAlign: 'center', marginTop: 40 }}><Text type="secondary">Sin puntos de ruta. Haz clic en el mapa o sube un KML.</Text></div>}
+              </>
+            ) : (
+              // ── VISTA 2: ITINERARIO CRONOLÓGICO Y PRONÓSTICO METEOROLÓGICO ──
+              <div>
+                {loadingForecast && (
+                  <div style={{ textAlign: 'center', padding: '16px 0' }}>
+                    <Spin tip={`Calculando cronología y consultando modelo ${weatherModel === 'ecmwf' ? 'ECMWF IFS' : 'GFS/WW3'}...`} />
+                  </div>
+                )}
+                {routeForecast && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, padding: '5px 10px', background: '#F8F9FA', borderRadius: 6, fontSize: 11, border: '1px solid #E9ECEF' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <span>Modelo meteorológico: <b>{routeForecast.model_name || (weatherModel === 'ecmwf' ? 'ECMWF (IFS Europeo)' : 'GFS (NOAA)')}</b></span>
+                      {weatherModel === 'ecmwf' ? (
+                        <Tag color="purple" style={{ margin: 0, fontSize: 10 }}>🇪🇺 ECMWF IFS</Tag>
+                      ) : (
+                        <Tag color="blue" style={{ margin: 0, fontSize: 10 }}>🌐 GFS / WW3</Tag>
                       )}
                     </div>
+                    <Button
+                      size="small"
+                      type="primary"
+                      icon={<FilePdfOutlined />}
+                      onClick={() => setWeatherReportModalOpen(true)}
+                      style={{
+                        background: '#E74C3C',
+                        borderColor: '#E74C3C',
+                        fontSize: 11,
+                        height: 24,
+                        padding: '0 8px',
+                        fontWeight: 600,
+                      }}
+                    >
+                      Reporte PDF
+                    </Button>
+                  </div>
+                )}
+                {routeForecast && routeForecast.waypoints.map((wf, i) => (
+                  <Card
+                    key={i}
+                    size="small"
+                    style={{
+                      marginBottom: 10,
+                      borderRadius: 8,
+                      border: wf.is_warning ? '1.5px solid #FAAD14' : '1px solid #E8E8E8',
+                      background: wf.is_warning ? '#FEFDF8' : '#FFFFFF',
+                    }}
+                    title={
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Space size={6}>
+                          <Badge count={i + 1} style={{ backgroundColor: i === 0 ? '#52C41A' : '#0A2647' }} />
+                          <Text strong style={{ fontSize: 13 }}>{wf.name}</Text>
+                        </Space>
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<AimOutlined style={{ color: '#1677FF' }} />}
+                          onClick={() => focusOnMap(i)}
+                          title="Ubicar en mapa"
+                        />
+                      </div>
+                    }
+                  >
+                    <div style={{ fontSize: 11, marginBottom: 4, display: 'flex', justifyContent: 'space-between' }}>
+                      <span>🕒 <b>ETA Arribo:</b> {dayjs(wf.eta).format('DD/MMM HH:mm')}</span>
+                      <span>🏁 <b>ETD:</b> {dayjs(wf.etd).format('HH:mm')}</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: '#666', marginBottom: 6 }}>
+                      <span>📏 Tramo: <b>{wf.distance_from_prev_nm} nm</b> (Acum: {wf.cumulative_distance_nm} nm) · {wf.speed_knots} nd</span>
+                    </div>
 
-                    {!wp.id ? (
-                      <div style={{ fontSize: 11, color: '#faad14', padding: '4px 0' }}>
-                        ⚠️ Guarda la ruta para habilitar el registro de muestras en este punto.
+                    {wf.has_weather ? (
+                      <div style={{ padding: '6px 8px', background: wf.is_warning ? '#FFF7E6' : '#F6FFED', borderRadius: 6, border: wf.is_warning ? '1px solid #FFE58F' : '1px solid #D9F7BE', fontSize: 11 }}>
+                        <Row gutter={[4, 4]}>
+                          <Col span={12}>
+                            <div>💨 <b>Viento:</b> {wf.wind_speed_kt} kt {wf.wind_gust_kt ? `(${wf.wind_gust_kt} ráf)` : ''}</div>
+                            <div style={{ fontSize: 10, color: '#888' }}>{wf.wind_dir_deg}° · {wf.beaufort_description}</div>
+                          </Col>
+                          <Col span={12}>
+                            <div>🌊 <b>Oleaje:</b> {wf.wave_height_m !== null ? `${wf.wave_height_m} m` : 'N/A'}</div>
+                            <div style={{ fontSize: 10, color: '#888' }}>{wf.wave_period_s ? `${wf.wave_period_s}s` : ''} {wf.wave_dir_deg !== null ? `· ${wf.wave_dir_deg}°` : ''}</div>
+                          </Col>
+                          <Col span={12}>
+                            <div>🌡️ <b>Temp Mar:</b> {wf.sea_temp_c !== null ? `${wf.sea_temp_c}°C` : 'N/A'}</div>
+                          </Col>
+                          <Col span={12}>
+                            <div>🌡️ <b>Temp Aire:</b> {wf.air_temp_c !== null ? `${wf.air_temp_c}°C` : 'N/A'}</div>
+                          </Col>
+                        </Row>
+                        {wf.is_warning && (
+                          <div style={{ marginTop: 4, color: '#D4380D', fontWeight: 600, fontSize: 10 }}>
+                            ⚠️ {wf.warning_reasons.join(' · ')}
+                          </div>
+                        )}
                       </div>
                     ) : (
-                      <>
-                        {(!wp.samples || wp.samples.length === 0) ? (
-                          <div style={{ fontSize: 11, color: '#999', textAlign: 'center', padding: '4px 0' }}>
-                            Sin muestras en esta estación.
-                          </div>
-                        ) : (
-                          <div style={{ maxHeight: 150, overflowY: 'auto', marginBottom: 8 }}>
-                            {wp.samples.map((s) => (
-                              <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', background: '#fff', padding: 6, borderRadius: 4, marginBottom: 4, border: '1px solid #f0f0f0', fontSize: 11 }}>
-                                <div style={{ flex: 1, paddingRight: 4 }}>
-                                  <div style={{ fontWeight: 'bold' }}>{s.variable_name} <span style={{ color: '#888', fontWeight: 'normal' }}>(#{s.sampling_order})</span></div>
-                                  <div style={{ fontSize: 10, color: '#555' }}>
-                                    {s.responsible_name && `Resp: ${s.responsible_name}`}
-                                    {s.volume_needed && ` | Vol: ${s.volume_needed}`}
-                                  </div>
-                                  <div style={{ marginTop: 2 }}>
-                                    {s.depth_surface && <Tag size="small" style={{ fontSize: 9, padding: '0 4px', margin: 0, marginRight: 2 }}>Sup</Tag>}
-                                    {s.depth_mid_water && <Tag size="small" style={{ fontSize: 9, padding: '0 4px', margin: 0, marginRight: 2 }}>Med</Tag>}
-                                    {s.depth_bottom && <Tag size="small" style={{ fontSize: 9, padding: '0 4px', margin: 0, marginRight: 2 }}>Fon</Tag>}
-                                    {s.depth_custom && <Tag color="blue" size="small" style={{ fontSize: 9, padding: '0 4px', margin: 0 }}>{s.depth_custom} m</Tag>}
-                                  </div>
-                                  {s.notes && <div style={{ fontSize: 10, color: '#888', fontStyle: 'italic', marginTop: 2 }}>Nota: {s.notes}</div>}
-                                </div>
-                                <Button
-                                  type="text"
-                                  danger
-                                  size="small"
-                                  icon={<DeleteOutlined style={{ fontSize: 10 }} />}
-                                  style={{ padding: 0, width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                  onClick={() => handleDeleteSampleInline(wp.id, s.id)}
-                                />
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {showAddSampleForm && (
-                          <div style={{ background: '#fff', padding: 8, borderRadius: 4, border: '1px solid #e8e8e8', marginTop: 8 }}>
-                            <div style={{ fontWeight: 'bold', fontSize: 11, marginBottom: 6 }}>Nueva Muestra</div>
-                            <Row gutter={[4, 6]}>
-                              <Col span={16}>
-                                <Input
-                                  size="small"
-                                  placeholder="Variable (ej: CID)"
-                                  value={newSample.variable_name}
-                                  onChange={e => setNewSample(prev => ({ ...prev, variable_name: e.target.value }))}
-                                />
-                              </Col>
-                              <Col span={8}>
-                                <InputNumber
-                                  size="small"
-                                  placeholder="Orden"
-                                  style={{ width: '100%' }}
-                                  min={1}
-                                  value={newSample.sampling_order}
-                                  onChange={v => setNewSample(prev => ({ ...prev, sampling_order: v }))}
-                                />
-                              </Col>
-                              <Col span={12}>
-                                <Input
-                                  size="small"
-                                  placeholder="Responsable"
-                                  value={newSample.responsible_name}
-                                  onChange={e => setNewSample(prev => ({ ...prev, responsible_name: e.target.value }))}
-                                />
-                              </Col>
-                              <Col span={12}>
-                                <Input
-                                  size="small"
-                                  placeholder="Volumen"
-                                  value={newSample.volume_needed}
-                                  onChange={e => setNewSample(prev => ({ ...prev, volume_needed: e.target.value }))}
-                                />
-                              </Col>
-                              <Col span={24}>
-                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 10, margin: '2px 0' }}>
-                                  <Checkbox checked={newSample.depth_surface} onChange={e => setNewSample(prev => ({ ...prev, depth_surface: e.target.checked }))}>Sup</Checkbox>
-                                  <Checkbox checked={newSample.depth_mid_water} onChange={e => setNewSample(prev => ({ ...prev, depth_mid_water: e.target.checked }))}>Med</Checkbox>
-                                  <Checkbox checked={newSample.depth_bottom} onChange={e => setNewSample(prev => ({ ...prev, depth_bottom: e.target.checked }))}>Fon</Checkbox>
-                                </div>
-                              </Col>
-                              <Col span={24}>
-                                <Input
-                                  size="small"
-                                  placeholder="Profundidad esp. (m/notas)"
-                                  value={newSample.depth_custom}
-                                  onChange={e => setNewSample(prev => ({ ...prev, depth_custom: e.target.value }))}
-                                />
-                              </Col>
-                              <Col span={24}>
-                                <Input
-                                  size="small"
-                                  placeholder="Notas/Especificaciones"
-                                  value={newSample.notes}
-                                  onChange={e => setNewSample(prev => ({ ...prev, notes: e.target.value }))}
-                                />
-                              </Col>
-                              <Col span={24} style={{ display: 'flex', justifyContent: 'flex-end', gap: 4, marginTop: 4 }}>
-                                <Button size="small" onClick={() => { setShowAddSampleForm(false); resetNewSample(); }}>
-                                  Cancelar
-                                </Button>
-                                <Button type="primary" size="small" style={{ background: '#8E44AD', borderColor: '#8E44AD' }} onClick={() => handleSaveSampleInline(wp.id)}>
-                                  Guardar
-                                </Button>
-                              </Col>
-                            </Row>
-                          </div>
-                        )}
-                      </>
+                      <div style={{ fontSize: 10, color: '#999', fontStyle: 'italic', padding: '4px 6px', background: '#FAFAFA', borderRadius: 4 }}>
+                        ℹ️ Arribo fuera de ventana del modelo ({routeForecast?.model_name?.includes('ECMWF') ? 'ECMWF 7-10 días' : 'GFS/WW3 5-7 días'}).
+                      </div>
                     )}
+                  </Card>
+                ))}
+                {(!routeForecast || routeForecast.waypoints.length === 0) && (
+                  <div style={{ textAlign: 'center', marginTop: 40 }}>
+                    <Text type="secondary">Agrega puntos a la ruta para generar el itinerario y pronóstico meteorológico.</Text>
                   </div>
-                  {/* Navegación entre Waypoints */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 14 }}>
-                    <Button
-                      size="small"
-                      disabled={i === 0}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        scrollToWaypoint(i - 1);
-                      }}
-                    >
-                      ← Anterior
-                    </Button>
-                    <Button
-                      size="small"
-                      disabled={i === waypoints.length - 1}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        scrollToWaypoint(i + 1);
-                      }}
-                    >
-                      Siguiente →
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </Card>
-          ))}
-          {waypoints.length === 0 && <div style={{ textAlign: 'center', marginTop: 40 }}><Text type="secondary">Sin puntos de ruta</Text></div>}
+                )}
+              </div>
+            )}
           </div>
         </Col>
       </Row>
+
+      {/* Modal Visor y Descarga de Reporte Meteorológico Oficial en PDF */}
+      <Modal
+        title={
+          <Space>
+            <FilePdfOutlined style={{ color: '#E74C3C' }} />
+            <span>Reporte Meteorológico de Navegación — {cruise?.folio || cruise?.name || 'Crucero'}</span>
+          </Space>
+        }
+        open={weatherReportModalOpen}
+        onCancel={() => setWeatherReportModalOpen(false)}
+        width="88%"
+        style={{ top: 20 }}
+        footer={[
+          <Button key="close" onClick={() => setWeatherReportModalOpen(false)}>
+            Cerrar
+          </Button>,
+          routeForecast && (
+            <PDFDownloadLink
+              key="download"
+              document={
+                <CruiseWeatherReportDocument
+                  cruise={cruise}
+                  routeForecast={routeForecast}
+                  departureDatetime={departureDatetime}
+                  defaultSpeedKnots={defaultSpeedKnots}
+                  defaultDurationHours={defaultDurationHours}
+                  weatherModel={weatherModel}
+                />
+              }
+              fileName={`Reporte_Meteorologico_${(cruise?.folio || cruise?.name || 'Crucero').replace(/[^a-zA-Z0-9_-]/g, '_')}_${dayjs().format('YYYYMMDD')}.pdf`}
+              style={{ textDecoration: 'none', marginLeft: 8 }}
+            >
+              {({ loading }) => (
+                <Button type="primary" icon={<DownloadOutlined />} loading={loading} style={{ background: '#E74C3C', borderColor: '#E74C3C' }}>
+                  Descargar PDF
+                </Button>
+              )}
+            </PDFDownloadLink>
+          ),
+        ]}
+      >
+        {weatherReportModalOpen && routeForecast && (
+          <PDFViewer style={{ width: '100%', height: '75vh', border: 'none', borderRadius: 8 }}>
+            <CruiseWeatherReportDocument
+              cruise={cruise}
+              routeForecast={routeForecast}
+              departureDatetime={departureDatetime}
+              defaultSpeedKnots={defaultSpeedKnots}
+              defaultDurationHours={defaultDurationHours}
+              weatherModel={weatherModel}
+            />
+          </PDFViewer>
+        )}
+      </Modal>
     </>
   );
 
@@ -1511,8 +2126,127 @@ function WaypointMapModal({ cruise, open, onClose, onSave, onConfigureSamples, i
   );
 }
 
+// ── Tab de Estabilidad y Tanques ─────────────────────────────
+function CruiseStabilityTab({ cruise, onNavigate }) {
+  const [conditions, setConditions] = useState([]);
+  const [latestSounding, setLatestSounding] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!cruise?.id || !cruise?.vessel_id) return;
+    setLoading(true);
+    Promise.all([
+      apiClient.get(`/cruises/${cruise.id}/stability`).catch(() => ({ data: [] })),
+      apiClient.get(`/vessels/${cruise.vessel_id}/soundings/latest`).catch(() => ({ data: null })),
+    ])
+      .then(([stabRes, soundRes]) => {
+        setConditions(stabRes.data || []);
+        setLatestSounding(soundRes.data || null);
+      })
+      .finally(() => setLoading(false));
+  }, [cruise?.id, cruise?.vessel_id]);
+
+  if (loading) {
+    return <div style={{ textAlign: 'center', padding: '30px 0' }}><Spin /></div>;
+  }
+
+  const latestCond = conditions[0];
+
+  return (
+    <div style={{ padding: '8px 0' }}>
+      <Row gutter={[16, 16]}>
+        <Col xs={24} md={12}>
+          <Card
+            title={<span>⛽ Estado Oficial de Tanques</span>}
+            size="small"
+            style={{ borderRadius: 10, height: '100%' }}
+            extra={
+              <Button size="small" onClick={() => onNavigate(`/soundings`)}>
+                Ver Inventario
+              </Button>
+            }
+          >
+            {latestSounding ? (
+              <div>
+                <Space style={{ marginBottom: 12 }} wrap>
+                  <Tag color={latestSounding.is_official ? 'success' : 'blue'}>
+                    {latestSounding.is_official ? '🟢 Sondeo Oficial Vigente' : '📝 Último Sondeo'}
+                  </Tag>
+                  <Text type="secondary">{dayjs(latestSounding.sounding_datetime).format('DD/MM/YYYY HH:mm')}</Text>
+                </Space>
+                <Descriptions size="small" column={2} bordered>
+                  <Descriptions.Item label="Combustible">{latestSounding.total_fuel_tons?.toFixed(1)} t</Descriptions.Item>
+                  <Descriptions.Item label="Agua Dulce">{latestSounding.total_fresh_water_tons?.toFixed(1)} t</Descriptions.Item>
+                  <Descriptions.Item label="Lastre">{latestSounding.total_ballast_tons?.toFixed(1)} t</Descriptions.Item>
+                  <Descriptions.Item label="Trim">{latestSounding.trim_m !== null ? `${latestSounding.trim_m?.toFixed(2)} m` : '—'}</Descriptions.Item>
+                </Descriptions>
+              </div>
+            ) : (
+              <Empty description="Sin sondeos oficiales registrados para esta embarcación" />
+            )}
+          </Card>
+        </Col>
+
+        <Col xs={24} md={12}>
+          <Card
+            title={<span>⚖️ Evaluación de Estabilidad del Crucero</span>}
+            size="small"
+            style={{ borderRadius: 10, height: '100%' }}
+            extra={
+              <Button
+                type="primary"
+                size="small"
+                onClick={() => onNavigate(`/stability`)}
+                style={{ background: '#0A2647', borderColor: '#0A2647' }}
+              >
+                Abrir Calculador de Estabilidad
+              </Button>
+            }
+          >
+            {latestCond ? (
+              <div>
+                <Space style={{ marginBottom: 12 }} wrap>
+                  <Tag
+                    color={
+                      latestCond.status_level === 'APROBADO' ? 'success' : latestCond.status_level === 'ADVERTENCIA' ? 'warning' : 'error'
+                    }
+                    style={{ fontWeight: 600 }}
+                  >
+                    {latestCond.status_level}
+                  </Tag>
+                  <Text strong>{latestCond.condition_name}</Text>
+                </Space>
+                <Descriptions size="small" column={2} bordered>
+                  <Descriptions.Item label="Desplazamiento">{latestCond.displacement_tons?.toFixed(1)} t</Descriptions.Item>
+                  <Descriptions.Item label="KG Corregido">{latestCond.kg_corrected_m?.toFixed(3)} m</Descriptions.Item>
+                  <Descriptions.Item label="KG Máximo">{latestCond.kg_max_m?.toFixed(3)} m</Descriptions.Item>
+                  <Descriptions.Item label="Margen">{(latestCond.stability_margin_m * 100)?.toFixed(1)} cm</Descriptions.Item>
+                </Descriptions>
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '16px 0' }}>
+                <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
+                  Aún no se ha guardado una condición de estabilidad específica para este crucero.
+                </Text>
+                <Button
+                  type="primary"
+                  style={{ background: '#27AE60', borderColor: '#27AE60' }}
+                  onClick={() => onNavigate(`/stability`)}
+                >
+                  ⚡ Evaluar Estabilidad Pre-Zarpe
+                </Button>
+              </div>
+            )}
+          </Card>
+        </Col>
+      </Row>
+    </div>
+  );
+}
+
 // ── Página principal ──────────────────────────────────────────
 function CruisesPage() {
+  const navigate = useNavigate();
   const { user, hasPermission } = useAuth();
   const isAdmin = user?.is_superadmin || user?.roles?.some(r => r.name === 'Administrador');
 
@@ -1633,7 +2367,7 @@ function CruisesPage() {
   }, [editingCruise?.actual_track]);
 
   // Estados y Hooks para Telemetría Real
-  const [trackSource, setTrackSource] = useState('gpx'); // 'gpx' | 'telemetry'
+  const [trackSource, setTrackSource] = useState('telemetry'); // 'telemetry' | 'gpx'
   const [telemetryTrack, setTelemetryTrack] = useState([]);
   const [telemetryLoading, setTelemetryLoading] = useState(false);
 
@@ -1641,26 +2375,37 @@ function CruisesPage() {
     return calcTelemetryStats(telemetryTrack);
   }, [telemetryTrack]);
 
-  const fetchTelemetryTrack = useCallback(async () => {
-    if (!editingCruise?.vessel_id || !editingCruise?.departure_date || !editingCruise?.return_date) {
+  const fetchTelemetryTrack = useCallback(async (currentCruise) => {
+    const c = currentCruise || editingCruise;
+    if (!c?.vessel_id || !c?.departure_date || !c?.return_date) {
       setTelemetryTrack([]);
       return;
     }
     setTelemetryLoading(true);
     try {
-      const start = dayjs(editingCruise.departure_date).toISOString();
-      const end = dayjs(editingCruise.return_date).toISOString();
-      const res = await apiClient.get(`/vessels/${editingCruise.vessel_id}/telemetry`, {
+      const start = dayjs(c.departure_date).toISOString();
+      const end = dayjs(c.return_date).toISOString();
+      const res = await apiClient.get(`/vessels/${c.vessel_id}/telemetry`, {
         params: { start, end }
       });
-      setTelemetryTrack(res.data || []);
+      const data = res.data || [];
+      setTelemetryTrack(data);
+      // Priorizar telemetría de la estación meteorológica por defecto
+      if (data.length > 0) {
+        setTrackSource('telemetry');
+      } else if (c.actual_track && c.actual_track.length > 0) {
+        setTrackSource('gpx');
+      }
     } catch (err) {
       console.error("Error al cargar telemetría del crucero:", err);
       setTelemetryTrack([]);
+      if (c?.actual_track && c.actual_track.length > 0) {
+        setTrackSource('gpx');
+      }
     } finally {
       setTelemetryLoading(false);
     }
-  }, [editingCruise?.vessel_id, editingCruise?.departure_date, editingCruise?.return_date]);
+  }, [editingCruise?.vessel_id, editingCruise?.departure_date, editingCruise?.return_date, editingCruise?.actual_track]);
 
   const handleDownloadTelemetryCsv = useCallback(() => {
     if (!telemetryTrack || telemetryTrack.length === 0) {
@@ -1736,17 +2481,27 @@ function CruisesPage() {
   }, [telemetryTrack, editingCruise]);
 
   useEffect(() => {
-    if (modalOpen && trackSource === 'telemetry') {
+    if (modalOpen && editingCruise?.vessel_id && editingCruise?.departure_date && editingCruise?.return_date) {
       fetchTelemetryTrack();
     }
-  }, [modalOpen, trackSource, fetchTelemetryTrack]);
+  }, [modalOpen, editingCruise?.vessel_id, editingCruise?.departure_date, editingCruise?.return_date, fetchTelemetryTrack]);
 
   useEffect(() => {
     if (!modalOpen) {
-      setTrackSource('gpx');
+      setTrackSource('telemetry');
       setTelemetryTrack([]);
     }
   }, [modalOpen]);
+
+  // Auto-llenar tripulantes autorizados con la tripulación base/mínima de la embarcación seleccionada al crear
+  useEffect(() => {
+    if (!editingCruise && selectedVesselObj && selectedVesselObj.max_crew !== null && selectedVesselObj.max_crew !== undefined) {
+      const currentVal = form.getFieldValue('crew_count');
+      if (currentVal === 0 || currentVal === null || currentVal === undefined) {
+        form.setFieldsValue({ crew_count: selectedVesselObj.max_crew });
+      }
+    }
+  }, [selectedVesselObj, editingCruise, form]);
 
   // Estados de facturación
   const [cruiseBilling, setCruiseBilling] = useState(null);
@@ -1906,6 +2661,7 @@ function CruisesPage() {
         filename: file.name,
       });
       setEditingCruise(res.data);
+      setTrackSource('gpx');
       setShowActualTrack(true);
       message.success(`Track GPX cargado: ${points.length} puntos de "${file.name}"`);
     } catch (err) {
@@ -1920,6 +2676,7 @@ function CruisesPage() {
     try {
       await apiClient.delete(`/cruises/${editingCruise.id}/gpx`);
       setEditingCruise(prev => ({ ...prev, actual_track: null, actual_track_filename: null, actual_track_uploaded_at: null }));
+      setTrackSource('telemetry');
       message.success('Track GPX eliminado');
     } catch (err) {
       message.error(err?.response?.data?.detail || 'Error al eliminar el track GPX');
@@ -2022,9 +2779,21 @@ function CruisesPage() {
 
   const openCreate = () => {
     setEditingCruise(null);
+    setChecklist([]);
+    setDischarges([]);
+    setSelectedWaypoint(null);
+    setWaypointSamples([]);
+    setCruiseLogEntries([]);
+    setCruiseBilling(null);
+    setTelemetryTrack([]);
+    setActiveTab('1');
     form.resetFields();
     setShowCustomProjectInput(false);
-    form.setFieldsValue({ status: 'borrador' });
+    form.setFieldsValue({
+      status: 'borrador',
+      crew_count: undefined,
+      scientists_count: undefined,
+    });
     setModalOpen(true);
   };
 
@@ -2033,6 +2802,8 @@ function CruisesPage() {
       const res = await apiClient.get(`/cruises/${c.id}`);
       const fullCruise = res.data;
       setEditingCruise(fullCruise);
+      // Priorizar telemetría de la estación meteorológica por defecto
+      setTrackSource('telemetry');
       setChecklist(fullCruise.checklist || []);
       setDischarges(fullCruise.discharges || []);
       setSelectedWaypoint(initialWaypoint);
@@ -2044,6 +2815,7 @@ function CruisesPage() {
       }
       fetchCruiseLogEntries(c.id);
       fetchCruiseBilling(c.id);
+      fetchTelemetryTrack(fullCruise);
       setActiveTab(initialTab);
       const isCustomProject = !fullCruise.project_id && fullCruise.project_name;
       setShowCustomProjectInput(isCustomProject);
@@ -2059,7 +2831,7 @@ function CruisesPage() {
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = async (andStayOpen = false, targetTab = null) => {
     try {
       const values = await form.validateFields();
       
@@ -2068,7 +2840,7 @@ function CruisesPage() {
       if (selectedVessel) {
         if (values.scientists_count && selectedVessel.max_passengers !== null && values.scientists_count > selectedVessel.max_passengers) {
           message.error(`El número de investigadores autorizados (${values.scientists_count}) excede la capacidad máxima de la embarcación (${selectedVessel.max_passengers} personas).`);
-          return;
+          return false;
         }
       }
 
@@ -2094,14 +2866,27 @@ function CruisesPage() {
       if (editingCruise) {
         await apiClient.put(`/cruises/${editingCruise.id}`, payload);
         message.success('Crucero actualizado');
+        const refreshRes = await apiClient.get(`/cruises/${editingCruise.id}`);
+        setEditingCruise(refreshRes.data);
+        if (!andStayOpen) {
+          setModalOpen(false);
+        }
       } else {
-        await apiClient.post('/cruises', { ...payload, waypoints: [] });
+        const res = await apiClient.post('/cruises', { ...payload, waypoints: [] });
         message.success('Plan de crucero creado');
+        const fullRes = await apiClient.get(`/cruises/${res.data.id}`);
+        setEditingCruise(fullRes.data);
+        if (andStayOpen && targetTab) {
+          setActiveTab(targetTab);
+        } else if (!andStayOpen) {
+          setModalOpen(false);
+        }
       }
-      setModalOpen(false);
       fetchCruises(); fetchMeta();
+      return true;
     } catch (err) {
       if (err.response?.data?.detail) message.error(err.response.data.detail);
+      return false;
     } finally { setSaving(false); }
   };
 
@@ -2335,8 +3120,17 @@ function CruisesPage() {
           <Row gutter={16}>
             {!editingCruise ? (
               <Col span={12}>
-                <Form.Item name="vessel_id" label="Embarcación" rules={[{ required: true }]}>
-                  <Select placeholder="Seleccionar embarcación" options={vessels.map(v => ({ value: v.id, label: v.name }))} />
+                <Form.Item name="vessel_id" label="Embarcación" rules={[{ required: true, message: 'Seleccione una embarcación' }]}>
+                  <Select
+                    placeholder="Seleccionar embarcación"
+                    options={vessels.map(v => ({ value: v.id, label: v.name }))}
+                    onChange={(vId) => {
+                      const vObj = vessels.find(v => v.id === vId);
+                      if (vObj && vObj.max_crew !== null && vObj.max_crew !== undefined) {
+                        form.setFieldsValue({ crew_count: vObj.max_crew });
+                      }
+                    }}
+                  />
                 </Form.Item>
               </Col>
             ) : (
@@ -2446,7 +3240,7 @@ function CruisesPage() {
                   label={
                     <span>
                       Capitán de la Embarcación (DEO) &nbsp;
-                      <Tooltip title="Derivado de la tripulación asignada en la pestaña Participantes. Asigna a alguien con rol Capitán para que aparezca aquí.">
+                      <Tooltip title="Asignado automáticamente de la tripulación base de la embarcación o personal con rol Capitán en la pestaña Participantes.">
                         <InfoCircleOutlined />
                       </Tooltip>
                     </span>
@@ -2454,17 +3248,27 @@ function CruisesPage() {
                 >
                   {(() => {
                     const captainCrew = editingCruise?.crew?.find(c => c.role === 'capitan');
-                    return captainCrew ? (
+                    const captainName = captainCrew?.personnel?.full_name
+                      || selectedVesselObj?.default_captain_name
+                      || selectedVesselObj?.default_captain?.full_name
+                      || editingCruise?.vessel?.default_captain_name
+                      || editingCruise?.captain?.full_name;
+
+                    return captainName ? (
                       <Input
                         disabled
-                        value={captainCrew.personnel?.full_name}
+                        value={captainName}
                         style={{ background: '#f6ffed', borderColor: '#b7eb8f', color: '#237804', fontWeight: 500 }}
                         prefix={<span style={{ marginRight: 4 }}>⚓</span>}
                       />
                     ) : (
                       <Input
                         disabled
-                        placeholder="Sin capitán asignado — asigna uno en la pestaña Participantes"
+                        placeholder={
+                          (selectedVesselId || editingCruise?.vessel_id)
+                            ? "Sin capitán base en esta embarcación — puede asignarse en la pestaña Participantes"
+                            : "Seleccione una embarcación para ver el capitán"
+                        }
                         style={{ background: '#fffbe6', borderColor: '#ffe58f' }}
                       />
                     );
@@ -2530,14 +3334,22 @@ function CruisesPage() {
           <Row gutter={16}>
             {isAdmin && (
               <Col span={12}>
-                <Form.Item name="crew_count" label="Tripulantes autorizados (DEO)">
-                  <InputNumber style={{ width: '100%' }} min={0} disabled />
+                <Form.Item
+                  name="crew_count"
+                  label="Tripulantes autorizados (DEO)"
+                  extra={selectedVesselObj && selectedVesselObj.max_crew !== null ? `Tripulación mínima requerida: ${selectedVesselObj.max_crew}` : undefined}
+                >
+                  <InputNumber style={{ width: '100%' }} min={0} />
                 </Form.Item>
               </Col>
             )}
             <Col span={isAdmin ? 12 : 24}>
-              <Form.Item name="scientists_count" label="Investigadores autorizados (Planificado)">
-                <InputNumber style={{ width: '100%' }} min={0} disabled />
+              <Form.Item
+                name="scientists_count"
+                label="Investigadores autorizados (Planificado)"
+                extra={selectedVesselObj && selectedVesselObj.max_passengers !== null ? `Capacidad máxima: ${selectedVesselObj.max_passengers}` : undefined}
+              >
+                <InputNumber style={{ width: '100%' }} min={0} />
               </Form.Item>
             </Col>
           </Row>
@@ -2556,7 +3368,7 @@ function CruisesPage() {
             gap: 12
           }}>
             <div style={{ flex: '1 1 auto' }}>
-              <Text strong style={{ color: '#002060', display: 'block', fontSize: 13, marginBottom: 2 }}>
+              <Text strong style={{ color: '#0A2647', display: 'block', fontSize: 13, marginBottom: 2 }}>
                 ⚓ Asignación de Tripulantes y Científicos a Bordo
               </Text>
               <Text type="secondary" style={{ fontSize: 12 }}>
@@ -2568,8 +3380,11 @@ function CruisesPage() {
               ghost
               icon={<TeamOutlined />}
               onClick={() => {
-                setParticipantsCruise(editingCruise);
-                setModalOpen(false);
+                if (editingCruise) {
+                  setActiveTab('participants');
+                } else {
+                  handleSave(true, 'participants');
+                }
               }}
               style={{ flex: '0 0 auto' }}
             >
@@ -2586,21 +3401,31 @@ function CruisesPage() {
       label: '🗺️ Waypoints y Ruta',
       children: (
         <div style={{ marginTop: 10 }}>
-          <WaypointMapModal
-            cruise={editingCruise}
-            inline={true}
-            onSave={() => {
-              fetchCruises();
-              apiClient.get(`/cruises/${editingCruise.id}`).then(res => {
-                const fullCruise = res.data;
-                setEditingCruise(fullCruise);
-                form.setFieldsValue({
-                  planned_nm: fullCruise.planned_nm,
-                  return_date: fullCruise.return_date ? dayjs(fullCruise.return_date) : null,
+          {editingCruise ? (
+            <WaypointMapModal
+              cruise={editingCruise}
+              defaultDepartureDate={form.getFieldValue('departure_date')}
+              inline={true}
+              onSave={() => {
+                fetchCruises();
+                apiClient.get(`/cruises/${editingCruise.id}`).then(res => {
+                  const fullCruise = res.data;
+                  setEditingCruise(fullCruise);
+                  form.setFieldsValue({
+                    planned_nm: fullCruise.planned_nm,
+                    return_date: fullCruise.return_date ? dayjs(fullCruise.return_date) : null,
+                  });
                 });
-              });
-            }}
-          />
+              }}
+            />
+          ) : (
+            <UnsavedCruiseNotice
+              tabTitle="🗺️ Waypoints y Ruta"
+              description="Para trazar la ruta de navegación en el mapa interactivo o importar archivos KML/KMZ con tus estaciones, primero guarda los datos generales del crucero."
+              onSave={() => handleSave(true, 'route')}
+              saving={saving}
+            />
+          )}
         </div>
       )
     },
@@ -2609,11 +3434,24 @@ function CruisesPage() {
       label: '⚓ Participantes',
       children: (
         <div style={{ marginTop: 10 }}>
-          <ParticipantsDrawer
-            cruise={editingCruise}
-            inline={true}
-            onClose={() => {}}
-          />
+          {editingCruise ? (
+            <ParticipantsDrawer
+              cruise={editingCruise}
+              inline={true}
+              onClose={() => {
+                apiClient.get(`/cruises/${editingCruise.id}`).then(res => {
+                  setEditingCruise(res.data);
+                });
+              }}
+            />
+          ) : (
+            <UnsavedCruiseNotice
+              tabTitle="⚓ Personal Científico y Tripulación"
+              description="Para registrar al Jefe Científico, investigadores a bordo y tripulación DEO, primero guarda los datos generales del crucero."
+              onSave={() => handleSave(true, 'participants')}
+              saving={saving}
+            />
+          )}
         </div>
       )
     },
@@ -2622,102 +3460,113 @@ function CruisesPage() {
       label: 'Muestreo Científico (Matriz)',
       children: (
         <div style={{ marginTop: 16 }}>
-          <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
-            Selecciona una estación de la lista para ver, agregar o editar su matriz de muestras y lances científicos.
-          </Text>
-          <Row gutter={16}>
-            <Col span={10}>
-              <Table
-                dataSource={editingCruise?.waypoints || []}
-                rowKey="id"
-                pagination={false}
-                size="small"
-                columns={[
-                  { title: 'Est.', dataIndex: 'order_index', width: 60, render: (v) => `#${v + 1}` },
-                  { title: 'Nombre', dataIndex: 'name', render: (n) => <Text strong>{n || 'Sin nombre'}</Text> },
-                  {
-                    title: 'Acción',
-                    key: 'action',
-                    width: 110,
-                    render: (_, r) => (
-                      <Button
-                        type={selectedWaypoint?.id === r.id ? 'primary' : 'default'}
-                        size="small"
-                        onClick={() => {
-                          setSelectedWaypoint(r);
-                          fetchWaypointSamples(r.id);
-                        }}
-                      >
-                        {selectedWaypoint?.id === r.id ? 'Seleccionado' : 'Ver lances'}
-                      </Button>
-                    )
-                  }
-                ]}
-              />
-            </Col>
-            <Col span={14}>
-              {selectedWaypoint ? (
-                <Card
-                  title={`Muestras en Estación: ${selectedWaypoint.name || `#${selectedWaypoint.order_index + 1}`}`}
-                  size="small"
-                  extra={
-                    <Button
-                      type="primary"
-                      size="small"
-                      icon={<PlusOutlined />}
-                      onClick={() => {
-                        setSubModalType('sample');
-                        subForm.resetFields();
-                      }}
-                    >
-                      Nueva Muestra
-                    </Button>
-                  }
-                >
+          {editingCruise ? (
+            <>
+              <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
+                Selecciona una estación de la lista para ver, agregar o editar su matriz de muestras y lances científicos.
+              </Text>
+              <Row gutter={16}>
+                <Col span={10}>
                   <Table
-                    dataSource={waypointSamples}
+                    dataSource={editingCruise?.waypoints || []}
                     rowKey="id"
                     pagination={false}
                     size="small"
                     columns={[
-                      { title: 'Ord.', dataIndex: 'sampling_order', width: 50 },
-                      { title: 'Variable', dataIndex: 'variable_name', render: (v) => <Text strong>{v}</Text> },
-                      { title: 'Científico', dataIndex: 'responsible_name', render: (r) => r || '—' },
-                      { title: 'Volumen', dataIndex: 'volume_needed', render: (vol) => vol || '—' },
+                      { title: 'Est.', dataIndex: 'order_index', width: 60, render: (v) => `#${v + 1}` },
+                      { title: 'Nombre', dataIndex: 'name', render: (n) => <Text strong>{n || 'Sin nombre'}</Text> },
                       {
-                        title: 'Nivel',
-                        key: 'depths',
+                        title: 'Acción',
+                        key: 'action',
+                        width: 110,
                         render: (_, r) => (
-                          <Space size={2} wrap>
-                            {r.depth_surface && <Tag color="blue" style={{ fontSize: 9 }}>Sup</Tag>}
-                            {r.depth_mid_water && <Tag color="cyan" style={{ fontSize: 9 }}>Med</Tag>}
-                            {r.depth_bottom && <Tag color="geekblue" style={{ fontSize: 9 }}>Fon</Tag>}
-                            {r.depth_custom && <Tag color="orange" style={{ fontSize: 9 }}>{r.depth_custom}</Tag>}
-                            {!r.depth_surface && !r.depth_mid_water && !r.depth_bottom && !r.depth_custom && <Tag style={{ fontSize: 9 }}>—</Tag>}
-                          </Space>
-                        )
-                      },
-                      {
-                        title: '',
-                        key: 'delete',
-                        width: 40,
-                        render: (_, r) => (
-                          <Popconfirm title="¿Eliminar esta muestra?" onConfirm={() => handleDeleteWaypointSample(r.id)}>
-                            <Button type="text" danger size="small" icon={<DeleteOutlined />} />
-                          </Popconfirm>
+                          <Button
+                            type={selectedWaypoint?.id === r.id ? 'primary' : 'default'}
+                            size="small"
+                            onClick={() => {
+                              setSelectedWaypoint(r);
+                              fetchWaypointSamples(r.id);
+                            }}
+                          >
+                            {selectedWaypoint?.id === r.id ? 'Seleccionado' : 'Ver lances'}
+                          </Button>
                         )
                       }
                     ]}
                   />
-                </Card>
-              ) : (
-                <div style={{ textAlign: 'center', padding: '40px 0', border: '1px dashed #ccc', borderRadius: 8, background: '#fafafa' }}>
-                  <CompassOutlined style={{ fontSize: 32, color: '#ccc', marginBottom: 8 }} />
-                  <p style={{ margin: 0, color: '#999' }}>Ninguna estación seleccionada</p>
-                </div>
-              )}
-            </Col>
-          </Row>
+                </Col>
+                <Col span={14}>
+                  {selectedWaypoint ? (
+                    <Card
+                      title={`Muestras en Estación: ${selectedWaypoint.name || `#${selectedWaypoint.order_index + 1}`}`}
+                      size="small"
+                      extra={
+                        <Button
+                          type="primary"
+                          size="small"
+                          icon={<PlusOutlined />}
+                          onClick={() => {
+                            setSubModalType('sample');
+                            subForm.resetFields();
+                          }}
+                        >
+                          Nueva Muestra
+                        </Button>
+                      }
+                    >
+                      <Table
+                        dataSource={waypointSamples}
+                        rowKey="id"
+                        pagination={false}
+                        size="small"
+                        columns={[
+                          { title: 'Ord.', dataIndex: 'sampling_order', width: 50 },
+                          { title: 'Variable', dataIndex: 'variable_name', render: (v) => <Text strong>{v}</Text> },
+                          { title: 'Científico', dataIndex: 'responsible_name', render: (r) => r || '—' },
+                          { title: 'Volumen', dataIndex: 'volume_needed', render: (vol) => vol || '—' },
+                          {
+                            title: 'Nivel',
+                            key: 'depths',
+                            render: (_, r) => (
+                              <Space size={2} wrap>
+                                {r.depth_surface && <Tag color="blue" style={{ fontSize: 9 }}>Sup</Tag>}
+                                {r.depth_mid_water && <Tag color="cyan" style={{ fontSize: 9 }}>Med</Tag>}
+                                {r.depth_bottom && <Tag color="geekblue" style={{ fontSize: 9 }}>Fon</Tag>}
+                                {r.depth_custom && <Tag color="orange" style={{ fontSize: 9 }}>{r.depth_custom}</Tag>}
+                                {!r.depth_surface && !r.depth_mid_water && !r.depth_bottom && !r.depth_custom && <Tag style={{ fontSize: 9 }}>—</Tag>}
+                              </Space>
+                            )
+                          },
+                          {
+                            title: '',
+                            key: 'delete',
+                            width: 40,
+                            render: (_, r) => (
+                              <Popconfirm title="¿Eliminar esta muestra?" onConfirm={() => handleDeleteWaypointSample(r.id)}>
+                                <Button type="text" danger size="small" icon={<DeleteOutlined />} />
+                              </Popconfirm>
+                            )
+                          }
+                        ]}
+                      />
+                    </Card>
+                  ) : (
+                    <div style={{ textAlign: 'center', padding: '40px 0', border: '1px dashed #ccc', borderRadius: 8, background: '#fafafa' }}>
+                      <CompassOutlined style={{ fontSize: 32, color: '#ccc', marginBottom: 8 }} />
+                      <p style={{ margin: 0, color: '#999' }}>Ninguna estación seleccionada</p>
+                    </div>
+                  )}
+                </Col>
+              </Row>
+            </>
+          ) : (
+            <UnsavedCruiseNotice
+              tabTitle="🔬 Matriz de Muestreo Científico"
+              description="Para configurar variables, lances de CTD, redes o botellas por estación, primero guarda los datos generales y define las estaciones de la ruta."
+              onSave={() => handleSave(true, '2')}
+              saving={saving}
+            />
+          )}
         </div>
       )
     },
@@ -2726,59 +3575,70 @@ function CruisesPage() {
       label: 'Lista de Embarque (Checklist)',
       children: (
         <div style={{ marginTop: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <Text type="secondary">
-              Control de equipos científicos, hieleras y materiales que deben cargarse a bordo del barco.
-            </Text>
-            <Button
-              type="primary"
-              size="small"
-              icon={<PlusOutlined />}
-              onClick={() => {
-                setSubModalType('checklist');
-                subForm.resetFields();
-              }}
-            >
-              Agregar Ítem
-            </Button>
-          </div>
-          <Table
-            dataSource={checklist}
-            rowKey="id"
-            size="small"
-            pagination={{ pageSize: 10 }}
-            columns={[
-              { title: 'Responsable', dataIndex: 'investigator_name', render: (n) => <Text strong>{n}</Text>, width: 180 },
-              { title: 'Material / Equipo / Reactivo', dataIndex: 'item_name' },
-              { title: 'Cantidad', dataIndex: 'quantity', width: 80, render: (q) => <Tag color="purple">{q}</Tag> },
-              {
-                title: 'A Bordo',
-                key: 'is_boarded',
-                width: 110,
-                render: (_, r) => (
-                  <Button
-                    type={r.is_boarded ? 'primary' : 'default'}
-                    size="small"
-                    style={r.is_boarded ? { backgroundColor: '#52C41A', borderColor: '#52C41A' } : {}}
-                    onClick={() => handleToggleBoarded(r)}
-                  >
-                    {r.is_boarded ? 'Cargado' : 'Pendiente'}
-                  </Button>
-                )
-              },
-              { title: 'Notas', dataIndex: 'notes', render: (n) => n || '—' },
-              {
-                title: '',
-                key: 'delete',
-                width: 40,
-                render: (_, r) => (
-                  <Popconfirm title="¿Eliminar este material?" onConfirm={() => handleDeleteChecklistItem(r.id)}>
-                    <Button type="text" danger size="small" icon={<DeleteOutlined />} />
-                  </Popconfirm>
-                )
-              }
-            ]}
-          />
+          {editingCruise ? (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <Text type="secondary">
+                  Control de equipos científicos, hieleras y materiales que deben cargarse a bordo del barco.
+                </Text>
+                <Button
+                  type="primary"
+                  size="small"
+                  icon={<PlusOutlined />}
+                  onClick={() => {
+                    setSubModalType('checklist');
+                    subForm.resetFields();
+                  }}
+                >
+                  Agregar Ítem
+                </Button>
+              </div>
+              <Table
+                dataSource={checklist}
+                rowKey="id"
+                size="small"
+                pagination={{ pageSize: 10 }}
+                columns={[
+                  { title: 'Responsable', dataIndex: 'investigator_name', render: (n) => <Text strong>{n}</Text>, width: 180 },
+                  { title: 'Material / Equipo / Reactivo', dataIndex: 'item_name' },
+                  { title: 'Cantidad', dataIndex: 'quantity', width: 80, render: (q) => <Tag color="purple">{q}</Tag> },
+                  {
+                    title: 'A Bordo',
+                    key: 'is_boarded',
+                    width: 110,
+                    render: (_, r) => (
+                      <Button
+                        type={r.is_boarded ? 'primary' : 'default'}
+                        size="small"
+                        style={r.is_boarded ? { backgroundColor: '#52C41A', borderColor: '#52C41A' } : {}}
+                        onClick={() => handleToggleBoarded(r)}
+                      >
+                        {r.is_boarded ? 'Cargado' : 'Pendiente'}
+                      </Button>
+                    )
+                  },
+                  { title: 'Notas', dataIndex: 'notes', render: (n) => n || '—' },
+                  {
+                    title: '',
+                    key: 'delete',
+                    width: 40,
+                    render: (_, r) => (
+                      <Popconfirm title="¿Eliminar este material?" onConfirm={() => handleDeleteChecklistItem(r.id)}>
+                        <Button type="text" danger size="small" icon={<DeleteOutlined />} />
+                      </Popconfirm>
+                    )
+                  }
+                ]}
+              />
+            </>
+          ) : (
+            <UnsavedCruiseNotice
+              tabTitle="📦 Lista de Embarque (Checklist)"
+              description="Para registrar equipos científicos, hieleras y reactivos que subirán a bordo, primero guarda los datos generales del crucero."
+              onSave={() => handleSave(true, '3')}
+              saving={saving}
+            />
+          )}
         </div>
       )
     },
@@ -2787,49 +3647,60 @@ function CruisesPage() {
       label: 'Logística y Entregas',
       children: (
         <div style={{ marginTop: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <Text type="secondary">
-              Planificación de puntos intermedios de descarga de muestras y entregas logísticas en ruta.
-            </Text>
-            <Button
-              type="primary"
-              size="small"
-              icon={<PlusOutlined />}
-              onClick={() => {
-                setSubModalType('discharge');
-                subForm.resetFields();
-              }}
-            >
-              Nueva Entrega
-            </Button>
-          </div>
-          <Table
-            dataSource={discharges}
-            rowKey="id"
-            size="small"
-            pagination={false}
-            columns={[
-              { title: 'Punto / Puerto', dataIndex: 'port_name', render: (p) => <Text strong>{p}</Text> },
-              {
-                title: 'Fecha/Hora Descarga',
-                dataIndex: 'discharge_date',
-                render: (d) => d ? dayjs(d).format('DD/MM/YYYY HH:mm') : '—'
-              },
-              { title: 'Recoge en Tierra', dataIndex: 'responsible_land_person', render: (r) => r || '—' },
-              { title: 'Lab. Destino', dataIndex: 'destination_lab', render: (l) => <Tag color="blue">{l || '—'}</Tag> },
-              { title: 'Notas', dataIndex: 'notes', render: (n) => n || '—' },
-              {
-                title: '',
-                key: 'delete',
-                width: 40,
-                render: (_, r) => (
-                  <Popconfirm title="¿Eliminar esta entrega?" onConfirm={() => handleDeleteDischarge(r.id)}>
-                    <Button type="text" danger size="small" icon={<DeleteOutlined />} />
-                  </Popconfirm>
-                )
-              }
-            ]}
-          />
+          {editingCruise ? (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <Text type="secondary">
+                  Planificación de puntos intermedios de descarga de muestras y entregas logísticas en ruta.
+                </Text>
+                <Button
+                  type="primary"
+                  size="small"
+                  icon={<PlusOutlined />}
+                  onClick={() => {
+                    setSubModalType('discharge');
+                    subForm.resetFields();
+                  }}
+                >
+                  Nueva Entrega
+                </Button>
+              </div>
+              <Table
+                dataSource={discharges}
+                rowKey="id"
+                size="small"
+                pagination={false}
+                columns={[
+                  { title: 'Punto / Puerto', dataIndex: 'port_name', render: (p) => <Text strong>{p}</Text> },
+                  {
+                    title: 'Fecha/Hora Descarga',
+                    dataIndex: 'discharge_date',
+                    render: (d) => d ? dayjs(d).format('DD/MM/YYYY HH:mm') : '—'
+                  },
+                  { title: 'Recoge en Tierra', dataIndex: 'responsible_land_person', render: (r) => r || '—' },
+                  { title: 'Lab. Destino', dataIndex: 'destination_lab', render: (l) => <Tag color="blue">{l || '—'}</Tag> },
+                  { title: 'Notas', dataIndex: 'notes', render: (n) => n || '—' },
+                  {
+                    title: '',
+                    key: 'delete',
+                    width: 40,
+                    render: (_, r) => (
+                      <Popconfirm title="¿Eliminar esta entrega?" onConfirm={() => handleDeleteDischarge(r.id)}>
+                        <Button type="text" danger size="small" icon={<DeleteOutlined />} />
+                      </Popconfirm>
+                    )
+                  }
+                ]}
+              />
+            </>
+          ) : (
+            <UnsavedCruiseNotice
+              tabTitle="🚚 Logística y Entregas en Ruta"
+              description="Para programar puntos intermedios de descarga o entrega de muestras en puerto, primero guarda los datos generales del crucero."
+              onSave={() => handleSave(true, '4')}
+              saving={saving}
+            />
+          )}
         </div>
       )
     },
@@ -2838,478 +3709,595 @@ function CruisesPage() {
       label: (
         <span>
           📋 Reporte de Salida
-          {editingCruise?.actual_track && (
+          {editingCruise?.actual_track ? (
             <span style={{ marginLeft: 6, background: '#FF6B00', color: '#fff', fontSize: 9, borderRadius: 4, padding: '1px 5px', fontWeight: 700, verticalAlign: 'middle' }}>
               GPX ✓
             </span>
-          )}
+          ) : telemetryTrack?.length > 0 ? (
+            <span style={{ marginLeft: 6, background: '#13C2C2', color: '#fff', fontSize: 9, borderRadius: 4, padding: '1px 5px', fontWeight: 700, verticalAlign: 'middle' }}>
+              📡 Telemetría ({telemetryTrack.length})
+            </span>
+          ) : null}
         </span>
       ),
       children: (
-        <Row style={{ height: 'calc(100vh - 280px)', minHeight: 480 }}>
-          {/* ── Columna izquierda: Mapa ── */}
-          <Col span={16} style={{ height: '100%', position: 'relative' }}>
-            {/* Barra de controles GPX / Telemetría */}
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 1000, background: 'rgba(10,38,71,0.92)', padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backdropFilter: 'blur(4px)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ color: '#fff', fontWeight: 700, fontSize: 13 }}>🛸 Track Real</span>
-                <Segmented
-                  size="small"
-                  value={trackSource}
-                  onChange={setTrackSource}
-                  options={[
-                    { label: '📁 Archivo GPX', value: 'gpx' },
-                    { label: '📡 Telemetría Real', value: 'telemetry' }
-                  ]}
-                  style={{ background: 'rgba(255,255,255,0.1)', color: '#fff' }}
-                />
-                {trackSource === 'gpx' && editingCruise?.actual_track && (
-                  <>
-                    <Tag color="orange" style={{ margin: 0, fontSize: 10 }}>{editingCruise.actual_track.length} pts</Tag>
-                    <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 10 }}>{editingCruise.actual_track_filename}</Text>
-                  </>
-                )}
-                {trackSource === 'telemetry' && (
-                  <>
-                    {telemetryLoading ? (
-                      <Spin size="small" style={{ marginLeft: 8 }} />
-                    ) : (
-                      <>
-                        <Tag color="cyan" style={{ margin: 0, fontSize: 10 }}>{telemetryTrack.length} pts</Tag>
-                        {telemetryTrack.length > 0 && (
-                          <Button
-                            size="small"
-                            icon={<DownloadOutlined />}
-                            onClick={handleDownloadTelemetryCsv}
-                            style={{
-                              background: 'rgba(19, 194, 194, 0.2)',
-                              borderColor: '#13C2C2',
-                              color: '#13C2C2',
-                              fontSize: 11,
-                              fontWeight: 600,
-                              height: 24,
-                              padding: '0 8px',
-                            }}
-                          >
-                            Descargar CSV
-                          </Button>
-                        )}
-                      </>
-                    )}
-                  </>
-                )}
-              </div>
-              <Space size={6}>
-                {((trackSource === 'gpx' && editingCruise?.actual_track) || (trackSource === 'telemetry' && telemetryTrack.length > 0)) && (
-                  <Switch
+        editingCruise ? (
+          <Row style={{ height: 'calc(100vh - 280px)', minHeight: 480 }}>
+            {/* ── Columna izquierda: Mapa ── */}
+            <Col span={16} style={{ height: '100%', position: 'relative' }}>
+              {/* Barra de controles GPX / Telemetría */}
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 1000, background: 'rgba(10,38,71,0.92)', padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backdropFilter: 'blur(4px)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{ color: '#fff', fontWeight: 700, fontSize: 13 }}>🛸 Track Real</span>
+                  <Segmented
                     size="small"
-                    checked={showActualTrack}
-                    onChange={setShowActualTrack}
-                    checkedChildren={trackSource === 'gpx' ? '🟠' : '🟢'}
-                    unCheckedChildren="—"
-                  />
-                )}
-                {trackSource === 'gpx' && isAdmin && (
-                  <>
-                    <Upload accept=".gpx" showUploadList={false} beforeUpload={handleGpxUpload}>
-                      <Button
-                        size="small"
-                        icon={gpxUploading ? <LoadingOutlined /> : <UploadOutlined />}
-                        loading={gpxUploading}
-                        style={{ background: '#FF6B00', borderColor: '#FF6B00', color: '#fff', fontSize: 11, fontWeight: 600 }}
-                      >
-                        {editingCruise?.actual_track ? 'Reemplazar GPX' : '⬆ Subir GPX'}
-                      </Button>
-                    </Upload>
-                    {editingCruise?.actual_track && (
-                      <Popconfirm title="¿Eliminar el track GPX?" onConfirm={handleGpxDelete} okText="Sí" cancelText="No">
-                        <Button size="small" danger icon={<DeleteOutlined />} />
-                      </Popconfirm>
-                    )}
-                  </>
-                )}
-              </Space>
-            </div>
-
-            {/* Mapa */}
-            <div style={{ height: '100%', position: 'relative' }}>
-              {editingCruise?.waypoints?.length > 0 || editingCruise?.actual_track?.length > 0 || (trackSource === 'telemetry' && telemetryTrack.length > 0) ? (
-                <MapContainer
-                  center={(() => {
-                    const wps = editingCruise?.waypoints?.filter(w => w.latitude != null);
-                    if (wps?.length > 0) return [wps[0].latitude, wps[0].longitude];
-                    if (trackSource === 'telemetry' && telemetryTrack?.length > 0) {
-                      const vt = telemetryTrack.find(p => p.latitude !== 0 && p.longitude !== 0);
-                      if (vt) return [vt.latitude, vt.longitude];
-                    }
-                    const tr = editingCruise?.actual_track;
-                    if (tr?.length > 0) return [tr[0].lat, tr[0].lon];
-                    return [23.6345, -110.0];
-                  })()}
-                  zoom={8}
-                  style={{ height: '100%', width: '100%' }}
-                  key={`report-map-${editingCruise?.id}-${editingCruise?.actual_track?.length}-${telemetryTrack?.length}-${trackSource}`}
-                >
-                  <TileLayer
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                  />
-                  {/* Ruta planificada — azul punteada */}
-                  {editingCruise?.waypoints?.length > 1 && (() => {
-                    const pts = editingCruise.waypoints
-                      .filter(w => w.latitude != null && w.longitude != null)
-                      .map(w => [w.latitude, w.longitude]);
-                    return pts.length > 1 ? (
-                      <>
-                        <Polyline positions={pts} color="#0A2647" weight={2} dashArray="8 5" opacity={0.8} />
-                        {editingCruise.waypoints.filter(w => w.latitude != null).map((wp, i) => (
-                          <Marker key={`rpt-wp-${i}`} position={[wp.latitude, wp.longitude]}>
-                            <Popup><strong>{wp.name || `Waypoint ${i + 1}`}</strong></Popup>
-                          </Marker>
-                        ))}
-                      </>
-                    ) : null;
-                  })()}
-                  {/* Ruta real GPX — naranja sólida con hitos interactivos */}
-                  <GpxTrackLayer
-                    track={editingCruise?.actual_track}
-                    show={showActualTrack && trackSource === 'gpx'}
-                    onCreateLogbook={handleCreateLogbookAtGpxPoint}
-                  />
-                  {/* Ruta real Telemetría — celeste sólida con hitos interactivos */}
-                  <TelemetryTrackLayer
-                    track={telemetryTrack}
-                    show={showActualTrack && trackSource === 'telemetry'}
-                  />
-                  <MapFitter
-                    waypoints={[
-                      ...(editingCruise?.waypoints?.filter(w => w.latitude != null) || []),
-                      ...(showActualTrack && trackSource === 'gpx' && editingCruise?.actual_track
-                        ? editingCruise.actual_track.map(p => ({ latitude: p.lat, longitude: p.lon }))
-                        : []),
-                      ...(showActualTrack && trackSource === 'telemetry' && telemetryTrack
-                        ? telemetryTrack.filter(p => p.latitude !== 0 && p.longitude !== 0).map(p => ({ latitude: p.latitude, longitude: p.longitude }))
-                        : [])
+                    value={trackSource}
+                    onChange={setTrackSource}
+                    options={[
+                      { 
+                        label: (
+                          <span>
+                            📡 Telemetría / Estación
+                            {telemetryTrack.length > 0 && (
+                              <span style={{ marginLeft: 4, color: '#13C2C2', fontWeight: 600 }}>({telemetryTrack.length})</span>
+                            )}
+                          </span>
+                        ), 
+                        value: 'telemetry' 
+                      },
+                      { 
+                        label: (
+                          <span>
+                            📁 Archivo GPX
+                            {editingCruise?.actual_track && <span style={{ marginLeft: 4, color: '#FF6B00' }}>✓</span>}
+                          </span>
+                        ), 
+                        value: 'gpx' 
+                      },
+                      ...(editingCruise?.actual_track?.length > 0 && telemetryTrack?.length > 0 ? [{
+                        label: <span>🔀 Ambos</span>,
+                        value: 'both'
+                      }] : [])
                     ]}
-                    modalReady={true}
+                    style={{ background: 'rgba(255,255,255,0.1)', color: '#fff' }}
                   />
-                </MapContainer>
-              ) : (
-                <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#999', background: '#f9f9f9' }}>
-                  <div style={{ fontSize: 48, marginBottom: 12 }}>🗺️</div>
-                  <div style={{ fontSize: 14 }}>
-                    {trackSource === 'gpx' ? 'Sin waypoints ni track GPX' : 'Sin waypoints ni track de telemetría'}
-                  </div>
-                  {trackSource === 'gpx' && isAdmin && (
-                    <div style={{ fontSize: 11, marginTop: 6, color: '#bbb' }}>Sube un archivo .gpx con el botón de arriba</div>
+                  {trackSource === 'gpx' && (
+                    editingCruise?.actual_track ? (
+                      <>
+                        <Tag color="orange" style={{ margin: 0, fontSize: 10 }}>{editingCruise.actual_track.length} pts</Tag>
+                        <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 10 }}>{editingCruise.actual_track_filename}</Text>
+                      </>
+                    ) : (
+                      <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, fontStyle: 'italic' }}>
+                        Sin archivo GPX cargado
+                      </Text>
+                    )
                   )}
                   {trackSource === 'telemetry' && (
-                    <div style={{ fontSize: 11, marginTop: 6, color: '#bbb' }}>Asegúrate de que la embarcación tenga telemetría reportada en las fechas del crucero</div>
+                    <>
+                      {telemetryLoading ? (
+                        <Spin size="small" style={{ marginLeft: 8 }} />
+                      ) : (
+                        <>
+                          <Tag color="cyan" style={{ margin: 0, fontSize: 10 }}>{telemetryTrack.length} pts</Tag>
+                          {telemetryTrack.length > 0 && (
+                            <Button
+                              size="small"
+                              icon={<DownloadOutlined />}
+                              onClick={handleDownloadTelemetryCsv}
+                              style={{
+                                background: 'rgba(19, 194, 194, 0.2)',
+                                borderColor: '#13C2C2',
+                                color: '#13C2C2',
+                                fontSize: 11,
+                                fontWeight: 600,
+                                height: 24,
+                                padding: '0 8px',
+                              }}
+                            >
+                              Descargar CSV
+                            </Button>
+                          )}
+                        </>
+                      )}
+                    </>
                   )}
-                </div>
-              )}
-
-              {/* Panel de estadísticas GPX flotante */}
-              {trackSource === 'gpx' && gpxStats && showActualTrack && (
-                <div style={{
-                  position: 'absolute',
-                  top: 52,
-                  right: 12,
-                  zIndex: 1000,
-                  background: 'rgba(255, 255, 255, 0.9)',
-                  backdropFilter: 'blur(6px)',
-                  padding: '10px 14px',
-                  borderRadius: 8,
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                  border: '1px solid rgba(0,0,0,0.08)',
-                  width: 240,
-                }}>
-                  <div style={{ fontWeight: 'bold', color: '#0A2647', fontSize: 12, marginBottom: 6, borderBottom: '1px solid #eee', paddingBottom: 4 }}>
-                    📊 Resumen de Ruta Real (GPX)
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 10px', fontSize: 10 }}>
-                    <div>
-                      <span style={{ color: '#888', display: 'block' }}>Distancia</span>
-                      <strong style={{ fontSize: 12, color: '#FF6B00' }}>{gpxStats.distanceNm.toFixed(1)} mn</strong>
-                    </div>
-                    <div>
-                      <span style={{ color: '#888', display: 'block' }}>Duración</span>
-                      <strong style={{ fontSize: 12, color: '#333' }}>
-                        {gpxStats.durationMinutes ? `${Math.floor(gpxStats.durationMinutes / 60)}h ${gpxStats.durationMinutes % 60}m` : '—'}
-                      </strong>
-                    </div>
-                    <div>
-                      <span style={{ color: '#888', display: 'block' }}>Vel. Promedio</span>
-                      <strong style={{ fontSize: 11, color: '#333' }}>
-                        {gpxStats.avgSpeedKnots ? `${gpxStats.avgSpeedKnots.toFixed(1)} kt` : '—'}
-                      </strong>
-                    </div>
-                    <div>
-                      <span style={{ color: '#888', display: 'block' }}>Vel. Máxima</span>
-                      <strong style={{ fontSize: 11, color: '#333' }}>
-                        {gpxStats.maxSpeedKnots ? `${gpxStats.maxSpeedKnots.toFixed(1)} kt` : '—'}
-                      </strong>
-                    </div>
-                  </div>
-                  {gpxStats.startTime && (
-                    <div style={{ marginTop: 8, fontSize: 9, color: '#666', borderTop: '1px solid #eee', paddingTop: 6 }}>
-                      <div>📅 Salida: {dayjs(gpxStats.startTime).format('DD/MM HH:mm')}</div>
-                      <div>📅 Regreso: {dayjs(gpxStats.endTime).format('DD/MM HH:mm')}</div>
+                  {trackSource === 'both' && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Tag color="cyan" style={{ margin: 0, fontSize: 10 }}>📡 {telemetryTrack.length} pts</Tag>
+                      <Tag color="orange" style={{ margin: 0, fontSize: 10 }}>📁 {editingCruise?.actual_track?.length || 0} pts</Tag>
                     </div>
                   )}
                 </div>
-              )}
+                <Space size={6}>
+                  {((trackSource === 'gpx' && editingCruise?.actual_track) || (trackSource === 'telemetry' && telemetryTrack.length > 0) || (trackSource === 'both' && (editingCruise?.actual_track || telemetryTrack.length > 0))) && (
+                    <Switch
+                      size="small"
+                      checked={showActualTrack}
+                      onChange={setShowActualTrack}
+                      checkedChildren={trackSource === 'gpx' ? '🟠' : trackSource === 'both' ? '🟠🟢' : '🟢'}
+                      unCheckedChildren="—"
+                    />
+                  )}
+                  {isAdmin && (
+                    <>
+                      <Upload accept=".gpx" showUploadList={false} beforeUpload={handleGpxUpload}>
+                        <Button
+                          size="small"
+                          icon={gpxUploading ? <LoadingOutlined /> : <UploadOutlined />}
+                          loading={gpxUploading}
+                          style={{ background: '#FF6B00', borderColor: '#FF6B00', color: '#fff', fontSize: 11, fontWeight: 600 }}
+                        >
+                          {editingCruise?.actual_track ? 'Reemplazar GPX' : '⬆ Subir GPX'}
+                        </Button>
+                      </Upload>
+                      {editingCruise?.actual_track && (
+                        <Popconfirm title="¿Eliminar el track GPX?" onConfirm={handleGpxDelete} okText="Sí" cancelText="No">
+                          <Button size="small" danger icon={<DeleteOutlined />} />
+                        </Popconfirm>
+                      )}
+                    </>
+                  )}
+                </Space>
+              </div>
 
-              {/* Panel de estadísticas de Telemetría flotante */}
-              {trackSource === 'telemetry' && telemetryStats && showActualTrack && (
-                <div style={{
-                  position: 'absolute',
-                  top: 52,
-                  right: 12,
-                  zIndex: 1000,
-                  background: 'rgba(255, 255, 255, 0.9)',
-                  backdropFilter: 'blur(6px)',
-                  padding: '10px 14px',
-                  borderRadius: 8,
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                  border: '1px solid rgba(0,0,0,0.08)',
-                  width: 260,
-                }}>
-                  <div style={{ fontWeight: 'bold', color: '#0A2647', fontSize: 12, marginBottom: 6, borderBottom: '1px solid #eee', paddingBottom: 4 }}>
-                    📊 Resumen de Ruta Real (Telemetría)
+              {/* Mapa */}
+              <div style={{ height: '100%', position: 'relative' }}>
+                {editingCruise?.waypoints?.length > 0 || editingCruise?.actual_track?.length > 0 || telemetryTrack.length > 0 || telemetryLoading ? (
+                  <MapContainer
+                    center={(() => {
+                      if (trackSource === 'telemetry' && telemetryTrack?.length > 0) {
+                        const vt = telemetryTrack.find(p => p.latitude !== 0 && p.longitude !== 0);
+                        if (vt) return [vt.latitude, vt.longitude];
+                      }
+                      const tr = editingCruise?.actual_track;
+                      if (trackSource === 'gpx' && tr?.length > 0) return [tr[0].lat, tr[0].lon];
+                      const wps = editingCruise?.waypoints?.filter(w => w.latitude != null);
+                      if (wps?.length > 0) return [wps[0].latitude, wps[0].longitude];
+                      if (telemetryTrack?.length > 0) {
+                        const vt = telemetryTrack.find(p => p.latitude !== 0 && p.longitude !== 0);
+                        if (vt) return [vt.latitude, vt.longitude];
+                      }
+                      if (tr?.length > 0) return [tr[0].lat, tr[0].lon];
+                      return [23.6345, -110.0];
+                    })()}
+                    zoom={8}
+                    style={{ height: '100%', width: '100%' }}
+                    key={`report-map-${editingCruise?.id}-${editingCruise?.actual_track?.length}-${telemetryTrack?.length}-${trackSource}`}
+                  >
+                    <TileLayer
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                      attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                    />
+                    {/* Ruta planificada — azul punteada */}
+                    {editingCruise?.waypoints?.length > 1 && (() => {
+                      const pts = editingCruise.waypoints
+                        .filter(w => w.latitude != null && w.longitude != null)
+                        .map(w => [w.latitude, w.longitude]);
+                      return pts.length > 1 ? (
+                        <>
+                          <Polyline positions={pts} color="#0A2647" weight={2} dashArray="8 5" opacity={0.8} />
+                          {editingCruise.waypoints.filter(w => w.latitude != null).map((wp, i) => (
+                            <Marker key={`rpt-wp-${i}`} position={[wp.latitude, wp.longitude]}>
+                              <Popup><strong>{wp.name || `Waypoint ${i + 1}`}</strong></Popup>
+                            </Marker>
+                          ))}
+                        </>
+                      ) : null;
+                    })()}
+                    {/* Ruta real GPX — naranja sólida con hitos interactivos */}
+                    <GpxTrackLayer
+                      track={editingCruise?.actual_track}
+                      show={showActualTrack && (trackSource === 'gpx' || trackSource === 'both')}
+                      onCreateLogbook={handleCreateLogbookAtGpxPoint}
+                    />
+                    {/* Ruta real Telemetría — celeste sólida con hitos interactivos */}
+                    <TelemetryTrackLayer
+                      track={telemetryTrack}
+                      show={showActualTrack && (trackSource === 'telemetry' || trackSource === 'both')}
+                    />
+                    <MapFitter
+                      waypoints={[
+                        ...(editingCruise?.waypoints?.filter(w => w.latitude != null) || []),
+                        ...(showActualTrack && (trackSource === 'gpx' || trackSource === 'both') && editingCruise?.actual_track
+                          ? editingCruise.actual_track.map(p => ({ latitude: p.lat, longitude: p.lon }))
+                          : []),
+                        ...(showActualTrack && (trackSource === 'telemetry' || trackSource === 'both') && telemetryTrack
+                          ? telemetryTrack.filter(p => p.latitude !== 0 && p.longitude !== 0).map(p => ({ latitude: p.latitude, longitude: p.longitude }))
+                          : [])
+                      ]}
+                      modalReady={true}
+                    />
+                  </MapContainer>
+                ) : (
+                  <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#999', background: '#f9f9f9' }}>
+                    <div style={{ fontSize: 48, marginBottom: 12 }}>🗺️</div>
+                    <div style={{ fontSize: 14 }}>
+                      {trackSource === 'gpx' ? 'Sin waypoints ni track GPX' : 'Sin waypoints ni track de telemetría'}
+                    </div>
+                    <div style={{ fontSize: 11, marginTop: 6, color: '#888' }}>
+                      {trackSource === 'gpx' 
+                        ? 'Sube un archivo .gpx con el botón superior'
+                        : 'No se detectó telemetría reportada en las fechas de salida y regreso del crucero'}
+                    </div>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 10px', fontSize: 10 }}>
-                    <div>
-                      <span style={{ color: '#888', display: 'block' }}>Distancia</span>
-                      <strong style={{ fontSize: 12, color: '#13C2C2' }}>{telemetryStats.distanceNm.toFixed(1)} mn</strong>
-                    </div>
-                    <div>
-                      <span style={{ color: '#888', display: 'block' }}>Duración</span>
-                      <strong style={{ fontSize: 12, color: '#333' }}>
-                        {telemetryStats.durationMinutes ? `${Math.floor(telemetryStats.durationMinutes / 60)}h ${telemetryStats.durationMinutes % 60}m` : '—'}
-                      </strong>
-                    </div>
-                    <div>
-                      <span style={{ color: '#888', display: 'block' }}>Vel. Promedio</span>
-                      <strong style={{ fontSize: 11, color: '#333' }}>
-                        {telemetryStats.avgSpeedKnots ? `${telemetryStats.avgSpeedKnots.toFixed(1)} kt` : '—'}
-                      </strong>
-                    </div>
-                    <div>
-                      <span style={{ color: '#888', display: 'block' }}>Vel. Máxima</span>
-                      <strong style={{ fontSize: 11, color: '#333' }}>
-                        {telemetryStats.maxSpeedKnots ? `${telemetryStats.maxSpeedKnots.toFixed(1)} kt` : '—'}
-                      </strong>
-                    </div>
-                  </div>
-                  
-                  {/* Resumen meteorológico de telemetría */}
-                  <div style={{ marginTop: 8, borderTop: '1px solid #eee', paddingTop: 6 }}>
-                    <div style={{ fontWeight: 'bold', color: '#0A2647', fontSize: 10, marginBottom: 4 }}>
-                      🌡️ Meteorología de Ruta
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 8px', fontSize: 9 }}>
-                      <div>
-                        <span style={{ color: '#888' }}>Temp: </span>
-                        <strong style={{ color: '#333' }}>
-                          {telemetryStats.avgTemp != null ? `${telemetryStats.avgTemp.toFixed(1)}°C` : '—'}
-                        </strong>
-                      </div>
-                      <div>
-                        <span style={{ color: '#888' }}>Presión: </span>
-                        <strong style={{ color: '#333' }}>
-                          {telemetryStats.avgPressure != null ? `${telemetryStats.avgPressure.toFixed(1)} hPa` : '—'}
-                        </strong>
-                      </div>
-                      <div style={{ gridColumn: 'span 2' }}>
-                        <span style={{ color: '#888' }}>Viento Promedio: </span>
-                        <strong style={{ color: '#333' }}>
-                          {telemetryStats.avgWind != null ? `${telemetryStats.avgWind.toFixed(1)} kt` : '—'}
-                          {telemetryStats.avgWindDir != null ? ` (${Math.round(telemetryStats.avgWindDir)}° ${getWindDirectionText(telemetryStats.avgWindDir)})` : ''}
-                        </strong>
-                      </div>
-                      <div style={{ gridColumn: 'span 2' }}>
-                        <span style={{ color: '#888' }}>Viento Máximo: </span>
-                        <strong style={{ color: '#333' }}>
-                          {telemetryStats.maxWind != null ? `${telemetryStats.maxWind.toFixed(1)} kt` : '—'}
-                          {telemetryStats.maxWindDir != null ? ` (${Math.round(telemetryStats.maxWindDir)}° ${getWindDirectionText(telemetryStats.maxWindDir)})` : ''}
-                        </strong>
-                      </div>
-                    </div>
-                  </div>
+                )}
 
-                  {telemetryStats.startTime && (
-                    <div style={{ marginTop: 8, fontSize: 9, color: '#666', borderTop: '1px solid #eee', paddingTop: 6 }}>
-                      <div>📅 Salida: {dayjs(telemetryStats.startTime).format('DD/MM HH:mm')}</div>
-                      <div>📅 Regreso: {dayjs(telemetryStats.endTime).format('DD/MM HH:mm')}</div>
+                {/* Panel de estadísticas GPX flotante */}
+                {trackSource === 'gpx' && gpxStats && showActualTrack && (
+                  <div style={{
+                    position: 'absolute',
+                    top: 52,
+                    right: 12,
+                    zIndex: 1000,
+                    background: 'rgba(255, 255, 255, 0.9)',
+                    backdropFilter: 'blur(6px)',
+                    padding: '10px 14px',
+                    borderRadius: 8,
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                    border: '1px solid rgba(0,0,0,0.08)',
+                    width: 250,
+                  }}>
+                    <div style={{ fontWeight: 'bold', color: '#0A2647', fontSize: 12, marginBottom: 6, borderBottom: '1px solid #eee', paddingBottom: 4 }}>
+                      📊 Resumen de Ruta Real (GPX)
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 10px', fontSize: 10 }}>
+                      <div>
+                        <span style={{ color: '#888', display: 'block' }}>Distancia</span>
+                        <strong style={{ fontSize: 12, color: '#FF6B00' }}>{gpxStats.distanceNm.toFixed(1)} mn</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: '#888', display: 'block' }}>Duración</span>
+                        <strong style={{ fontSize: 12, color: '#333' }}>
+                          {gpxStats.durationMinutes ? `${Math.floor(gpxStats.durationMinutes / 60)}h ${gpxStats.durationMinutes % 60}m` : '—'}
+                        </strong>
+                      </div>
+                      <div>
+                        <span style={{ color: '#888', display: 'block' }}>Vel. Promedio</span>
+                        <strong style={{ fontSize: 11, color: '#333' }}>
+                          {gpxStats.avgSpeedKnots ? `${gpxStats.avgSpeedKnots.toFixed(1)} kt` : '—'}
+                        </strong>
+                      </div>
+                      <div>
+                        <span style={{ color: '#888', display: 'block' }}>Vel. Máxima</span>
+                        <strong style={{ fontSize: 11, color: '#333' }}>
+                          {gpxStats.maxSpeedKnots ? `${gpxStats.maxSpeedKnots.toFixed(1)} kt` : '—'}
+                        </strong>
+                      </div>
+                    </div>
+
+                    {/* Resumen meteorológico de telemetría también disponible en vista GPX si existe */}
+                    {telemetryStats && (telemetryStats.avgTemp != null || telemetryStats.avgWind != null || telemetryStats.avgPressure != null) && (
+                      <div style={{ marginTop: 8, borderTop: '1px solid #eee', paddingTop: 6 }}>
+                        <div style={{ fontWeight: 'bold', color: '#0A2647', fontSize: 10, marginBottom: 4 }}>
+                          🌡️ Meteorología de Ruta (Estación)
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 8px', fontSize: 9 }}>
+                          <div>
+                            <span style={{ color: '#888' }}>Temp: </span>
+                            <strong style={{ color: '#333' }}>
+                              {telemetryStats.avgTemp != null ? `${telemetryStats.avgTemp.toFixed(1)}°C` : '—'}
+                            </strong>
+                          </div>
+                          <div>
+                            <span style={{ color: '#888' }}>Presión: </span>
+                            <strong style={{ color: '#333' }}>
+                              {telemetryStats.avgPressure != null ? `${telemetryStats.avgPressure.toFixed(1)} hPa` : '—'}
+                            </strong>
+                          </div>
+                          <div style={{ gridColumn: 'span 2' }}>
+                            <span style={{ color: '#888' }}>Viento Promedio: </span>
+                            <strong style={{ color: '#333' }}>
+                              {telemetryStats.avgWind != null ? `${telemetryStats.avgWind.toFixed(1)} kt` : '—'}
+                              {telemetryStats.avgWindDir != null ? ` (${Math.round(telemetryStats.avgWindDir)}° ${getWindDirectionText(telemetryStats.avgWindDir)})` : ''}
+                            </strong>
+                          </div>
+                          <div style={{ gridColumn: 'span 2' }}>
+                            <span style={{ color: '#888' }}>Viento Máximo: </span>
+                            <strong style={{ color: '#333' }}>
+                              {telemetryStats.maxWind != null ? `${telemetryStats.maxWind.toFixed(1)} kt` : '—'}
+                              {telemetryStats.maxWindDir != null ? ` (${Math.round(telemetryStats.maxWindDir)}° ${getWindDirectionText(telemetryStats.maxWindDir)})` : ''}
+                            </strong>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {gpxStats.startTime && (
+                      <div style={{ marginTop: 8, fontSize: 9, color: '#666', borderTop: '1px solid #eee', paddingTop: 6 }}>
+                        <div>📅 Salida: {dayjs(gpxStats.startTime).format('DD/MM HH:mm')}</div>
+                        <div>📅 Regreso: {dayjs(gpxStats.endTime).format('DD/MM HH:mm')}</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Panel de estadísticas de Telemetría flotante */}
+                {(trackSource === 'telemetry' || trackSource === 'both') && telemetryStats && showActualTrack && (
+                  <div style={{
+                    position: 'absolute',
+                    top: 52,
+                    right: 12,
+                    zIndex: 1000,
+                    background: 'rgba(255, 255, 255, 0.9)',
+                    backdropFilter: 'blur(6px)',
+                    padding: '10px 14px',
+                    borderRadius: 8,
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                    border: '1px solid rgba(0,0,0,0.08)',
+                    width: 260,
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, borderBottom: '1px solid #eee', paddingBottom: 4 }}>
+                      <span style={{ fontWeight: 'bold', color: '#0A2647', fontSize: 12 }}>
+                        📊 Resumen de Ruta Real (Telemetría)
+                      </span>
+                      {trackSource === 'both' && <Tag color="cyan" style={{ margin: 0, fontSize: 9 }}>+ GPX</Tag>}
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 10px', fontSize: 10 }}>
+                      <div>
+                        <span style={{ color: '#888', display: 'block' }}>Distancia</span>
+                        <strong style={{ fontSize: 12, color: '#13C2C2' }}>{telemetryStats.distanceNm.toFixed(1)} mn</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: '#888', display: 'block' }}>Duración</span>
+                        <strong style={{ fontSize: 12, color: '#333' }}>
+                          {telemetryStats.durationMinutes ? `${Math.floor(telemetryStats.durationMinutes / 60)}h ${telemetryStats.durationMinutes % 60}m` : '—'}
+                        </strong>
+                      </div>
+                      <div>
+                        <span style={{ color: '#888', display: 'block' }}>Vel. Barco Prom</span>
+                        <strong style={{ fontSize: 11, color: '#333' }}>
+                          {telemetryStats.avgSpeedKnots ? `${telemetryStats.avgSpeedKnots.toFixed(1)} kt` : '—'}
+                        </strong>
+                      </div>
+                      <div>
+                        <span style={{ color: '#888', display: 'block' }}>Vel. Barco Máx</span>
+                        <strong style={{ fontSize: 11, color: '#333' }}>
+                          {telemetryStats.maxSpeedKnots ? `${telemetryStats.maxSpeedKnots.toFixed(1)} kt` : '—'}
+                        </strong>
+                      </div>
+                    </div>
+                    
+                    {/* Resumen meteorológico de telemetría */}
+                    <div style={{ marginTop: 8, borderTop: '1px solid #eee', paddingTop: 6 }}>
+                      <div style={{ fontWeight: 'bold', color: '#0A2647', fontSize: 10, marginBottom: 4 }}>
+                        🌡️ Meteorología de Ruta
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 8px', fontSize: 9 }}>
+                        <div>
+                          <span style={{ color: '#888' }}>Temp: </span>
+                          <strong style={{ color: '#333' }}>
+                            {telemetryStats.avgTemp != null ? `${telemetryStats.avgTemp.toFixed(1)}°C` : '—'}
+                          </strong>
+                        </div>
+                        <div>
+                          <span style={{ color: '#888' }}>Presión: </span>
+                          <strong style={{ color: '#333' }}>
+                            {telemetryStats.avgPressure != null ? `${telemetryStats.avgPressure.toFixed(1)} hPa` : '—'}
+                          </strong>
+                        </div>
+                        <div style={{ gridColumn: 'span 2' }}>
+                          <span style={{ color: '#888' }}>Viento Promedio: </span>
+                          <strong style={{ color: '#333' }}>
+                            {telemetryStats.avgWind != null ? `${telemetryStats.avgWind.toFixed(1)} kt` : '—'}
+                            {telemetryStats.avgWindDir != null ? ` (${Math.round(telemetryStats.avgWindDir)}° ${getWindDirectionText(telemetryStats.avgWindDir)})` : ''}
+                          </strong>
+                        </div>
+                        <div style={{ gridColumn: 'span 2' }}>
+                          <span style={{ color: '#888' }}>Viento Máximo: </span>
+                          <strong style={{ color: '#333' }}>
+                            {telemetryStats.maxWind != null ? `${telemetryStats.maxWind.toFixed(1)} kt` : '—'}
+                            {telemetryStats.maxWindDir != null ? ` (${Math.round(telemetryStats.maxWindDir)}° ${getWindDirectionText(telemetryStats.maxWindDir)})` : ''}
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+
+                    {telemetryStats.startTime && (
+                      <div style={{ marginTop: 8, fontSize: 9, color: '#666', borderTop: '1px solid #eee', paddingTop: 6 }}>
+                        <div>📅 Salida: {dayjs(telemetryStats.startTime).format('DD/MM HH:mm')}</div>
+                        <div>📅 Regreso: {dayjs(telemetryStats.endTime).format('DD/MM HH:mm')}</div>
+                      </div>
+                    )}
+
+                    <Button
+                      size="small"
+                      type="primary"
+                      ghost
+                      block
+                      icon={<DownloadOutlined />}
+                      onClick={handleDownloadTelemetryCsv}
+                      style={{
+                        marginTop: 8,
+                        fontSize: 11,
+                        borderColor: '#13C2C2',
+                        color: '#08979c',
+                        borderRadius: 6,
+                      }}
+                    >
+                      Descargar Telemetría (CSV)
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* Leyenda inferior */}
+              {(editingCruise?.waypoints?.length > 0 || ((trackSource === 'gpx' || trackSource === 'both') && editingCruise?.actual_track) || ((trackSource === 'telemetry' || trackSource === 'both') && telemetryTrack.length > 0)) && (
+                <div style={{ position: 'absolute', bottom: 10, left: 10, zIndex: 1000, background: 'rgba(255,255,255,0.95)', padding: '6px 10px', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.12)', fontSize: 10, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {editingCruise?.waypoints?.length > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <div style={{ width: 20, height: 0, borderTop: '2px dashed #0A2647' }} />
+                      <span>Ruta planificada</span>
                     </div>
                   )}
+                  {(trackSource === 'gpx' || trackSource === 'both') && editingCruise?.actual_track && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <div style={{ width: 20, height: 3, background: '#FF6B00', borderRadius: 2 }} />
+                      <span style={{ color: '#FF6B00', fontWeight: 600 }}>Track real (GPX)</span>
+                    </div>
+                  )}
+                  {(trackSource === 'telemetry' || trackSource === 'both') && telemetryTrack.length > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <div style={{ width: 20, height: 3, background: '#13C2C2', borderRadius: 2 }} />
+                      <span style={{ color: '#13C2C2', fontWeight: 600 }}>Track real (Telemetría)</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </Col>
 
+            {/* ── Columna derecha: Observaciones + Bitácoras ── */}
+            <Col span={8} style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#f5f5f5', borderLeft: '1px solid #eee', overflow: 'hidden' }}>
+              {/* Observaciones */}
+              <div style={{ padding: '12px 16px 10px', borderBottom: '1px solid #e8e8e8', flexShrink: 0, background: '#fff' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <Text strong style={{ fontSize: 13 }}>📝 Observaciones de la Salida</Text>
                   <Button
                     size="small"
                     type="primary"
-                    ghost
-                    block
-                    icon={<DownloadOutlined />}
-                    onClick={handleDownloadTelemetryCsv}
-                    style={{
-                      marginTop: 8,
-                      fontSize: 11,
-                      borderColor: '#13C2C2',
-                      color: '#08979c',
-                      borderRadius: 6,
+                    style={{ background: '#0A2647', borderColor: '#0A2647', fontSize: 11 }}
+                    onClick={async () => {
+                      try {
+                        const res = await apiClient.put(`/cruises/${editingCruise.id}`, {
+                          trip_report: editingCruise.trip_report,
+                        });
+                        setEditingCruise(res.data);
+                        message.success('Observaciones guardadas');
+                      } catch { message.error('Error al guardar observaciones'); }
                     }}
                   >
-                    Descargar Telemetría (CSV)
+                    Guardar
                   </Button>
                 </div>
-              )}
-            </div>
-
-            {/* Leyenda inferior */}
-            {(editingCruise?.waypoints?.length > 0 || (trackSource === 'gpx' && editingCruise?.actual_track) || (trackSource === 'telemetry' && telemetryTrack.length > 0)) && (
-              <div style={{ position: 'absolute', bottom: 10, left: 10, zIndex: 1000, background: 'rgba(255,255,255,0.95)', padding: '6px 10px', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.12)', fontSize: 10, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                {editingCruise?.waypoints?.length > 0 && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <div style={{ width: 20, height: 0, borderTop: '2px dashed #0A2647' }} />
-                    <span>Ruta planificada</span>
-                  </div>
-                )}
-                {trackSource === 'gpx' && editingCruise?.actual_track && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <div style={{ width: 20, height: 3, background: '#FF6B00', borderRadius: 2 }} />
-                    <span style={{ color: '#FF6B00', fontWeight: 600 }}>Track real (GPX)</span>
-                  </div>
-                )}
-                {trackSource === 'telemetry' && telemetryTrack.length > 0 && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <div style={{ width: 20, height: 3, background: '#13C2C2', borderRadius: 2 }} />
-                    <span style={{ color: '#13C2C2', fontWeight: 600 }}>Track real (Telemetría)</span>
-                  </div>
-                )}
+                <TextArea
+                  rows={4}
+                  placeholder="Describe cómo fue la salida, incidentes, condiciones del mar, logros, observaciones generales..."
+                  value={editingCruise?.trip_report || ''}
+                  onChange={e => setEditingCruise(prev => ({ ...prev, trip_report: e.target.value }))}
+                  style={{ fontSize: 12, resize: 'none' }}
+                />
               </div>
-            )}
-          </Col>
 
-          {/* ── Columna derecha: Observaciones + Bitácoras ── */}
-          <Col span={8} style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#f5f5f5', borderLeft: '1px solid #eee', overflow: 'hidden' }}>
-            {/* Observaciones */}
-            <div style={{ padding: '12px 16px 10px', borderBottom: '1px solid #e8e8e8', flexShrink: 0, background: '#fff' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                <Text strong style={{ fontSize: 13 }}>📝 Observaciones de la Salida</Text>
+              {/* Bitácoras */}
+              <div style={{ padding: '10px 16px 8px', borderBottom: '1px solid #e8e8e8', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text strong style={{ fontSize: 13 }}>📓 Bitácoras ({cruiseLogEntries.length})</Text>
                 <Button
                   size="small"
                   type="primary"
-                  style={{ background: '#0A2647', borderColor: '#0A2647', fontSize: 11 }}
-                  onClick={async () => {
-                    try {
-                      const res = await apiClient.put(`/cruises/${editingCruise.id}`, {
-                        trip_report: editingCruise.trip_report,
-                      });
-                      setEditingCruise(res.data);
-                      message.success('Observaciones guardadas');
-                    } catch { message.error('Error al guardar observaciones'); }
+                  icon={<PlusOutlined />}
+                  onClick={() => {
+                    setSubModalType('logbook');
+                    subForm.resetFields();
+                    subForm.setFieldsValue({ entry_date: dayjs() });
                   }}
+                  style={{ background: '#2C3E50', borderColor: '#2C3E50', fontSize: 11 }}
                 >
-                  Guardar
+                  Nueva Entrada
                 </Button>
               </div>
-              <TextArea
-                rows={4}
-                placeholder="Describe cómo fue la salida, incidentes, condiciones del mar, logros, observaciones generales..."
-                value={editingCruise?.trip_report || ''}
-                onChange={e => setEditingCruise(prev => ({ ...prev, trip_report: e.target.value }))}
-                style={{ fontSize: 12, resize: 'none' }}
-              />
-            </div>
-
-            {/* Bitácoras */}
-            <div style={{ padding: '10px 16px 8px', borderBottom: '1px solid #e8e8e8', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Text strong style={{ fontSize: 13 }}>📓 Bitácoras ({cruiseLogEntries.length})</Text>
-              <Button
-                size="small"
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={() => {
-                  setSubModalType('logbook');
-                  subForm.resetFields();
-                  subForm.setFieldsValue({ entry_date: dayjs() });
-                }}
-                style={{ background: '#2C3E50', borderColor: '#2C3E50', fontSize: 11 }}
-              >
-                Nueva Entrada
-              </Button>
-            </div>
-            <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px' }}>
-              {loadingLogEntries ? (
-                <div style={{ textAlign: 'center', padding: '20px 0', color: '#999' }}>Cargando...</div>
-              ) : cruiseLogEntries.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '24px 0', color: '#bbb' }}>
-                  <div style={{ fontSize: 28, marginBottom: 6 }}>📓</div>
-                  <div style={{ fontSize: 12 }}>Sin bitácoras registradas</div>
-                  <div style={{ fontSize: 11, marginTop: 4 }}>Haz clic en "Nueva Entrada" para agregar</div>
-                </div>
-              ) : (
-                cruiseLogEntries.map(r => (
-                  <div key={r.id} style={{ background: '#fff', borderRadius: 8, padding: '10px 12px', marginBottom: 8, border: '1px solid #ececec', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-                      <Space size={4}>
-                        <Tag color="blue" style={{ margin: 0, fontSize: 10 }}>{r.logbook_type.toUpperCase()}</Tag>
-                        {r.event_type && <Tag color={r.event_type.color || 'cyan'} style={{ margin: 0, fontSize: 10 }}>{r.event_type.name}</Tag>}
-                      </Space>
-                      <Text type="secondary" style={{ fontSize: 10 }}>
-                        {dayjs(r.entry_date).format('DD/MM/YYYY')}{r.entry_time ? ` ${r.entry_time}` : ''}
-                      </Text>
-                    </div>
-                    {r.title && <Text strong style={{ fontSize: 12, display: 'block', marginBottom: 2 }}>{r.title}</Text>}
-                    <Text style={{ fontSize: 11, color: '#444', display: 'block' }}>{r.content}</Text>
-                    
-                    {/* Detalles adicionales de ubicación y navegación */}
-                    {(r.location_name || r.latitude != null || r.longitude != null) && (
-                      <div style={{ fontSize: 10, color: '#666', marginTop: 5, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-                        <span>📍</span>
-                        <span style={{ fontWeight: 500 }}>
-                          {r.location_name || 'Ubicación'}
-                        </span>
-                        {r.latitude != null && r.longitude != null && (
-                          <Text type="secondary" style={{ fontSize: 9 }}>
-                            ({r.latitude.toFixed(4)}, {r.longitude.toFixed(4)})
-                          </Text>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Clima y estado del mar */}
-                    {(r.weather_conditions || r.sea_state) && (
-                      <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
-                        {r.weather_conditions && (
-                          <Tag style={{ fontSize: 9, margin: 0, padding: '0 4px', background: '#f0f5ff', color: '#1d39c4', border: '1px solid #d6e4ff' }}>
-                            🌤️ {r.weather_conditions}
-                          </Tag>
-                        )}
-                        {r.sea_state && (
-                          <Tag style={{ fontSize: 9, margin: 0, padding: '0 4px', background: '#e6f7ff', color: '#096dd9', border: '1px solid #bae7ff' }}>
-                            🌊 {r.sea_state}
-                          </Tag>
-                        )}
-                      </div>
-                    )}
-                    
-                    {r.is_signed && <div style={{ fontSize: 10, color: '#52C41A', marginTop: 4 }}>✓ {r.signed_by || 'Firmado'}</div>}
+              <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px' }}>
+                {loadingLogEntries ? (
+                  <div style={{ textAlign: 'center', padding: '20px 0', color: '#999' }}>Cargando...</div>
+                ) : cruiseLogEntries.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '24px 0', color: '#bbb' }}>
+                    <div style={{ fontSize: 28, marginBottom: 6 }}>📓</div>
+                    <div style={{ fontSize: 12 }}>Sin bitácoras registradas</div>
+                    <div style={{ fontSize: 11, marginTop: 4 }}>Haz clic en "Nueva Entrada" para agregar</div>
                   </div>
-                ))
-              )}
-            </div>
-          </Col>
-        </Row>
+                ) : (
+                  cruiseLogEntries.map(r => (
+                    <div key={r.id} style={{ background: '#fff', borderRadius: 8, padding: '10px 12px', marginBottom: 8, border: '1px solid #ececec', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                        <Space size={4}>
+                          <Tag color="blue" style={{ margin: 0, fontSize: 10 }}>{r.logbook_type.toUpperCase()}</Tag>
+                          {r.event_type && <Tag color={r.event_type.color || 'cyan'} style={{ margin: 0, fontSize: 10 }}>{r.event_type.name}</Tag>}
+                        </Space>
+                        <Text type="secondary" style={{ fontSize: 10 }}>
+                          {dayjs(r.entry_date).format('DD/MM/YYYY')}{r.entry_time ? ` ${r.entry_time}` : ''}
+                        </Text>
+                      </div>
+                      {r.title && <Text strong style={{ fontSize: 12, display: 'block', marginBottom: 2 }}>{r.title}</Text>}
+                      <Text style={{ fontSize: 11, color: '#444', display: 'block' }}>{r.content}</Text>
+                      
+                      {/* Detalles adicionales de ubicación y navegación */}
+                      {(r.location_name || r.latitude != null || r.longitude != null) && (
+                        <div style={{ fontSize: 10, color: '#666', marginTop: 5, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                          <span>📍</span>
+                          <span style={{ fontWeight: 500 }}>
+                            {r.location_name || 'Ubicación'}
+                          </span>
+                          {r.latitude != null && r.longitude != null && (
+                            <Text type="secondary" style={{ fontSize: 9 }}>
+                              ({r.latitude.toFixed(4)}, {r.longitude.toFixed(4)})
+                            </Text>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Clima y estado del mar */}
+                      {(r.weather_conditions || r.sea_state) && (
+                        <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                          {r.weather_conditions && (
+                            <Tag style={{ fontSize: 9, margin: 0, padding: '0 4px', background: '#f0f5ff', color: '#1d39c4', border: '1px solid #d6e4ff' }}>
+                              🌤️ {r.weather_conditions}
+                            </Tag>
+                          )}
+                          {r.sea_state && (
+                            <Tag style={{ fontSize: 9, margin: 0, padding: '0 4px', background: '#e6f7ff', color: '#096dd9', border: '1px solid #bae7ff' }}>
+                              🌊 {r.sea_state}
+                            </Tag>
+                          )}
+                        </div>
+                      )}
+                      
+                      {r.is_signed && <div style={{ fontSize: 10, color: '#52C41A', marginTop: 4 }}>✓ {r.signed_by || 'Firmado'}</div>}
+                    </div>
+                  ))
+                )}
+              </div>
+            </Col>
+          </Row>
+        ) : (
+          <UnsavedCruiseNotice
+            tabTitle="📋 Reporte de Salida y Bitácoras"
+            description="El reporte de salida, tracks GPX y bitácoras de navegación estarán disponibles una vez registrado el crucero."
+            onSave={() => handleSave(true, '5')}
+            saving={saving}
+          />
+        )
       )
     },
+    ...(telemetryTrack && telemetryTrack.length > 0 ? [{
+      key: 'telemetry_charts',
+      label: (
+        <span>
+          📈 Gráficas de Telemetría
+          <Tag color="cyan" style={{ marginLeft: 6, fontSize: 10, borderRadius: 10, padding: '0 6px' }}>
+            {telemetryTrack.length} pts
+          </Tag>
+        </span>
+      ),
+      children: (
+        <CruiseTelemetryCharts
+          telemetryTrack={telemetryTrack}
+          cruise={editingCruise}
+          onDownloadCsv={handleDownloadTelemetryCsv}
+        />
+      )
+    }] : []),
     {
       key: 'billing',
       label: '💰 Facturación',
       children: (
         <div style={{ marginTop: 16 }}>
-          {editingCruise?.status !== 'completado' ? (
+          {!editingCruise ? (
+            <UnsavedCruiseNotice
+              tabTitle="💰 Facturación y Cobros"
+              description="El módulo de facturación se activa una vez guardado y completado el crucero."
+              onSave={() => handleSave(true, 'billing')}
+              saving={saving}
+            />
+          ) : editingCruise.status !== 'completado' ? (
             <Alert
               message="Módulo de Facturación Bloqueado"
               description="El registro y control de cobros/facturación de la campaña se habilita únicamente cuando el crucero está completado (Estado: Completado)."
@@ -3529,6 +4517,30 @@ function CruisesPage() {
           )}
         </div>
       )
+    },
+    {
+      key: 'stability',
+      label: '⚓ Estabilidad y Tanques',
+      children: (
+        <div style={{ marginTop: 16 }}>
+          {!editingCruise ? (
+            <UnsavedCruiseNotice
+              tabTitle="⚓ Estabilidad y Tanques"
+              description="Guarda el crucero primero para vincular el cálculo de estabilidad naval y sondeo de tanques."
+              onSave={() => handleSave(true, 'stability')}
+              saving={saving}
+            />
+          ) : (
+            <CruiseStabilityTab
+              cruise={editingCruise}
+              onNavigate={(path) => {
+                setModalOpen(false);
+                navigate(path);
+              }}
+            />
+          )}
+        </div>
+      )
     }
   ];
 
@@ -3603,234 +4615,68 @@ function CruisesPage() {
           }} />
       </Card>
 
-      {/* Modal crear/editar */}
-      <Modal title={editingCruise ? `Editar: ${editingCruise.name}` : 'Nuevo Plan de Crucero'}
-        open={modalOpen} onCancel={() => setModalOpen(false)} onOk={handleSave}
-        confirmLoading={saving} okText={editingCruise ? 'Guardar' : 'Crear'} destroyOnClose
-        width={editingCruise ? '92%' : 660}
-        style={editingCruise ? { top: 20 } : undefined}
-        styles={editingCruise ? { body: { padding: '12px 16px', maxHeight: 'calc(100vh - 140px)', overflowY: 'auto' } } : undefined}>
-        {editingCruise ? (
-          <>
-            {!isAdmin && (
-              <Card style={{ borderRadius: 8, marginBottom: 16, background: '#f8fafd', border: '1px solid #e6f0fa' }} styles={{ body: { padding: '12px 16px' } }}>
-                <Steps
-                  current={
-                    editingCruise.status === 'pendiente' || editingCruise.status === 'planificado' || editingCruise.status === 'en_curso' || editingCruise.status === 'completado'
-                      ? 4
-                      : editingCruise.waypoints?.length > 0 && editingCruise.participants_count > 0
-                        ? 3
-                        : editingCruise.waypoints?.length > 0
-                          ? 2
-                          : 1
-                  }
-                  size="small"
-                  items={[
-                    { title: 'Solicitud Aprobada', description: 'Completado' },
-                    { title: 'Waypoints y Ruta', description: editingCruise.waypoints?.length > 0 ? 'Definido' : 'Pendiente' },
-                    { title: 'Personal Científico', description: editingCruise.participants_count > 0 ? `Asignado (${editingCruise.participants_count})` : 'Pendiente' },
-                    { title: 'Muestreo / Estaciones', description: 'Configurar' },
-                    { title: 'Enviar a Revisión', description: editingCruise.status === 'borrador' ? 'Pendiente' : 'Enviado' },
-                  ]}
-                />
-              </Card>
-            )}
-            <Tabs activeKey={activeTab} onChange={(k) => setActiveTab(k)} items={tabItems} style={{ marginTop: 10 }} />
-          </>
-        ) : (
-          <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item name="vessel_id" label="Embarcación" rules={[{ required: true }]}>
-                  <Select placeholder="Seleccionar embarcación" options={vessels.map(v => ({ value: v.id, label: v.name }))} />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item name="cruise_number" label="Número de crucero / Folio" extra="Se autogenera si se deja vacío">
-                  <Input placeholder="ej: ALBA-2026-01" />
-                </Form.Item>
-              </Col>
-            </Row>
-
-            <Form.Item name="name" label="Nombre del plan" rules={[{ required: true }]}>
-              <Input placeholder="ej: Crucero Corriente Costera BC-2026-01" />
-            </Form.Item>
-
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item name="project_id" label="Proyecto asociado" rules={[{ required: true, message: 'Selecciona un proyecto' }]}>
-                  <Select
-                    showSearch
-                    placeholder="Seleccionar proyecto"
-                    optionFilterProp="children"
-                    onChange={(val) => {
-                      setShowCustomProjectInput(val === 'otro');
-                      if (val !== 'otro') {
-                        const matchedProj = projectsList.find(p => p.id === val);
-                        if (matchedProj) {
-                          form.setFieldsValue({ 
-                            project_name: matchedProj.name,
-                            cruise_responsible: matchedProj.responsible_name
-                          });
-                        }
-                      } else {
-                        form.setFieldsValue({ project_name: '', cruise_responsible: '' });
-                      }
-                    }}
-                  >
-                    <Select.OptGroup label="Catálogo de Proyectos">
-                      {projectsList.map(p => (
-                        <Select.Option key={p.id} value={p.id}>
-                          {p.account_number} — {p.name}
-                        </Select.Option>
-                      ))}
-                    </Select.OptGroup>
-                    <Select.OptGroup label="Alternativa">
-                      <Select.Option value="otro">✍️ Otro (Capturar manualmente)</Select.Option>
-                    </Select.OptGroup>
-                  </Select>
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item name="funding_source" label="Fuente de financiamiento">
-                  <Input placeholder="ej: CONACYT CB-2024-XXXX" />
-                </Form.Item>
-              </Col>
-            </Row>
-
-            <Row gutter={16}>
-              <Col span={24}>
-                <Form.Item name="cruise_responsible" label="Responsable del Crucero (No necesariamente se embarca)">
-                  <Input placeholder="Nombre de la persona responsable del crucero (opcional)" />
-                </Form.Item>
-              </Col>
-            </Row>
-
-            {showCustomProjectInput && (
-              <Row gutter={16}>
-                <Col span={24}>
-                  <Form.Item name="project_name" label="Nombre del Proyecto (Manual)" rules={[{ required: true, message: 'El nombre es requerido' }]}>
-                    <Input placeholder="ej: Proyecto Bacab Lum — SEP-CONACYT" />
-                  </Form.Item>
-                </Col>
-              </Row>
-            )}
-
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item name="study_area" label="Área de estudio">
-                  <TextArea rows={2} placeholder="ej: Zona económica exclusiva, frente a Ensenada" />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item name="disciplines" label="Disciplinas científicas">
-                  <TextArea rows={2} placeholder="ej: Oceanografía física, química, biológica" />
-                </Form.Item>
-              </Col>
-            </Row>
-
-            <Form.Item name="objective" label="Objetivo científico / operativo">
-              <TextArea rows={2} placeholder="Objetivo científico u operativo del crucero" />
-            </Form.Item>
-
-            <Row gutter={16}>
-              <Col span={8}>
-                <Form.Item name="status" label="Estado">
-                  <Select options={Object.entries(STATUS_MAP).map(([k, v]) => ({ value: k, label: v.label }))} />
-                </Form.Item>
-              </Col>
-              <Col span={16}>
-                <Form.Item label="Capitán de la Embarcación">
-                  <Input
-                    disabled
-                    placeholder="Asigna un capitán en la pestaña Participantes"
-                    style={{ background: '#fffbe6', borderColor: '#ffe58f' }}
-                  />
-                </Form.Item>
-              </Col>
-            </Row>
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item name="departure_port_id" label="Puerto de salida">
-                  <Select
-                    placeholder="Seleccionar puerto"
-                    allowClear
-                    showSearch
-                    optionFilterProp="label"
-                    options={ports.map(p => ({ value: p.id, label: p.name }))}
-                  />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item name="return_port_id" label="Puerto de regreso">
-                  <Select
-                    placeholder="Seleccionar puerto"
-                    allowClear
-                    showSearch
-                    optionFilterProp="label"
-                    options={ports.map(p => ({ value: p.id, label: p.name }))}
-                  />
-                </Form.Item>
-              </Col>
-            </Row>
-            <Row gutter={16}>
-              <Col span={12}><Form.Item name="departure_date" label="Fecha y hora salida"><DatePicker style={{ width: '100%' }} format="DD/MM/YYYY HH:mm" showTime={{ format: 'HH:mm' }} /></Form.Item></Col>
-              <Col span={12}>
-                <Form.Item
-                  name="return_date"
-                  label="Fecha y hora regreso"
-                  extra={
-                    suggestedReturnDate ? (
-                      <span style={{ fontSize: '12px', color: '#595959' }}>
-                        Sugerido por ruta: <strong>{suggestedReturnDate.format('DD/MM/YYYY HH:mm')}</strong>{' '}
-                        <a onClick={() => form.setFieldsValue({ return_date: suggestedReturnDate })} style={{ marginLeft: 6 }}>
-                          (Aplicar sugerido)
-                        </a>
-                      </span>
-                    ) : (
-                      <span style={{ fontSize: '12px', color: '#8c8c8c' }}>
-                        No hay ruta configurada para calcular una fecha sugerida
-                      </span>
-                    )
-                  }
-                >
-                  <DatePicker placeholder="Seleccionar fecha y hora" style={{ width: '100%' }} format="DD/MM/YYYY HH:mm" showTime={{ format: 'HH:mm' }} />
-                </Form.Item>
-              </Col>
-            </Row>
-            <Row gutter={16}>
-              <Col span={8}><Form.Item name="planned_nm" label="Millas planificadas"><InputNumber disabled placeholder="Autocalculado" style={{ width: '100%' }} min={0} /></Form.Item></Col>
-              <Col span={8}><Form.Item name="actual_nm" label="Millas reales"><InputNumber style={{ width: '100%' }} min={0} step={10} /></Form.Item></Col>
-              <Col span={8}><Form.Item name="fuel_consumed" label="Combustible (L)"><InputNumber style={{ width: '100%' }} min={0} step={100} /></Form.Item></Col>
-            </Row>
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item
-                  name="crew_count"
-                  label="Tripulantes"
-                  extra={selectedVesselObj && selectedVesselObj.max_crew !== null ? `Tripulación mínima requerida: ${selectedVesselObj.max_crew}` : undefined}
-                >
-                  <InputNumber style={{ width: '100%' }} min={0} />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item
-                  name="scientists_count"
-                  label="Investigadores"
-                  extra={selectedVesselObj && selectedVesselObj.max_passengers !== null ? `Capacidad máxima: ${selectedVesselObj.max_passengers}` : undefined}
-                >
-                  <InputNumber style={{ width: '100%' }} min={0} />
-                </Form.Item>
-              </Col>
-            </Row>
-            <Form.Item name="notes" label="Notas"><TextArea rows={2} /></Form.Item>
-          </Form>
+      {/* Modal crear/editar unificado */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 18 }}>🧭</span>
+            <span style={{ fontWeight: 700, color: '#0A2647' }}>
+              {editingCruise ? (
+                <>
+                  Editar: {editingCruise.name}
+                  {editingCruise.cruise_number && (
+                    <Tag color="blue" style={{ marginLeft: 8, fontWeight: 500 }}>{editingCruise.cruise_number}</Tag>
+                  )}
+                </>
+              ) : (
+                'Nuevo Plan de Crucero'
+              )}
+            </span>
+          </div>
+        }
+        open={modalOpen}
+        onCancel={() => setModalOpen(false)}
+        onOk={() => handleSave(false)}
+        confirmLoading={saving}
+        okText={editingCruise ? 'Guardar Cambios' : 'Crear Plan'}
+        destroyOnClose
+        width="92%"
+        style={{ top: 20 }}
+        styles={{ body: { padding: '12px 16px', maxHeight: 'calc(100vh - 140px)', overflowY: 'auto' } }}
+      >
+        {!isAdmin && (
+          <Card style={{ borderRadius: 8, marginBottom: 16, background: '#f8fafd', border: '1px solid #e6f0fa' }} styles={{ body: { padding: '12px 16px' } }}>
+            <Steps
+              current={
+                !editingCruise ? 0 :
+                editingCruise.status === 'pendiente' || editingCruise.status === 'planificado' || editingCruise.status === 'en_curso' || editingCruise.status === 'completado'
+                  ? 4
+                  : editingCruise.waypoints?.length > 0 && editingCruise.participants_count > 0
+                    ? 3
+                    : editingCruise.waypoints?.length > 0
+                      ? 2
+                      : 1
+              }
+              size="small"
+              items={[
+                { title: 'Solicitud Aprobada', description: editingCruise ? 'Completado' : 'Pendiente' },
+                { title: 'Waypoints y Ruta', description: editingCruise?.waypoints?.length > 0 ? 'Definido' : 'Pendiente' },
+                { title: 'Personal Científico', description: editingCruise?.participants_count > 0 ? `Asignado (${editingCruise.participants_count})` : 'Pendiente' },
+                { title: 'Muestreo / Estaciones', description: 'Configurar' },
+                { title: 'Enviar a Revisión', description: editingCruise?.status === 'borrador' || !editingCruise ? 'Pendiente' : 'Enviado' },
+              ]}
+            />
+          </Card>
         )}
+        <Tabs activeKey={activeTab} onChange={(k) => setActiveTab(k)} items={tabItems} style={{ marginTop: 10 }} />
       </Modal>
 
       {/* Modal del mapa */}
       {mapCruise && (
-        <WaypointMapModal cruise={mapCruise} open={!!mapCruise}
+        <WaypointMapModal
+          cruise={mapCruise}
+          open={!!mapCruise}
+          defaultDepartureDate={mapCruise?.departure_date}
           onClose={() => setMapCruise(null)}
           onSave={() => { fetchCruises(); setMapCruise(null); }}
           onConfigureSamples={(wp) => {

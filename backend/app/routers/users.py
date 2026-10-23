@@ -267,6 +267,9 @@ async def update_user(
 
     # Log de auditoría
     try:
+        details_dict = {"username": user.username, "email": user.email, "is_active": user.is_active}
+        if user.telegram_id:
+            details_dict["telegram_id"] = user.telegram_id
         log_action(
             db=db,
             user_id=current_user.id,
@@ -276,7 +279,7 @@ async def update_user(
             entity_type="User",
             entity_id=user.id,
             description=f"Actualizó datos del usuario '{user.username}' ({user.full_name})",
-            details={"username": user.username, "email": user.email, "is_active": user.is_active}
+            details=details_dict
         )
     except Exception:
         pass

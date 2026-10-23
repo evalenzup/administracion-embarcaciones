@@ -1,39 +1,35 @@
 /**
- * SIAE — Animación de oleaje estilo Windy: guiones cortos que marchan en la
- * dirección de propagación del swell.
+ * SIAE — Animación de oleaje continuo estilo Windy: guiones cortos que marchan en la
+ * dirección de propagación del swell a 60 FPS ininterrumpidos.
  *
- * A diferencia de leaflet-velocity (estelas largas tipo viento, sin forma de
- * enmascarar tierra), aquí se dibuja una retícula de guiones cortos y se usa
- * el CANAL ALFA DEL PNG DE OLEAJE como máscara por píxel: el PNG ya viene
- * recortado a la línea de costa real por el backend, así que los guiones
- * heredan exactamente ese recorte y nunca se dibujan sobre tierra.
- *
- * Reutiliza L.canvasLayer (registrado globalmente por leaflet-velocity).
+ * Utiliza el canal alfa del PNG de oleaje como máscara por píxel para respetar
+ * la línea de costa real (sin pintar sobre tierra).
  */
 import { useEffect, useRef } from 'react';
 import { useMap } from 'react-leaflet';
-import L from '../../utils/leafletGlobal';
-import 'leaflet-velocity';
 
-const GRID_SPACING_PX = 34; // separación de la retícula de guiones en pantalla
-const CYCLE_PX = 26; // recorrido de cada guion antes de reiniciar
-const FPS_INTERVAL_MS = 50; // ~20 fps, suficiente para un vaivén suave
+const GRID_SPACING_PX = 32; // Separación de la retícula de guiones en pantalla
+const CYCLE_PX = 24; // Recorrido de cada guion antes de reiniciar
 
 /** Interpolador bilineal U/V sobre el JSON de /weather/waves-velocity. */
 function buildInterpolator(velocityData) {
-  const header = velocityData[0].header;
+  if (!velocityData || !Array.isArray(velocityData) || velocityData.length < 2) return null;
+  const header = velocityData[0]?.header;
+  if (!header) return null;
   const { nx, ny, la1, lo1, dx, dy } = header;
   const u = velocityData[0].data;
   const v = velocityData[1].data;
 
+  if (!u || !v) return null;
+
   return (lat, lon) => {
     const colF = (lon - lo1) / dx;
     const rowF = (la1 - lat) / dy;
-    if (colF < 0 || rowF < 0 || colF > nx - 1 || rowF > ny - 1) return null;
+    if (colF < 0 || rowF < 0 || colF >= nx - 1 || rowF >= ny - 1) return null;
     const c0 = Math.floor(colF);
     const r0 = Math.floor(rowF);
-    const c1 = Math.min(c0 + 1, nx - 1);
-    const r1 = Math.min(r0 + 1, ny - 1);
+    const c1 = c0 + 1;
+    const r1 = r0 + 1;
     const fc = colF - c0;
     const fr = rowF - r0;
     const top_u = u[r0 * nx + c0] * (1 - fc) + u[r0 * nx + c1] * fc;
@@ -44,97 +40,44 @@ function buildInterpolator(velocityData) {
   };
 }
 
-/**
- * Muestreador del canal alfa del PNG de oleaje. Las filas del PNG están en
- * espaciado Mercator (así las genera el backend), por lo que el muestreo en
- * Y usa la misma transformación.
- */
+/** Muestreador del canal alfa del PNG de oleaje (máscara de costa). */
 function buildMaskSampler(img, bounds) {
-  const canvas = document.createElement('canvas');
-  canvas.width = img.naturalWidth;
-  canvas.height = img.naturalHeight;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(img, 0, 0);
-  const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth || img.width;
+    canvas.height = img.naturalHeight || img.height;
+    if (!canvas.width || !canvas.height) return () => 255;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0);
+    const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
 
-  const [[latS, lonW], [latN, lonE]] = bounds;
-  const merc = (lat) => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
-  const mercN = merc(latN);
-  const mercS = merc(latS);
-  const w = canvas.width;
-  const h = canvas.height;
+    const [[latS, lonW], [latN, lonE]] = bounds;
+    const merc = (lat) => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
+    const mercN = merc(latN);
+    const mercS = merc(latS);
+    const w = canvas.width;
+    const h = canvas.height;
 
-  return (lat, lon) => {
-    if (lat <= latS || lat >= latN || lon <= lonW || lon >= lonE) return 0;
-    const x = Math.floor(((lon - lonW) / (lonE - lonW)) * (w - 1));
-    const y = Math.floor(((mercN - merc(lat)) / (mercN - mercS)) * (h - 1));
-    return data[(y * w + x) * 4 + 3];
-  };
+    return (lat, lon) => {
+      if (lat <= latS || lat >= latN || lon <= lonW || lon >= lonE) return 0;
+      const x = Math.floor(((lon - lonW) / (lonE - lonW)) * (w - 1));
+      const y = Math.floor(((mercN - merc(lat)) / (mercN - mercS)) * (h - 1));
+      if (x < 0 || x >= w || y < 0 || y >= h) return 0;
+      return data[(y * w + x) * 4 + 3];
+    };
+  } catch (err) {
+    console.warn('Fallback al dibujar mascara de oleaje:', err);
+    return () => 255;
+  }
 }
 
-/** Pseudo-aleatorio determinista por punto de retícula (desfasa los guiones). */
+/** Pseudo-aleatorio determinista por punto de retícula. */
 function seed(x, y) {
   const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
   return s - Math.floor(s);
 }
 
-function drawFrame(info, state) {
-  const { canvas, size, layer } = info;
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  const { interpolate, maskAlpha } = state;
-  if (!interpolate || !maskAlpha) return;
-
-  const map = layer._map;
-  const t = performance.now() / 1000;
-
-  ctx.lineCap = 'round';
-  ctx.strokeStyle = 'rgba(255,255,255,1)';
-
-  for (let x = 0; x < size.x + GRID_SPACING_PX; x += GRID_SPACING_PX) {
-    for (let y = 0; y < size.y + GRID_SPACING_PX; y += GRID_SPACING_PX) {
-      const latlng = map.containerPointToLatLng([x, y]);
-      const vec = interpolate(latlng.lat, latlng.lng);
-      if (!vec) continue;
-      const [u, v] = vec;
-      const mag = Math.hypot(u, v);
-      if (mag < 0.05) continue;
-      if (maskAlpha(latlng.lat, latlng.lng) === 0) continue;
-
-      // Dirección de propagación en pantalla (v positivo = norte = -y)
-      const dirX = u / mag;
-      const dirY = -v / mag;
-
-      // El guion marcha a lo largo de su dirección y se reinicia cada CYCLE_PX
-      const speed = 4 + mag * 4; // px/s, más rápido con mar más grande
-      const phase = ((t * speed + seed(x, y) * CYCLE_PX * 4) % CYCLE_PX) - CYCLE_PX / 2;
-      const cx = x + dirX * phase;
-      const cy = y + dirY * phase;
-
-      // Desvanecer en los extremos del recorrido para que el reinicio no "parpadee"
-      const fade = 1 - Math.abs(phase) / (CYCLE_PX / 2);
-      const len = 5 + mag * 2; // guion más largo con mar más grande
-
-      ctx.globalAlpha = 0.25 + 0.65 * fade;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(cx - (dirX * len) / 2, cy - (dirY * len) / 2);
-      ctx.lineTo(cx + (dirX * len) / 2, cy + (dirY * len) / 2);
-      ctx.stroke();
-    }
-  }
-  ctx.globalAlpha = 1;
-}
-
-/**
- * @param {object} props
- * @param {Array|null} props.velocityData - JSON de /weather/waves-velocity.
- * @param {string|null} props.maskUrl - Object URL del PNG de oleaje (máscara alfa).
- * @param {Array|null} props.bounds - wave_bbox de /weather/status.
- * @param {boolean} props.visible
- */
-function WaveDashLayer({ velocityData, maskUrl, bounds, visible }) {
+export default function WaveDashLayer({ velocityData, maskUrl, bounds, visible }) {
   const map = useMap();
   const stateRef = useRef({ interpolate: null, maskAlpha: null });
 
@@ -147,30 +90,129 @@ function WaveDashLayer({ velocityData, maskUrl, bounds, visible }) {
     if (!maskUrl || !bounds) return;
     let cancelled = false;
     const img = new Image();
-    img.onload = () => {
-      if (!cancelled) stateRef.current.maskAlpha = buildMaskSampler(img, bounds);
+    img.crossOrigin = 'anonymous';
+    const onLoaded = () => {
+      if (!cancelled) {
+        stateRef.current.maskAlpha = buildMaskSampler(img, bounds);
+      }
+    };
+    img.onload = onLoaded;
+    img.onerror = () => {
+      if (!cancelled) stateRef.current.maskAlpha = () => 255;
     };
     img.src = maskUrl;
-    return () => { cancelled = true; };
+    if (img.complete && (img.naturalWidth > 0 || img.width > 0)) {
+      onLoaded();
+    }
+    return () => {
+      cancelled = true;
+    };
   }, [maskUrl, bounds]);
 
   useEffect(() => {
     if (!visible) return;
-    // L.canvasLayer espera el ELEMENTO DOM del pane en options.pane (así lo
-    // instancia el propio plugin internamente); sin él, Leaflet deja el
-    // string 'overlayPane' y appendChild/removeChild revientan.
-    const layer = L.canvasLayer({ pane: map.getPane('overlayPane') }).delegate({
-      onDrawLayer: (info) => drawFrame(info, stateRef.current),
-    });
-    layer.addTo(map);
-    const timer = setInterval(() => layer.needRedraw(), FPS_INTERVAL_MS);
+
+    let wavePane = map.getPane('wavePane');
+    if (!wavePane) {
+      wavePane = map.createPane('wavePane');
+      wavePane.style.zIndex = '450';
+      wavePane.style.pointerEvents = 'none';
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.style.position = 'absolute';
+    canvas.style.pointerEvents = 'none';
+    wavePane.appendChild(canvas);
+
+    const ctx = canvas.getContext('2d');
+    let animFrameId = null;
+    let width = 0;
+    let height = 0;
+
+    const resizeAndReposition = () => {
+      const size = map.getSize();
+      width = canvas.width = size.x;
+      height = canvas.height = size.y;
+      canvas.style.width = size.x + 'px';
+      canvas.style.height = size.y + 'px';
+      const topLeft = map.containerPointToLayerPoint([0, 0]);
+      L.DomUtil.setPosition(canvas, topLeft);
+    };
+    resizeAndReposition();
+
+    const renderLoop = () => {
+      animFrameId = requestAnimationFrame(renderLoop);
+
+      if (!ctx || width <= 0 || height <= 0) return;
+
+      ctx.clearRect(0, 0, width, height);
+
+      const { interpolate, maskAlpha } = stateRef.current;
+      if (interpolate) {
+        const checkMask = maskAlpha || (() => 255);
+        const t = performance.now() / 1000;
+
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = '#ffffff';
+
+        for (let x = 0; x < width + GRID_SPACING_PX; x += GRID_SPACING_PX) {
+          for (let y = 0; y < height + GRID_SPACING_PX; y += GRID_SPACING_PX) {
+            const latlng = map.containerPointToLatLng([x, y]);
+            const vec = interpolate(latlng.lat, latlng.lng);
+            if (!vec) continue;
+            const [u, v] = vec;
+            const mag = Math.hypot(u, v);
+            if (mag < 0.05) continue;
+            if (checkMask(latlng.lat, latlng.lng) === 0) continue;
+
+            const dirX = u / mag;
+            const dirY = -v / mag;
+
+            const speed = 4 + mag * 4;
+            const phase = ((t * speed + seed(x, y) * CYCLE_PX * 4) % CYCLE_PX) - CYCLE_PX / 2;
+            const cx = x + dirX * phase;
+            const cy = y + dirY * phase;
+
+            const fade = 1 - Math.abs(phase) / (CYCLE_PX / 2);
+            const len = 5 + mag * 2.2;
+
+            ctx.globalAlpha = 0.2 + 0.7 * fade;
+            ctx.lineWidth = 1.8;
+            ctx.beginPath();
+            ctx.moveTo(cx - (dirX * len) / 2, cy - (dirY * len) / 2);
+            ctx.lineTo(cx + (dirX * len) / 2, cy + (dirY * len) / 2);
+            ctx.stroke();
+          }
+        }
+        ctx.globalAlpha = 1;
+      }
+    };
+
+    animFrameId = requestAnimationFrame(renderLoop);
+
+    const handleClearAndResize = () => {
+      resizeAndReposition();
+      if (ctx && width > 0 && height > 0) {
+        ctx.clearRect(0, 0, width, height);
+      }
+    };
+
+    map.on('move', resizeAndReposition);
+    map.on('resize', handleClearAndResize);
+    map.on('zoom', resizeAndReposition);
+    map.on('zoomstart', handleClearAndResize);
+
     return () => {
-      clearInterval(timer);
-      map.removeLayer(layer);
+      if (animFrameId) cancelAnimationFrame(animFrameId);
+      map.off('move', resizeAndReposition);
+      map.off('resize', handleClearAndResize);
+      map.off('zoom', resizeAndReposition);
+      map.off('zoomstart', handleClearAndResize);
+      if (canvas.parentNode) {
+        canvas.parentNode.removeChild(canvas);
+      }
     };
   }, [visible, map]);
 
   return null;
 }
-
-export default WaveDashLayer;

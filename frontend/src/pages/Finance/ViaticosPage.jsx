@@ -55,11 +55,13 @@ import {
   InfoCircleOutlined,
   FolderOpenOutlined,
   SafetyCertificateOutlined,
-  WarningOutlined
+  WarningOutlined,
+  SendOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import apiClient from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
+import TelegramAnnouncementModal from '../../components/Finance/TelegramAnnouncementModal';
 
 const { TextArea } = Input;
 const { RangePicker } = DatePicker;
@@ -117,12 +119,18 @@ export default function ViaticosPage() {
   const [uploadingComprobacion, setUploadingComprobacion] = useState(false);
   const [uploadingReporte, setUploadingReporte] = useState(false);
   const [uploadingDevolucion, setUploadingDevolucion] = useState(false);
+  const [parsingReceipt, setParsingReceipt] = useState(false);
+  const [detectedReceiptInfo, setDetectedReceiptInfo] = useState(null);
+  const [devolucionFileList, setDevolucionFileList] = useState([]);
   const [downloadingExcel, setDownloadingExcel] = useState(false);
   const [downloadingZip, setDownloadingZip] = useState(false);
   const [uploadingTicketForInv, setUploadingTicketForInv] = useState(null);
   const [uploadingPdfForInv, setUploadingPdfForInv] = useState(null);
-  const [uploadingXmlForInv, setUploadingXmlForInv] = useState(null);
   const [devolucionForm] = Form.useForm();
+  
+  // Modal de Aviso Telegram
+  const [telegramModalOpen, setTelegramModalOpen] = useState(false);
+  const [telegramTramite, setTelegramTramite] = useState(null);
 
   const { hasPermission } = useAuth();
   const isAdmin = hasPermission('viaticos', 'edit');
@@ -933,16 +941,63 @@ export default function ViaticosPage() {
     if (!selectedViatico) return;
     const diff = Math.max(0, (selectedViatico.monto_solicitado || 0) - (selectedViatico.monto_comprobado || 0));
     const roundedDiff = Math.round(diff * 100) / 100;
-    const initialMonto = selectedViatico.monto_devuelto != null ? Number(Number(selectedViatico.monto_devuelto).toFixed(2)) : roundedDiff;
+    const initialMonto = (selectedViatico.monto_devuelto && Number(selectedViatico.monto_devuelto) > 0)
+      ? Number(Number(selectedViatico.monto_devuelto).toFixed(2))
+      : (roundedDiff > 0 ? roundedDiff : undefined);
+
+    setDetectedReceiptInfo(null);
+    setDevolucionFileList([]);
     devolucionForm.setFieldsValue({
-      monto_devuelto: initialMonto
+      monto_devuelto: initialMonto,
+      comprobante_file: undefined
     });
     setIsDevolucionModalOpen(true);
   };
 
+  const handleDevolucionFileChange = async (file) => {
+    if (!file) return false;
+    const isPdfOrImg = file.name?.toLowerCase().endsWith('.pdf') || 
+      file.type?.startsWith('image/') || 
+      /\.(jpe?g|png)$/i.test(file.name);
+
+    if (!isPdfOrImg) {
+      message.error('Por favor selecciona un archivo PDF o imagen válida.');
+      return false;
+    }
+
+    setDevolucionFileList([file]);
+    devolucionForm.setFieldsValue({ comprobante_file: [file] });
+    devolucionForm.validateFields(['comprobante_file']).catch(() => {});
+
+    // Auto-parsear comprobante bancario
+    const formData = new FormData();
+    formData.append('file', file);
+    setParsingReceipt(true);
+    try {
+      const res = await apiClient.post('/viaticos/parse-return-receipt', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      if (res.data?.monto && res.data.monto > 0) {
+        devolucionForm.setFieldsValue({
+          monto_devuelto: res.data.monto
+        });
+        setDetectedReceiptInfo(res.data);
+        message.success(`Comprobante ${res.data.banco || ''} leído: $${Number(res.data.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN detectados.`);
+      } else if (res.data?.banco) {
+        setDetectedReceiptInfo(res.data);
+      }
+    } catch (err) {
+      console.warn('No se pudo autodetectar monto del comprobante:', err);
+    } finally {
+      setParsingReceipt(false);
+    }
+    return false;
+  };
+
   const handleUploadDevolucion = async (values) => {
     if (!selectedViatico) return;
-    const file = values.comprobante_file?.fileList?.[0]?.originFileObj || values.comprobante_file?.file;
+    const file = devolucionFileList[0] || (Array.isArray(values?.comprobante_file) ? (values.comprobante_file[0]?.originFileObj || values.comprobante_file[0]) : (values?.comprobante_file?.fileList?.[0]?.originFileObj || values?.comprobante_file?.file || values?.comprobante_file));
+    
     if (!file) {
       message.error('Por favor selecciona el archivo del comprobante de devolución');
       return;
@@ -966,6 +1021,8 @@ export default function ViaticosPage() {
       setSelectedViatico(res.data);
       setIsDevolucionModalOpen(false);
       devolucionForm.resetFields();
+      setDevolucionFileList([]);
+      setDetectedReceiptInfo(null);
       fetchViaticos();
       fetchStats();
     } catch (error) {
@@ -1336,6 +1393,17 @@ export default function ViaticosPage() {
         <Space size="middle">
           <Tooltip title="Ver detalle">
             <Button icon={<EyeOutlined />} size="small" onClick={() => handleOpenDetail(record)} />
+          </Tooltip>
+          <Tooltip title="Enviar Aviso por Telegram">
+            <Button
+              icon={<SendOutlined />}
+              size="small"
+              style={{ color: '#0088cc', borderColor: '#0088cc' }}
+              onClick={() => {
+                setTelegramTramite(record);
+                setTelegramModalOpen(true);
+              }}
+            />
           </Tooltip>
           {isAdmin && (
             <>
@@ -2711,6 +2779,8 @@ export default function ViaticosPage() {
         onCancel={() => {
           setIsDevolucionModalOpen(false);
           devolucionForm.resetFields();
+          setDevolucionFileList([]);
+          setDetectedReceiptInfo(null);
         }}
         onOk={() => devolucionForm.submit()}
         okText="Guardar y Liquidar"
@@ -2719,59 +2789,90 @@ export default function ViaticosPage() {
         destroyOnClose
         width={600}
       >
-        <Form
-          form={devolucionForm}
-          layout="vertical"
-          onFinish={handleUploadDevolucion}
-          style={{ marginTop: 16 }}
-        >
-          <Alert
-            message="Comprobante de Reintegro a Tesorería"
-            description="Adjunta la ficha de depósito bancario, transferencia o recibo de tesorería institucional que acredita la devolución del remanente no ejercido."
-            type="info"
-            showIcon
-            style={{ marginBottom: 16 }}
-          />
-
-          <Form.Item
-            name="monto_devuelto"
-            label="Monto Devuelto ($ MXN)"
-            rules={[{ required: true, message: 'Ingresa el monto devuelto' }]}
+        <Spin spinning={parsingReceipt} tip="Analizando comprobante bancario con OCR...">
+          <Form
+            form={devolucionForm}
+            layout="vertical"
+            onFinish={handleUploadDevolucion}
+            style={{ marginTop: 16 }}
           >
-            <InputNumber
-              style={{ width: '100%' }}
-              precision={2}
-              min={0}
-              step={0.01}
-              formatter={value => {
-                if (value === null || value === undefined || value === '') return '';
-                const parts = `${value}`.split('.');
-                parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-                return `$ ${parts.join('.')}`;
-              }}
-              parser={value => (value ? value.replace(/\$\s?|(,*)/g, '') : '')}
+            <Alert
+              message="Comprobante de Reintegro a Tesorería"
+              description="Adjunta la ficha de depósito bancario o transferencia (BBVA, Banorte, Santander, SPEI, etc.). El sistema extraerá automáticamente el importe transferido."
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
             />
-          </Form.Item>
 
-          <Form.Item
-            name="comprobante_file"
-            label="Archivo del Comprobante (PDF o Imagen JPG / PNG)"
-            rules={[{ required: true, message: 'Selecciona el archivo del comprobante' }]}
-          >
-            <Upload.Dragger
-              accept=".pdf,.jpg,.jpeg,.png"
-              multiple={false}
-              beforeUpload={() => false}
-              maxCount={1}
+            {detectedReceiptInfo?.monto && (
+              <Alert
+                type="success"
+                showIcon
+                message={
+                  <span>
+                    <b>Comprobante {detectedReceiptInfo.banco || 'Bancario'} Detectado:</b> Importe transferido de <b>${Number(detectedReceiptInfo.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN</b> autocompletado con éxito.
+                    {detectedReceiptInfo.folio_operacion && <span style={{ display: 'block', fontSize: 12, marginTop: 2 }}>• Folio Operación: {detectedReceiptInfo.folio_operacion}</span>}
+                  </span>
+                }
+                style={{ marginBottom: 16 }}
+              />
+            )}
+
+            <Form.Item
+              name="monto_devuelto"
+              label="Monto Devuelto ($ MXN)"
+              rules={[{ required: true, message: 'Ingresa el monto devuelto' }]}
             >
-              <p className="ant-upload-drag-icon">
-                <InboxOutlined style={{ color: '#1B4F72' }} />
-              </p>
-              <p className="ant-upload-text">Haz clic o arrastra el archivo aquí</p>
-              <p className="ant-upload-hint">Formatos soportados: PDF, JPG, PNG</p>
-            </Upload.Dragger>
-          </Form.Item>
-        </Form>
+              <InputNumber
+                style={{ width: '100%' }}
+                precision={2}
+                min={0}
+                step={0.01}
+                formatter={value => {
+                  if (value === null || value === undefined || value === '') return '';
+                  const parts = `${value}`.split('.');
+                  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                  return `$ ${parts.join('.')}`;
+                }}
+                parser={value => (value ? value.replace(/\$\s?|(,*)/g, '') : '')}
+              />
+            </Form.Item>
+
+            <Form.Item
+              name="comprobante_file"
+              label="Archivo del Comprobante (PDF o Imagen JPG / PNG)"
+              rules={[
+                {
+                  validator: () => {
+                    if (devolucionFileList.length > 0) {
+                      return Promise.resolve();
+                    }
+                    return Promise.reject(new Error('Selecciona el archivo del comprobante'));
+                  }
+                }
+              ]}
+            >
+              <Upload.Dragger
+                accept=".pdf,.jpg,.jpeg,.png"
+                multiple={false}
+                fileList={devolucionFileList}
+                beforeUpload={handleDevolucionFileChange}
+                onRemove={() => {
+                  setDevolucionFileList([]);
+                  setDetectedReceiptInfo(null);
+                  devolucionForm.setFieldsValue({ comprobante_file: undefined });
+                }}
+                maxCount={1}
+              >
+                <p className="ant-upload-drag-icon">
+                  <InboxOutlined style={{ color: '#1B4F72' }} />
+                </p>
+                <p className="ant-upload-text">Haz clic o arrastra el comprobante aquí</p>
+                <p className="ant-upload-hint">Formatos soportados: PDF, JPG, PNG (Lectura automática de transferencias BBVA, Banorte, Santander, etc.)</p>
+              </Upload.Dragger>
+            </Form.Item>
+          </Form>
+        </Spin>
       </Modal>
 
       {/* Modal Cargar Factura */}
@@ -2987,6 +3088,17 @@ export default function ViaticosPage() {
           </Form.Item>
         </Form>
       </Modal>
+
+      {/* Modal de Aviso / Anuncio vía Telegram Bot */}
+      <TelegramAnnouncementModal
+        open={telegramModalOpen}
+        onClose={() => {
+          setTelegramModalOpen(false);
+          setTelegramTramite(null);
+        }}
+        tramite={telegramTramite}
+        tramiteType="viatico"
+      />
     </div>
   );
 }

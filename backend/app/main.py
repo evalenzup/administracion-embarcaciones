@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 from app.database import engine, Base, SessionLocal
 from app.routers import auth, users, roles, vessels, audit, documents, maintenance, inventory, logbooks, cruises, personnel, equipment
-from app.routers import cruise_participants, participant_profiles, vessel_requests, ports, fuel_logs, vessel_rates, cruise_billings, petty_cash, accounts, services, providers, projects, weather, gastos_reserva_comprobar, notifications, viaticos
+from app.routers import cruise_participants, participant_profiles, vessel_requests, ports, fuel_logs, vessel_rates, cruise_billings, petty_cash, accounts, services, providers, projects, weather, gastos_reserva_comprobar, notifications, viaticos, tank_soundings, stability
 
 
 # Importar modelos para que SQLAlchemy los registre
@@ -117,18 +117,28 @@ async def lifespan(app: FastAPI):
         run_pipeline_if_new_run,
         run_tide_ingest,
         run_smn_ingest,
+        run_enso_refresh,
+        run_cyclones_refresh,
         shutdown_scheduler,
         start_scheduler,
     )
+    from app.services.financial_reminder_scheduler import (
+        start_financial_scheduler,
+        shutdown_financial_scheduler,
+    )
     start_scheduler()
+    start_financial_scheduler()
     # Disparar la primera descarga/ingesta en segundo plano para no bloquear el arranque
     asyncio.create_task(run_pipeline_if_new_run())
     asyncio.create_task(run_tide_ingest())
     asyncio.create_task(run_smn_ingest())
+    asyncio.create_task(run_enso_refresh())
+    asyncio.create_task(run_cyclones_refresh())
 
     yield
 
     shutdown_scheduler()
+    shutdown_financial_scheduler()
 
 
 app = FastAPI(
@@ -184,6 +194,8 @@ app.include_router(weather.router)
 app.include_router(gastos_reserva_comprobar.router)
 app.include_router(notifications.router)
 app.include_router(viaticos.router)
+app.include_router(tank_soundings.router)
+app.include_router(stability.router)
 
 
 # ── Health check ──────────────────────────────────────────────

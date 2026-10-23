@@ -510,7 +510,10 @@ export default function ServicesPage() {
   const showTransitionModal = (targetStage) => {
     setTransitionTarget(targetStage);
     transitionForm.resetFields();
-    transitionForm.setFieldsValue({ date: dayjs() });
+    transitionForm.setFieldsValue({ 
+      date: dayjs(),
+      exchange_rate: selectedService?.exchange_rate || selectedService?.tentative_exchange_rate,
+    });
     setAuthEmailFileList([]);
     setXmlFileList([]);
     setPdfFileList([]);
@@ -556,6 +559,9 @@ export default function ServicesPage() {
           formData.append('conformity_file', conformityFileList[0]);
         }
       } else if (transitionTarget === 'pagado') {
+        if (values.exchange_rate !== undefined && values.exchange_rate !== null && values.exchange_rate !== '') {
+          formData.append('exchange_rate', values.exchange_rate);
+        }
         if (paymentFileList.length > 0) {
           formData.append('payment_file', paymentFileList[0]);
         }

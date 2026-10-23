@@ -200,6 +200,395 @@ def grib_gust_to_grid_json(grib_path: Path, forecast_hour: int) -> dict:
     return {"header": header, "data": _grid_from_values(values)}
 
 
+# ── Renderizado y Procesamiento Térmico (TSM y Temperatura del Aire) ──
+
+TEMP_MIN_C = 10.0
+TEMP_MAX_C = 34.0
+TEMP_PNG_ALPHA = 150
+
+# Paleta oceanográfica de temperatura superficial del mar (°C)
+TEMP_COLOR_STOPS = [
+    (0.00, (10, 25, 47)),    # 10.0°C - Azul marino profundo (corriente fría de California)
+    (0.15, (30, 64, 175)),   # 13.6°C - Azul oceánico
+    (0.35, (6, 182, 212)),   # 18.4°C - Cyan / Turquesa (Ensenada / costa occidental BC)
+    (0.55, (16, 185, 129)),  # 23.2°C - Verde esmeralda (Mar de Cortés central)
+    (0.70, (234, 179, 8)),   # 26.8°C - Amarillo cálido (Mazatlán / Vallarta)
+    (0.82, (249, 115, 22)),  # 29.7°C - Naranja tropical (Golfo de Tehuantepec / Acapulco)
+    (0.92, (239, 68, 68)),   # 32.1°C - Rojo cálido (piscina cálida del Pacífico)
+    (1.00, (190, 24, 93)),   # 34.0°C - Magenta intenso / aguas muy sobrecalentadas (El Niño)
+]
+
+
+def grib_to_temp_json(grib_path: Path, forecast_hour: int) -> dict | None:
+    """
+    Extrae la temperatura superficial del mar (TSM) y la temperatura del aire a 2m de GFS.
+    """
+    raw_t_k = None
+    ref_time = None
+    lats = None
+    lons = None
+
+    # 1. Intentar cargar temperatura de superficie (SST / Skin temp)
+    for key_filter in [{"typeOfLevel": "surface"}, {"shortName": "t"}, {}]:
+        try:
+            ds = xr.open_dataset(
+                grib_path, engine="cfgrib",
+                backend_kwargs={"filter_by_keys": key_filter, "indexpath": ""} if key_filter else {"indexpath": ""},
+            )
+            for vname in ["t", "TMP_surface", "sfc"]:
+                if vname in ds.data_vars:
+                    ds = _sort_north_to_south(ds)
+                    lats = ds.latitude.values
+                    lons = _normalize_lon(ds.longitude.values)
+                    raw_t_k = ds[vname].values
+                    ref_time = str(ds.time.values) if "time" in ds.coords else None
+                    break
+            ds.close()
+            if raw_t_k is not None:
+                break
+        except Exception:
+            continue
+
+    if raw_t_k is None:
+        return None
+
+    # 2. Intentar cargar temperatura del aire a 2 metros
+    raw_t2m_k = None
+    for key_filter in [{"shortName": "2t"}, {"shortName": "t2m"}, {"typeOfLevel": "heightAboveGround"}]:
+        try:
+            ds2 = xr.open_dataset(
+                grib_path, engine="cfgrib",
+                backend_kwargs={"filter_by_keys": key_filter, "indexpath": ""},
+            )
+            for vname in ["2t", "t2m", "TMP_2maboveground"]:
+                if vname in ds2.data_vars:
+                    ds2 = _sort_north_to_south(ds2)
+                    raw_t2m_k = ds2[vname].values
+                    break
+            ds2.close()
+            if raw_t2m_k is not None:
+                break
+        except Exception:
+            continue
+
+    ny, nx = raw_t_k.shape
+    header = {
+        "lo1": float(lons[0]),
+        "la1": float(lats[0]),
+        "lo2": float(lons[-1]),
+        "la2": float(lats[-1]),
+        "dx": float(abs(lons[1] - lons[0])) if nx > 1 else 0.25,
+        "dy": float(abs(lats[1] - lats[0])) if ny > 1 else 0.25,
+        "nx": int(nx),
+        "ny": int(ny),
+        "refTime": ref_time,
+        "forecastTime": forecast_hour,
+    }
+
+    land = _land_mask(lats, lons)
+
+    # sea_temp: enmascarado en tierra (TSM en °C)
+    sea_temp_c = np.where(land, np.nan, raw_t_k - 273.15)
+    # air_temp: válido en tierra y mar (°C)
+    air_temp_c = (raw_t2m_k - 273.15) if raw_t2m_k is not None else (raw_t_k - 273.15)
+
+    return {
+        "header": header,
+        "sea_temp": _grid_from_values(sea_temp_c),
+        "air_temp": _grid_from_values(air_temp_c),
+    }
+
+
+def render_temp_png(grib_path: Path, out_path: Path) -> None:
+    """Genera el PNG térmico de TSM / Temperatura superficial sobremuestreado estilo Windy."""
+    from PIL import Image
+
+    raw_t_k = None
+    lats = None
+    lons = None
+    for key_filter in [{"typeOfLevel": "surface"}, {"shortName": "t"}, {}]:
+        try:
+            ds = xr.open_dataset(
+                grib_path, engine="cfgrib",
+                backend_kwargs={"filter_by_keys": key_filter, "indexpath": ""} if key_filter else {"indexpath": ""},
+            )
+            for vname in ["t", "TMP_surface", "sfc"]:
+                if vname in ds.data_vars:
+                    ds = _sort_north_to_south(ds)
+                    lats = ds.latitude.values
+                    lons = _normalize_lon(ds.longitude.values)
+                    raw_t_k = ds[vname].values
+                    break
+            ds.close()
+            if raw_t_k is not None:
+                break
+        except Exception:
+            continue
+
+    if raw_t_k is None:
+        return
+
+    temp_c = raw_t_k - 273.15
+    ny, nx = temp_c.shape
+    new_ny, new_nx = ny * WAVE_PNG_SCALE, nx * WAVE_PNG_SCALE
+
+    filled = _fill_nan_nearest(temp_c)
+    lat_hi = _mercator_lat_rows(lats[0], lats[-1], new_ny)
+    lon_hi = np.linspace(lons[0], lons[-1], new_nx)
+    hi = _sample_bilinear(filled, lats, lons, lat_hi, lon_hi)
+
+    # Normalizar entre TEMP_MIN_C (10°C) y TEMP_MAX_C (34°C)
+    norm_t = np.clip((hi - TEMP_MIN_C) / (TEMP_MAX_C - TEMP_MIN_C), 0.0, 1.0)
+
+    # Máscara de costa a alta resolución: transparente en tierra (solo mar / TSM)
+    lon_grid, lat_grid = np.meshgrid(lon_hi, lat_hi)
+    land = globe.is_land(lat_grid, lon_grid)
+
+    alpha = np.where(land, 0, float(TEMP_PNG_ALPHA)).astype(float)
+    rows = np.arange(new_ny)[:, None]
+    cols = np.arange(new_nx)[None, :]
+    edge_dist = np.minimum(
+        np.minimum(rows, new_ny - 1 - rows),
+        np.minimum(cols, new_nx - 1 - cols),
+    )
+    alpha *= np.clip(edge_dist / WAVE_PNG_EDGE_FEATHER_PX, 0, 1)
+
+    rgb = np.zeros((new_ny, new_nx, 3), dtype=np.uint8)
+    stops_t = np.array([s[0] for s in TEMP_COLOR_STOPS])
+    for ch in range(3):
+        stops_c = np.array([s[1][ch] for s in TEMP_COLOR_STOPS], dtype=float)
+        rgb[..., ch] = np.interp(norm_t, stops_t, stops_c).astype(np.uint8)
+
+    rgba = np.dstack([rgb, alpha.astype(np.uint8)])
+    Image.fromarray(rgba, mode="RGBA").save(out_path, optimize=True)
+
+
+def render_air_temp_png(grib_path: Path, out_path: Path) -> None:
+    """Genera el PNG de temperatura del aire a 2m sobremuestreado continuo (mar y tierra)."""
+    from PIL import Image
+
+    raw_t2m_k = None
+    lats = None
+    lons = None
+    for key_filter in [{"shortName": "2t"}, {"shortName": "t2m"}, {"typeOfLevel": "heightAboveGround"}]:
+        try:
+            ds = xr.open_dataset(
+                grib_path, engine="cfgrib",
+                backend_kwargs={"filter_by_keys": key_filter, "indexpath": ""},
+            )
+            for vname in ["2t", "t2m", "TMP_2maboveground"]:
+                if vname in ds.data_vars:
+                    ds = _sort_north_to_south(ds)
+                    lats = ds.latitude.values
+                    lons = _normalize_lon(ds.longitude.values)
+                    raw_t2m_k = ds[vname].values
+                    break
+            ds.close()
+            if raw_t2m_k is not None:
+                break
+        except Exception:
+            continue
+
+    if raw_t2m_k is None:
+        return
+
+    temp_c = raw_t2m_k - 273.15
+    ny, nx = temp_c.shape
+    new_ny, new_nx = ny * WAVE_PNG_SCALE, nx * WAVE_PNG_SCALE
+
+    filled = _fill_nan_nearest(temp_c)
+    lat_hi = _mercator_lat_rows(lats[0], lats[-1], new_ny)
+    lon_hi = np.linspace(lons[0], lons[-1], new_nx)
+    hi = _sample_bilinear(filled, lats, lons, lat_hi, lon_hi)
+
+    norm_t = np.clip((hi - TEMP_MIN_C) / (TEMP_MAX_C - TEMP_MIN_C), 0.0, 1.0)
+
+    alpha = np.full((new_ny, new_nx), TEMP_PNG_ALPHA, dtype=float)
+    rows = np.arange(new_ny)[:, None]
+    cols = np.arange(new_nx)[None, :]
+    edge_dist = np.minimum(
+        np.minimum(rows, new_ny - 1 - rows),
+        np.minimum(cols, new_nx - 1 - cols),
+    )
+    alpha *= np.clip(edge_dist / WAVE_PNG_EDGE_FEATHER_PX, 0, 1)
+
+    rgb = np.zeros((new_ny, new_nx, 3), dtype=np.uint8)
+    stops_t = np.array([s[0] for s in TEMP_COLOR_STOPS])
+    for ch in range(3):
+        stops_c = np.array([s[1][ch] for s in TEMP_COLOR_STOPS], dtype=float)
+        rgb[..., ch] = np.interp(norm_t, stops_t, stops_c).astype(np.uint8)
+
+    rgba = np.dstack([rgb, alpha.astype(np.uint8)])
+    Image.fromarray(rgba, mode="RGBA").save(out_path, optimize=True)
+
+
+def air_temp_png_path(run_date: str, run_hour: str, forecast_hour: int) -> Path | None:
+    path = PROCESSED_DIR / f"{run_date}{run_hour}" / f"air_temp_f{forecast_hour:03d}.png"
+    return path if path.exists() else None
+
+
+# ── Renderizado de Precipitación / Lluvia (Estilo Radar Meteorológico) ──
+PRECIP_MAX_MMH = 50.0
+PRECIP_PNG_ALPHA = 180
+PRECIP_COLOR_STOPS = [
+    (0.000, (96, 165, 250)),   # 0.1 mm/h (azul claro / llovizna)
+    (0.020, (59, 130, 246)),   # 1.0 mm/h (azul)
+    (0.050, (34, 197, 94)),    # 2.5 mm/h (verde / moderada)
+    (0.100, (234, 179, 8)),    # 5.0 mm/h (amarillo)
+    (0.200, (249, 115, 22)),   # 10.0 mm/h (naranja / fuerte)
+    (0.500, (239, 68, 68)),    # 25.0 mm/h (rojo / muy fuerte)
+    (0.800, (168, 85, 247)),   # 40.0 mm/h (morado / torrencial)
+    (1.000, (236, 72, 153)),   # 50.0+ mm/h (magenta extremo)
+]
+
+
+def grib_precip_to_grid_json(grib_path: Path, forecast_hour: int) -> dict | None:
+    """
+    Extrae la tasa de precipitación (PRATE en mm/h) y la precipitación acumulada (APCP / tp en mm)
+    del GRIB2 de GFS.
+    """
+    raw_prate = None
+    lats = None
+    lons = None
+    ref_time = None
+
+    for filter_k in [
+        {"shortName": "prate", "stepType": "instant"},
+        {"shortName": "prate", "stepType": "avg"},
+        {"shortName": "prate"},
+    ]:
+        try:
+            ds = xr.open_dataset(
+                grib_path, engine="cfgrib",
+                backend_kwargs={"filter_by_keys": filter_k, "indexpath": ""},
+            )
+            if "prate" in ds.data_vars:
+                ds = _sort_north_to_south(ds)
+                lats = ds.latitude.values
+                lons = _normalize_lon(ds.longitude.values)
+                raw_prate = ds["prate"].values
+                ref_time = str(ds.time.values) if "time" in ds.coords else None
+                ds.close()
+                break
+            ds.close()
+        except Exception:
+            continue
+
+    if raw_prate is None:
+        return None
+
+    prate_mmh = np.maximum(0.0, np.nan_to_num(raw_prate, nan=0.0) * 3600.0)
+
+    raw_tp = None
+    try:
+        ds_tp = xr.open_dataset(
+            grib_path, engine="cfgrib",
+            backend_kwargs={"filter_by_keys": {"shortName": "tp"}, "indexpath": ""},
+        )
+        if "tp" in ds_tp.data_vars:
+            ds_tp = _sort_north_to_south(ds_tp)
+            raw_tp = ds_tp["tp"].values
+        ds_tp.close()
+    except Exception:
+        raw_tp = None
+
+    tp_mm = np.maximum(0.0, np.nan_to_num(raw_tp, nan=0.0)) if raw_tp is not None else (prate_mmh * max(forecast_hour, 1))
+
+    ny, nx = prate_mmh.shape
+    header = {
+        "lo1": float(lons[0]),
+        "la1": float(lats[0]),
+        "lo2": float(lons[-1]),
+        "la2": float(lats[-1]),
+        "dx": float(abs(lons[1] - lons[0])) if nx > 1 else 0.25,
+        "dy": float(abs(lats[1] - lats[0])) if ny > 1 else 0.25,
+        "nx": int(nx),
+        "ny": int(ny),
+        "refTime": ref_time,
+        "forecastTime": forecast_hour,
+    }
+
+    return {
+        "header": header,
+        "prate_mmh": _grid_from_values(prate_mmh),
+        "accum_mm": _grid_from_values(tp_mm),
+    }
+
+
+def render_precip_png(grib_path: Path, out_path: Path) -> None:
+    """Genera el PNG de radar de lluvia / precipitación sobremuestreado estilo Windy."""
+    from PIL import Image
+
+    raw_prate = None
+    lats = None
+    lons = None
+    for filter_k in [
+        {"shortName": "prate", "stepType": "instant"},
+        {"shortName": "prate", "stepType": "avg"},
+        {"shortName": "prate"},
+    ]:
+        try:
+            ds = xr.open_dataset(
+                grib_path, engine="cfgrib",
+                backend_kwargs={"filter_by_keys": filter_k, "indexpath": ""},
+            )
+            if "prate" in ds.data_vars:
+                ds = _sort_north_to_south(ds)
+                lats = ds.latitude.values
+                lons = _normalize_lon(ds.longitude.values)
+                raw_prate = ds["prate"].values
+                ds.close()
+                break
+            ds.close()
+        except Exception:
+            continue
+
+    if raw_prate is None:
+        return
+
+    prate_mmh = np.maximum(0.0, np.nan_to_num(raw_prate, nan=0.0) * 3600.0)
+    ny, nx = prate_mmh.shape
+    new_ny, new_nx = ny * WAVE_PNG_SCALE, nx * WAVE_PNG_SCALE
+
+    lat_hi = _mercator_lat_rows(lats[0], lats[-1], new_ny)
+    lon_hi = np.linspace(lons[0], lons[-1], new_nx)
+    hi = _sample_bilinear(prate_mmh, lats, lons, lat_hi, lon_hi)
+
+    # Transparente donde no llueve (< 0.1 mm/h). Opacidad gradual donde llueve
+    alpha = np.where(hi < 0.1, 0.0, np.clip(hi / 1.0, 0.5, 1.0) * PRECIP_PNG_ALPHA)
+
+    # Suavizar bordes de recorte
+    rows = np.arange(new_ny)[:, None]
+    cols = np.arange(new_nx)[None, :]
+    edge_dist = np.minimum(
+        np.minimum(rows, new_ny - 1 - rows),
+        np.minimum(cols, new_nx - 1 - cols),
+    )
+    alpha *= np.clip(edge_dist / WAVE_PNG_EDGE_FEATHER_PX, 0, 1)
+
+    norm_t = np.clip(hi / PRECIP_MAX_MMH, 0.0, 1.0)
+    rgb = np.zeros((new_ny, new_nx, 3), dtype=np.uint8)
+    stops_t = np.array([s[0] for s in PRECIP_COLOR_STOPS])
+    for ch in range(3):
+        stops_c = np.array([s[1][ch] for s in PRECIP_COLOR_STOPS], dtype=float)
+        rgb[..., ch] = np.interp(norm_t, stops_t, stops_c).astype(np.uint8)
+
+    rgba = np.dstack([rgb, alpha.astype(np.uint8)])
+    Image.fromarray(rgba, mode="RGBA").save(out_path, optimize=True)
+
+
+def load_precip_json(run_date: str, run_hour: str, forecast_hour: int) -> dict | None:
+    path = PROCESSED_DIR / f"{run_date}{run_hour}" / f"precip_f{forecast_hour:03d}.json"
+    if not path.exists():
+        return None
+    return json.loads(path.read_text())
+
+
+def precip_png_path(run_date: str, run_hour: str, forecast_hour: int) -> Path | None:
+    path = PROCESSED_DIR / f"{run_date}{run_hour}" / f"precip_f{forecast_hour:03d}.png"
+    return path if path.exists() else None
+
+
 # ── Renderizado de PNG de oleaje (alta resolución, enmascarado por costa) ──
 #
 # Dibujar la malla cruda de 0.25° (~68×65 px) estirada en el mapa hace que
@@ -500,6 +889,8 @@ def process_run(run_date: str, run_hour: str) -> dict:
 
     wind_hours: list[int] = []
     gust_hours: list[int] = []
+    temp_hours: list[int] = []
+    precip_hours: list[int] = []
     wave_hours: list[int] = []
 
     wind_bbox = None
@@ -525,6 +916,25 @@ def process_run(run_date: str, run_hour: str) -> dict:
         except Exception as exc:
             logger.warning("Error procesando ráfaga f%s de %s%s: %s", fff, run_date, run_hour, exc)
 
+        try:
+            temp_json = grib_to_temp_json(grib_path, fh)
+            if temp_json is not None:
+                (out_dir / f"temp_f{fff}.json").write_text(json.dumps(temp_json))
+                render_temp_png(grib_path, out_dir / f"temp_f{fff}.png")
+                render_air_temp_png(grib_path, out_dir / f"air_temp_f{fff}.png")
+                temp_hours.append(fh)
+        except Exception as exc:
+            logger.warning("Error procesando temperatura f%s de %s%s: %s", fff, run_date, run_hour, exc)
+
+        try:
+            precip_json = grib_precip_to_grid_json(grib_path, fh)
+            if precip_json is not None:
+                (out_dir / f"precip_f{fff}.json").write_text(json.dumps(precip_json))
+                render_precip_png(grib_path, out_dir / f"precip_f{fff}.png")
+                precip_hours.append(fh)
+        except Exception as exc:
+            logger.warning("Error procesando precipitación f%s de %s%s: %s", fff, run_date, run_hour, exc)
+
     wave_bbox = None
     for grib_path in sorted(raw_dir.glob("waves_f*.grib2")):
         fff = grib_path.stem.replace("waves_f", "")
@@ -547,15 +957,19 @@ def process_run(run_date: str, run_hour: str) -> dict:
         "run_hour": run_hour,
         "wind_hours": sorted(wind_hours),
         "gust_hours": sorted(gust_hours),
+        "temp_hours": sorted(temp_hours),
+        "precip_hours": sorted(precip_hours),
         "wave_hours": sorted(wave_hours),
         "wind_bbox": wind_bbox,
         "wave_bbox": wave_bbox,
+        "temp_bbox": wind_bbox,
+        "precip_bbox": wind_bbox,
         "processed_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
     }
     (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2))
     logger.info(
-        "Corrida %s%s procesada: %d horas de viento, %d de oleaje",
-        run_date, run_hour, len(wind_hours), len(wave_hours),
+        "Corrida %s%s procesada: %d horas de viento, %d de temp, %d de precip, %d de oleaje",
+        run_date, run_hour, len(wind_hours), len(temp_hours), len(precip_hours), len(wave_hours),
     )
     return manifest
 
@@ -585,6 +999,18 @@ def load_gust_json(run_date: str, run_hour: str, forecast_hour: int) -> dict | N
     if not path.exists():
         return None
     return json.loads(path.read_text())
+
+
+def load_temp_json(run_date: str, run_hour: str, forecast_hour: int) -> dict | None:
+    path = PROCESSED_DIR / f"{run_date}{run_hour}" / f"temp_f{forecast_hour:03d}.json"
+    if not path.exists():
+        return None
+    return json.loads(path.read_text())
+
+
+def temp_png_path(run_date: str, run_hour: str, forecast_hour: int) -> Path | None:
+    path = PROCESSED_DIR / f"{run_date}{run_hour}" / f"temp_f{forecast_hour:03d}.png"
+    return path if path.exists() else None
 
 
 def load_waves_json(run_date: str, run_hour: str, forecast_hour: int) -> dict | None:

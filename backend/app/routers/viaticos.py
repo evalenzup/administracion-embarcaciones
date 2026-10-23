@@ -22,6 +22,11 @@ from app.models.project import Project
 from app.models.account import Account
 from app.models.viatico import Viatico, ViaticoFactura
 from app.services.audit import log_action
+from app.services.telegram_notifications import (
+    notify_viatico_event,
+    notify_invoice_uploaded,
+    notify_remanente_uploaded
+)
 from app.schemas.viatico import (
     ViaticoCreate,
     ViaticoUpdate,
@@ -32,6 +37,7 @@ from app.schemas.viatico import (
 )
 from app.utils.xml_parser import parse_and_validate_cfdi
 from app.utils.viatico_pdf_parser import parse_viaticos_pdf, parse_viaticos_comprobacion_pdf
+from app.utils.bank_receipt_parser import parse_bank_receipt
 from app.utils.sat_validator import query_sat_cfdi_status
 
 router = APIRouter(prefix="/api/v1/viaticos", tags=["Finanzas — Viáticos"])
@@ -49,8 +55,18 @@ def find_matching_personnel(db_session, target_name: str):
     if not target_name:
         return None
     from app.models.personnel import Personnel
-    clean_target = clean_text(target_name)
+    cleaned_target = clean_text(target_name)
+    if not cleaned_target:
+        return None
+        
     all_personnel = db_session.query(Personnel).all()
+    
+    # 1. Exact cleaned match
+    for p in all_personnel:
+        p_full_name = f"{p.first_name} {p.last_name}"
+        if clean_text(p_full_name) == cleaned_target:
+            return p
+
     # 2. Substring cleaned match (either target contains DB name or vice-versa)
     for p in all_personnel:
         p_full_name = f"{p.first_name} {p.last_name}"
@@ -209,6 +225,11 @@ async def create_viatico(
     db.add(db_viatico)
     db.commit()
     db.refresh(db_viatico)
+
+    # Notificación Telegram si fue creado como aprobado
+    if db_viatico.status in ["aprobado", "comprobacion_pendiente"]:
+        import asyncio
+        asyncio.create_task(notify_viatico_event(db, db_viatico, db_viatico.status))
 
     # Log de auditoría
     try:
@@ -409,6 +430,7 @@ async def update_viatico(
     if not viatico:
         raise HTTPException(status_code=404, detail="Comisión de viático no encontrada")
     
+    old_status = viatico.status
     update_data = data.model_dump(exclude_unset=True)
     
     for key, val in update_data.items():
@@ -416,6 +438,11 @@ async def update_viatico(
         
     db.commit()
     db.refresh(viatico)
+
+    # Notificación Telegram si cambió de estado
+    if viatico.status != old_status and viatico.status in ["aprobado", "rechazado", "comprobacion_pendiente", "comprobado"]:
+        import asyncio
+        asyncio.create_task(notify_viatico_event(db, viatico, viatico.status, reason_or_notes=viatico.observaciones))
 
     # Log de auditoría
     try:
@@ -513,6 +540,21 @@ async def parse_pdf_route(
         return parsed_data
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al analizar el PDF de solicitud: {str(e)}")
+
+
+@router.post("/parse-return-receipt")
+async def parse_return_receipt_route(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    """Parsear un comprobante de transferencia bancaria o reintegro y extraer automáticamente el monto."""
+    filename_lower = file.filename.lower()
+    if not (filename_lower.endswith(".pdf") or filename_lower.endswith(".jpg") or filename_lower.endswith(".jpeg") or filename_lower.endswith(".png")):
+        raise HTTPException(status_code=400, detail="El archivo debe ser un PDF o imagen válida.")
+
+    file_bytes = await file.read()
+    res = parse_bank_receipt(file_bytes, file.filename)
+    return res
 
 
 @router.post("/{id}/replace-pdf", response_model=ViaticoResponse)
@@ -831,6 +873,18 @@ async def upload_return_receipt_route(
         except Exception:
             pass
 
+        # Notificar al Asistente vía Telegram
+        try:
+            await notify_remanente_uploaded(
+                db=db,
+                tramite_type="viatico",
+                tramite=viatico,
+                amount=viatico.monto_devuelto or 0.0,
+                source_str="Plataforma Web"
+            )
+        except Exception:
+            pass
+
         return viatico
     except Exception as e:
         db.rollback()
@@ -897,6 +951,7 @@ async def clear_file_route(
 @router.post("/{id}/invoices", response_model=ViaticoFacturaResponse, status_code=201)
 async def upload_viatico_invoice(
     id: int,
+    request: Request,
     xml_file: UploadFile = File(...),
     pdf_file: UploadFile = File(None),
     category_id: int = Form(None),
@@ -1127,6 +1182,23 @@ async def upload_viatico_invoice(
                 "category": db_invoice.category.name if db_invoice.category else None,
             }
         )
+    except Exception:
+        pass
+
+    # Notificar en tiempo real vía Telegram
+    try:
+        asyncio.create_task(notify_invoice_uploaded(
+            db=db,
+            tramite_type="viatico",
+            tramite=viatico,
+            invoice_data={
+                "emisor_nombre": db_invoice.emisor_nombre,
+                "emisor_rfc": db_invoice.emisor_rfc,
+                "total": db_invoice.total,
+                "uuid": db_invoice.uuid
+            },
+            source_str=source_str
+        ))
     except Exception:
         pass
 

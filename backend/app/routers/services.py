@@ -438,9 +438,10 @@ async def update_stage(
     
     if status == "pagado":
         if srv.currency == "USD":
-            if not exchange_rate:
+            final_rate = exchange_rate or srv.exchange_rate or srv.tentative_exchange_rate
+            if not final_rate:
                 raise HTTPException(status_code=400, detail="Se requiere ingresar el tipo de cambio real para realizar el pago en USD.")
-            srv.exchange_rate = exchange_rate
+            srv.exchange_rate = final_rate
         else:
             srv.exchange_rate = 1.0
 

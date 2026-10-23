@@ -93,6 +93,8 @@ class VesselResponse(BaseModel):
     description: str | None = None
     photo_url: str | None = None
     is_active: bool
+    default_captain_name: str | None = None
+    default_captain: dict | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -108,6 +110,8 @@ class VesselBasic(BaseModel):
     max_speed_knots: float | None = None
     max_crew: int | None = None
     max_passengers: int | None = None
+    default_captain_name: str | None = None
+    default_captain: dict | None = None
 
     model_config = {"from_attributes": True}
 

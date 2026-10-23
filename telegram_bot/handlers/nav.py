@@ -16,7 +16,10 @@ def get_main_keyboard(is_linked: bool = True) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="🚢 GRCs (Compras / Prov)", callback_data="list_grc"),
             InlineKeyboardButton(text="✈️ Viáticos (Comisiones)", callback_data="list_viatico")
         ])
-        buttons.append([InlineKeyboardButton(text="❓ Ayuda de comprobación", callback_data="help_info")])
+        buttons.append([
+            InlineKeyboardButton(text="📊 Panel Operativo / Resumen", callback_data="admin_digest"),
+            InlineKeyboardButton(text="❓ Ayuda", callback_data="help_info")
+        ])
     else:
         buttons.append([
             InlineKeyboardButton(text="🔄 Ya me vincularon (Actualizar)", callback_data="check_link_status")

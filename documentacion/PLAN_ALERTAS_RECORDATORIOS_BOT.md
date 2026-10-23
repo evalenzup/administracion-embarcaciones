@@ -49,14 +49,26 @@ Diseñar e implementar un motor de notificaciones proactivas y recordatorios aut
 
 ---
 
-## 3. Arquitectura Técnica Propuesta
+## 3. Destinatarios y Enrutamiento Inteligente
+
+Cada notificación y alerta se despacha automáticamente a:
+1. **Comisionado / Solicitante (Titular del trámite):**
+   - Para Viáticos: Usuario vinculado al personal comisionado (`viatico.personal.user_id`).
+   - Para GRCs: Usuario solicitante (`grc.solicitante_id`).
+2. **Asistente Asignado (`asistente_id`):**
+   - Si el trámite tiene un usuario asignado en `asistente_id` y tiene cuenta de Telegram vinculada, recibe una copia adaptada del aviso.
+   - El mensaje incluye contexto claro del titular (ej: `👤 Comisionado: Dr. Juan Pérez`).
+   - Permite al asistente subir facturas, dar seguimiento o recordar al titular directamente desde su propio Telegram.
+
+---
+
+## 4. Arquitectura Técnica Propuesta
 
 1. **Motor de Tareas Programadas (Scheduler):**
-   - Integración de `APScheduler` o `Asyncio Cron Worker` en el contenedor `telegram_bot` o `backend`.
-   - Ejecución periódica (ej. escaneo diario a las 9:00 AM).
-2. **Control Anti-Spam y Horarios:**
+   - Integración con `APScheduler` en el backend (ejecución periódica diaria a las 9:00 AM en días hábiles).
+2. **Control Anti-Spam y Deduplicación:**
    - Ventana de envío en días hábiles: 9:00 AM a 6:00 PM.
-   - Límite de 1 notificación automática por trámite al día.
-   - Tabla de registro de notificaciones (`notification_logs`) para evitar envíos duplicados.
+   - Límite de 1 notificación automática por trámite al día por tipo de alerta.
+   - Tabla / Caché de registro de envíos para evitar alertas duplicadas.
 3. **Deep Linking e Interacción:**
-   - Botones interactivos (`InlineKeyboardMarkup`) para navegar directamente a la carga de facturas o fichas de devolución.
+   - Botones interactivos (`InlineKeyboardMarkup`) para navegar directamente a la carga de facturas o fichas de devolución en el bot.

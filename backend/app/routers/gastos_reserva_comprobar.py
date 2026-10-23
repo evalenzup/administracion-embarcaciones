@@ -21,6 +21,11 @@ from app.models.project import Project
 from app.models.account import Account, AccountTransaction, TransactionType
 from app.models.gasto_reserva_comprobar import GastoReservaComprobar, GastoReservaComprobarFactura, GastoReservaComprobarItem
 from app.services.audit import log_action
+from app.services.telegram_notifications import (
+    notify_grc_event,
+    notify_invoice_uploaded,
+    notify_remanente_uploaded
+)
 from app.schemas.gasto_reserva_comprobar import (
     GastoReservaComprobarCreate,
     GastoReservaComprobarUpdate,
@@ -32,6 +37,7 @@ from app.schemas.gasto_reserva_comprobar import (
 from app.utils.xml_parser import parse_and_validate_cfdi
 from app.utils.sat_validator import query_sat_cfdi_status
 from app.utils.grc_pdf_parser import parse_grc_pdf
+from app.utils.bank_receipt_parser import parse_bank_receipt
 
 router = APIRouter(prefix="/api/v1/gastos-reserva-comprobar", tags=["Gastos a Reserva de Comprobar"])
 
@@ -567,6 +573,7 @@ async def update_grc(
                 db.add(item)
         del update_data["items"]
 
+    old_status = grc.status
     for key, val in update_data.items():
         setattr(grc, key, val)
 
@@ -594,6 +601,11 @@ async def update_grc(
 
     db.commit()
     db.refresh(grc)
+
+    # Notificación Telegram si cambió de estado
+    if grc.status != old_status and grc.status in ["aprobado", "rechazado", "comprobacion_pendiente", "comprobado"]:
+        import asyncio
+        asyncio.create_task(notify_grc_event(db, grc, grc.status, reason_or_notes=getattr(grc, 'observaciones', None)))
 
     # Log de auditoría
     try:
@@ -732,6 +744,21 @@ async def parse_grc_pdf_endpoint(
         "firma_contabilidad_fecha": parsed_data.get("firma_contabilidad_fecha"),
         "firma_contabilidad_hash": parsed_data.get("firma_contabilidad_hash"),
     }
+
+
+@router.post("/parse-return-receipt")
+async def parse_grc_return_receipt_route(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    """Parsear un comprobante de transferencia bancaria o reintegro y extraer automáticamente el monto."""
+    filename_lower = file.filename.lower()
+    if not (filename_lower.endswith(".pdf") or filename_lower.endswith(".jpg") or filename_lower.endswith(".jpeg") or filename_lower.endswith(".png")):
+        raise HTTPException(status_code=400, detail="El archivo debe ser un PDF o imagen válida.")
+
+    file_bytes = await file.read()
+    res = parse_bank_receipt(file_bytes, file.filename)
+    return res
 
 
 # ── CARGA Y ANÁLISIS DE REPORTES PDF ──
@@ -969,6 +996,7 @@ async def clear_liquidation_pdf(
 async def upload_return_receipt(
     id: int,
     file: UploadFile = File(...),
+    monto_devuelto: float = Form(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("gastos_reserva_comprobar", "edit")),
 ):
@@ -996,6 +1024,8 @@ async def upload_return_receipt(
 
     # Actualizar GRC
     grc.comprobante_devolucion_path = file_path
+    if monto_devuelto is not None:
+        grc.monto_devuelto = monto_devuelto
     grc.status = "devolucion_realizada"
 
     # Recalcular saldos
@@ -1006,6 +1036,19 @@ async def upload_return_receipt(
     
     db.commit()
     db.refresh(grc)
+
+    # Notificar al Asistente vía Telegram
+    try:
+        await notify_remanente_uploaded(
+            db=db,
+            tramite_type="grc",
+            tramite=grc,
+            amount=grc.monto_devuelto or 0.0,
+            source_str="Plataforma Web"
+        )
+    except Exception:
+        pass
+
     return grc
 
 
@@ -1036,6 +1079,7 @@ async def clear_return_receipt(
 @router.post("/{id}/invoices", response_model=GastoReservaComprobarFacturaResponse, status_code=201)
 async def upload_grc_invoice(
     id: int,
+    request: Request,
     xml_file: UploadFile = File(...),
     pdf_file: UploadFile = File(None),
     category_id: int = Form(None),
@@ -1236,6 +1280,23 @@ async def upload_grc_invoice(
                 "category": invoice.category.name if invoice.category else None,
             }
         )
+    except Exception:
+        pass
+
+    # Notificar en tiempo real vía Telegram
+    try:
+        asyncio.create_task(notify_invoice_uploaded(
+            db=db,
+            tramite_type="grc",
+            tramite=grc,
+            invoice_data={
+                "emisor_nombre": invoice.emisor_nombre,
+                "emisor_rfc": invoice.emisor_rfc,
+                "total": invoice.total,
+                "uuid": invoice.uuid
+            },
+            source_str=source_str
+        ))
     except Exception:
         pass
 

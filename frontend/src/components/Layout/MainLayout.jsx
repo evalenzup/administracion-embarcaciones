@@ -32,6 +32,7 @@ import {
   AppstoreOutlined,
   CloudOutlined,
   SendOutlined,
+  ExperimentOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -200,6 +201,18 @@ const menuConfig = [
         icon: <ThunderboltOutlined />,
         label: 'Combustible',
         permission: { module: 'fuel_logs', action: 'view' },
+      },
+      {
+        key: '/soundings',
+        icon: <ExperimentOutlined />,
+        label: 'Sondeo de Tanques',
+        permission: { module: 'vessels', action: 'view' },
+      },
+      {
+        key: '/stability',
+        icon: <CompassOutlined />,
+        label: 'Estabilidad Naval',
+        permission: { module: 'vessels', action: 'view' },
       },
     ]
   },

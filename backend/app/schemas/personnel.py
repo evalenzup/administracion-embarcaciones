@@ -66,7 +66,7 @@ class PersonnelUpdate(BaseModel):
 
 
 class UserBasicPersonnel(BaseModel):
-    id: int; username: str; full_name: str
+    id: int; username: str; full_name: str; telegram_id: str | None = None
     model_config = {"from_attributes": True}
 
 

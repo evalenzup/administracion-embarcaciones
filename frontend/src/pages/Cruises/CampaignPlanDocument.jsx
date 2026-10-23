@@ -372,7 +372,7 @@ export function CampaignPlanDocument({ cruise, staticMapUrl }) {
             <Text style={styles.gridKey}>Capitán</Text>
             <Text style={styles.gridVal}>{(() => {
               const captainCrew = tripulacion.find(c => c.role === 'capitan');
-              return captainCrew?.personnel?.full_name || cruise.captain?.full_name || 'Sin asignar';
+              return captainCrew?.personnel?.full_name || cruise.captain?.full_name || cruise.vessel?.default_captain_name || 'Sin asignar';
             })()}</Text>
           </View>
           <View style={styles.gridRow}>

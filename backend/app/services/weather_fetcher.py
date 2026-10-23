@@ -18,13 +18,13 @@ logger = logging.getLogger("siae.weather")
 
 NOMADS_BASE = "https://nomads.ncep.noaa.gov/cgi-bin"
 
-# Bounding box de la región de operación: todos los mares mexicanos
-# (Pacífico/Baja California, Golfo de California, Golfo de México y Caribe,
-# cubriendo las 43 estaciones mareográficas de CICESE).
-BBOX = {"toplat": 34, "leftlon": -122, "rightlon": -85, "bottomlat": 14}
+# Bounding box ampliado de la región de operación: todos los mares mexicanos y cuencas de influencia
+# (Pacífico Tropical/Baja California, Golfo de California, Golfo de México y Mar Caribe,
+# cubriendo la génesis temprana de ciclones tropicales y las 43 estaciones mareográficas de CICESE).
+BBOX = {"toplat": 34, "leftlon": -130, "rightlon": -80, "bottomlat": 8}
 
-# Horas de pronóstico a descargar: 0 a 120 h en pasos de 3 h
-FORECAST_HOURS = list(range(0, 121, 3))
+# Horas de pronóstico a descargar: 0 a 120 h en pasos de 1 h (alta resolución horaria)
+FORECAST_HOURS = list(range(0, 121, 1))
 
 RAW_DIR = Path(__file__).resolve().parent.parent.parent / "weather_data" / "raw"
 
@@ -87,8 +87,8 @@ async def download_gfs_wind(run_date: str, run_hour: str, forecast_hours: list[i
                 f"{NOMADS_BASE}/filter_gfs_0p25.pl"
                 f"?dir=%2Fgfs.{run_date}%2F{run_hour}%2Fatmos"
                 f"&file={fname}"
-                f"&var_UGRD=on&var_VGRD=on&var_GUST=on"
-                f"&lev_10_m_above_ground=on&lev_surface=on"
+                f"&var_UGRD=on&var_VGRD=on&var_GUST=on&var_TMP=on&var_APCP=on&var_PRATE=on"
+                f"&lev_10_m_above_ground=on&lev_surface=on&lev_2_m_above_ground=on"
                 f"&subregion="
                 f"&toplat={BBOX['toplat']}&leftlon={BBOX['leftlon']}"
                 f"&rightlon={BBOX['rightlon']}&bottomlat={BBOX['bottomlat']}"

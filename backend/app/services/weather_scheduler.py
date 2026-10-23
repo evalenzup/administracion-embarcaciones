@@ -16,7 +16,7 @@ _pipeline_lock = asyncio.Lock()
 _scheduler: AsyncIOScheduler | None = None
 
 
-async def run_pipeline_if_new_run() -> dict | None:
+async def run_pipeline_if_new_run(force: bool = False) -> dict | None:
     """
     Verifica si hay una corrida nueva disponible en NOMADS distinta a la ya
     procesada; si es así, la descarga y procesa. Protegido por lock para no
@@ -37,14 +37,13 @@ async def run_pipeline_if_new_run() -> dict | None:
             run_date, run_hour = latest
             current_manifest = weather_processor.get_latest_manifest()
             if (
-                current_manifest is not None
+                not force
+                and current_manifest is not None
                 and current_manifest.get("run_date") == run_date
                 and current_manifest.get("run_hour") == run_hour
-                # Una corrida "procesada" pero vacía (ej. descargas bloqueadas
-                # por rate-limit de NOMADS) debe reintentarse, no darse por buena.
-                and current_manifest.get("wind_hours")
+                and len(current_manifest.get("wind_hours", [])) >= len(weather_fetcher.FORECAST_HOURS)
             ):
-                logger.debug("La corrida %s%s ya está procesada, nada que hacer.", run_date, run_hour)
+                logger.debug("La corrida %s%s ya está procesada con todas las horas, nada que hacer.", run_date, run_hour)
                 return current_manifest
 
             logger.info("Nueva corrida detectada: %s%sZ. Descargando...", run_date, run_hour)
@@ -57,6 +56,14 @@ async def run_pipeline_if_new_run() -> dict | None:
             )
 
             weather_fetcher.cleanup_old_runs()
+
+            # Pre-generar pasos clave de ECMWF (0-48h) en segundo plano
+            try:
+                from app.services import weather_ecmwf
+                asyncio.create_task(weather_ecmwf.pregenerate_ecmwf_steps())
+            except Exception as e:
+                logger.warning("No se pudo iniciar la pregeneración de ECMWF: %s", e)
+
             return manifest
         except Exception:
             logger.exception("Error ejecutando el pipeline meteorológico.")
@@ -179,6 +186,25 @@ async def prune_old_ema_data() -> None:
         db.close()
 
 
+async def run_enso_refresh() -> None:
+    """Descarga e indexa en segundo plano los índices semanales de El Niño (NOAA CPC)."""
+    from app.services import enso_tracker
+    try:
+        await enso_tracker.fetch_enso_data()
+        logger.info("Índices de El Niño (ENSO) de la NOAA sincronizados con éxito.")
+    except Exception:
+        logger.exception("Error en la sincronización periódica de ENSO.")
+
+
+async def run_cyclones_refresh() -> None:
+    """Consulta en segundo plano la lista de ciclones activos en vivo de NOAA NHC."""
+    from app.services import cyclone_tracker
+    try:
+        await cyclone_tracker.get_active_cyclones_list()
+    except Exception:
+        logger.exception("Error en la consulta periódica de ciclones.")
+
+
 def start_scheduler() -> AsyncIOScheduler:
     """Inicia el scheduler que revisa cada hora si hay una corrida nueva."""
     global _scheduler
@@ -227,9 +253,27 @@ def start_scheduler() -> AsyncIOScheduler:
         max_instances=1,
         coalesce=True,
     )
+    # ENSO (El Niño): NOAA CPC publica índices semanales; revisar cada 6 horas
+    scheduler.add_job(
+        run_enso_refresh,
+        trigger="interval",
+        hours=6,
+        id="enso_refresh",
+        max_instances=1,
+        coalesce=True,
+    )
+    # Ciclones Tropicales: revisar el feed de NOAA NHC cada 15 minutos
+    scheduler.add_job(
+        run_cyclones_refresh,
+        trigger="interval",
+        minutes=15,
+        id="cyclones_refresh",
+        max_instances=1,
+        coalesce=True,
+    )
     scheduler.start()
     _scheduler = scheduler
-    logger.info("Scheduler de meteorología iniciado (revisión cada hora).")
+    logger.info("Scheduler de meteorología iniciado (revisión periódica de GFS, mareas, SMN, huracanes y ENSO).")
     return scheduler
 
 

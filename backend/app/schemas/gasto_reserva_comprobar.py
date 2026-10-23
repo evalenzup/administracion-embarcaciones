@@ -14,6 +14,7 @@ class UserBasic(BaseModel):
     username: str
     full_name: str | None = None
     email: str | None = None
+    telegram_id: str | None = None
 
     class Config:
         from_attributes = True

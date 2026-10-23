@@ -23,8 +23,10 @@ from app.schemas.weather import (
     WeatherStatusResponse,
     EmaStationResponse,
     EmaMeasurementResponse,
+    RouteForecastRequest,
+    RouteForecastResponse,
 )
-from app.services import weather_processor, weather_query
+from app.services import weather_processor, weather_query, cyclone_tracker, enso_tracker, weather_ecmwf
 from app.services.weather_scheduler import run_pipeline_if_new_run
 
 logger = logging.getLogger("siae.weather")
@@ -34,7 +36,7 @@ router = APIRouter(prefix="/api/v1/weather", tags=["Meteorología"])
 
 @router.get("/status", response_model=WeatherStatusResponse)
 async def get_status():
-    """Estado de la corrida meteorológica activa (viento/oleaje GFS-WW3)."""
+    """Estado de la corrida meteorológica activa (viento/oleaje/temperatura GFS-WW3)."""
     manifest = weather_processor.get_latest_manifest()
     if manifest is None:
         return WeatherStatusResponse(available=False)
@@ -53,9 +55,13 @@ async def get_status():
         run_date=manifest.get("run_date"),
         run_hour=manifest.get("run_hour"),
         wind_hours=manifest.get("wind_hours", []),
+        temp_hours=manifest.get("temp_hours", []),
+        precip_hours=manifest.get("precip_hours", []),
         wave_hours=manifest.get("wave_hours", []),
         wind_bbox=manifest.get("wind_bbox"),
         wave_bbox=manifest.get("wave_bbox"),
+        temp_bbox=manifest.get("temp_bbox") or manifest.get("wind_bbox"),
+        precip_bbox=manifest.get("precip_bbox") or manifest.get("wind_bbox"),
         processed_at=processed_at,
         hours_since_update=hours_since_update,
     )
@@ -64,8 +70,14 @@ async def get_status():
 @router.get("/wind")
 async def get_wind(
     hour: int = Query(..., description="Hora de pronóstico (0, 3, 6, ...)"),
+    model: str = Query("gfs", description="Modelo meteorológico ('gfs' o 'ecmwf')"),
 ):
     """Malla de viento (formato leaflet-velocity) de la corrida más reciente para la hora dada."""
+    if model.lower() == "ecmwf":
+        data = await weather_ecmwf.get_or_fetch_ecmwf_wind(hour)
+        if data is not None:
+            return data
+
     manifest = weather_processor.get_latest_manifest()
     if manifest is None:
         raise HTTPException(status_code=404, detail="No hay datos meteorológicos disponibles todavía")
@@ -74,6 +86,139 @@ async def get_wind(
     if data is None:
         raise HTTPException(status_code=404, detail=f"No hay datos de viento para la hora de pronóstico {hour}")
     return data
+
+
+@router.get("/temp")
+async def get_temp(
+    hour: int = Query(..., description="Hora de pronóstico (0, 3, 6, ...)"),
+    model: str = Query("gfs", description="Modelo meteorológico ('gfs' o 'ecmwf')"),
+):
+    """Malla de temperatura superficial del mar y aire de la corrida más reciente para la hora dada."""
+    if model.lower() == "ecmwf":
+        data = await weather_ecmwf.get_or_fetch_ecmwf_temp_json(hour)
+        if data is not None:
+            return data
+
+    manifest = weather_processor.get_latest_manifest()
+    if manifest is None:
+        raise HTTPException(status_code=404, detail="No hay datos meteorológicos disponibles todavía")
+
+    data = weather_processor.load_temp_json(manifest["run_date"], manifest["run_hour"], hour)
+    if data is None:
+        raise HTTPException(status_code=404, detail=f"No hay datos de temperatura para la hora de pronóstico {hour}")
+    return data
+
+
+@router.get("/precip")
+async def get_precip(
+    hour: int = Query(..., description="Hora de pronóstico (0, 1, 2, ...)"),
+    model: str = Query("gfs", description="Modelo meteorológico ('gfs' o 'ecmwf')"),
+):
+    """Malla escalar de tasa de precipitación (mm/h) y acumulación (mm) para la hora dada."""
+    if model.lower() == "ecmwf":
+        data = await weather_ecmwf.get_or_fetch_ecmwf_precip_json(hour)
+        if data is not None:
+            return data
+
+    manifest = weather_processor.get_latest_manifest()
+    if manifest is None:
+        raise HTTPException(status_code=404, detail="No hay datos meteorológicos disponibles todavía")
+
+    data = weather_processor.load_precip_json(manifest["run_date"], manifest["run_hour"], hour)
+    if data is None:
+        raise HTTPException(status_code=404, detail=f"No hay datos de precipitación para la hora de pronóstico {hour}")
+    return data
+
+
+@router.get("/precip-image")
+async def get_precip_image(
+    hour: int = Query(..., description="Hora de pronóstico (0, 1, 2, ...)"),
+    model: str = Query("gfs", description="Modelo meteorológico ('gfs' o 'ecmwf')"),
+):
+    """
+    PNG radar de precipitación / lluvia sobremuestreado,
+    para montarse como imageOverlay con los bounds `precip_bbox` de /weather/status.
+    """
+    from fastapi.responses import FileResponse
+
+    if model.lower() == "ecmwf":
+        path = await weather_ecmwf.get_or_fetch_ecmwf_precip_image_path(hour)
+        if path is not None and path.exists():
+            return FileResponse(path, media_type="image/png")
+
+    manifest = weather_processor.get_latest_manifest()
+    if manifest is None:
+        raise HTTPException(status_code=404, detail="No hay datos meteorológicos disponibles todavía")
+
+    path = weather_processor.precip_png_path(manifest["run_date"], manifest["run_hour"], hour)
+    if path is None:
+        raise HTTPException(status_code=404, detail=f"No hay imagen de precipitación para la hora de pronóstico {hour}")
+    return FileResponse(path, media_type="image/png")
+
+
+@router.get("/temp-image")
+async def get_temp_image(
+    hour: int = Query(..., description="Hora de pronóstico (0, 3, 6, ...)"),
+    model: str = Query("gfs", description="Modelo meteorológico ('gfs' o 'ecmwf')"),
+):
+    """
+    PNG térmico de Temperatura Superficial del Mar (TSM) sobremuestreado,
+    para montarse como imageOverlay con los bounds `temp_bbox` de /weather/status.
+    """
+    from fastapi.responses import FileResponse
+
+    if model.lower() == "ecmwf":
+        path = await weather_ecmwf.get_or_fetch_ecmwf_temp_image_path(hour)
+        if path is not None and path.exists():
+            return FileResponse(path, media_type="image/png")
+
+    manifest = weather_processor.get_latest_manifest()
+    if manifest is None:
+        raise HTTPException(status_code=404, detail="No hay datos meteorológicos disponibles todavía")
+
+    path = weather_processor.temp_png_path(manifest["run_date"], manifest["run_hour"], hour)
+    if path is None:
+        raise HTTPException(status_code=404, detail=f"No hay imagen de temperatura para la hora de pronóstico {hour}")
+    return FileResponse(path, media_type="image/png")
+
+
+@router.get("/air-temp-image")
+async def get_air_temp_image(
+    hour: int = Query(..., description="Hora de pronóstico (0, 3, 6, ...)"),
+    model: str = Query("gfs", description="Modelo meteorológico ('gfs' o 'ecmwf')"),
+):
+    """
+    PNG térmico de Temperatura del Aire a 2m sobremuestreado continuo (mar y tierra).
+    """
+    from fastapi.responses import FileResponse
+
+    if model.lower() == "ecmwf":
+        path = await weather_ecmwf.get_or_fetch_ecmwf_air_temp_image_path(hour)
+        if path is not None and path.exists():
+            return FileResponse(path, media_type="image/png")
+
+    manifest = weather_processor.get_latest_manifest()
+    if manifest is None:
+        raise HTTPException(status_code=404, detail="No hay datos meteorológicos disponibles todavía")
+
+    path = weather_processor.air_temp_png_path(manifest["run_date"], manifest["run_hour"], hour)
+    if path is None:
+        raise HTTPException(status_code=404, detail=f"No hay imagen de temperatura del aire para la hora de pronóstico {hour}")
+    return FileResponse(path, media_type="image/png")
+
+
+@router.get("/enso/status")
+async def get_enso_status():
+    """
+    Estado actual y series históricas del fenómeno El Niño / Oscilación del Sur (ENSO)
+    según índices oficiales semanales de la NOAA Climate Prediction Center (CPC).
+    """
+    try:
+        data = await enso_tracker.fetch_enso_data()
+        return data
+    except Exception as exc:
+        logger.exception("Error al consultar estado ENSO: %s", exc)
+        raise HTTPException(status_code=500, detail="Error al consultar estado del fenómeno ENSO")
 
 
 @router.get("/waves")
@@ -94,6 +239,7 @@ async def get_waves(
 @router.get("/wind-image")
 async def get_wind_image(
     hour: int = Query(..., description="Hora de pronóstico (0, 3, 6, ...)"),
+    model: str = Query("gfs", description="Modelo meteorológico ('gfs' o 'ecmwf')"),
 ):
     """
     PNG de velocidad de viento sobremuestreado (paleta estilo Windy, sin
@@ -101,6 +247,11 @@ async def get_wind_image(
     imageOverlay con los bounds `wind_bbox` de /weather/status.
     """
     from fastapi.responses import FileResponse
+
+    if model.lower() == "ecmwf":
+        path = await weather_ecmwf.get_or_fetch_ecmwf_wind_image_path(hour)
+        if path is not None and path.exists():
+            return FileResponse(path, media_type="image/png")
 
     manifest = weather_processor.get_latest_manifest()
     if manifest is None:
@@ -155,15 +306,27 @@ async def get_waves_image(
 async def get_point_forecast(
     lat: float = Query(..., ge=-90, le=90),
     lon: float = Query(..., ge=-180, le=180),
+    model: str = Query("gfs", description="Modelo meteorológico: 'gfs' o 'ecmwf'"),
 ):
     """Serie temporal de pronóstico (viento, ráfaga, oleaje) interpolada en un punto."""
-    forecast = weather_query.get_point_forecast(lat, lon)
+    forecast, model_name = weather_query.get_point_forecast(lat, lon, model=model)
     if not forecast:
         raise HTTPException(
             status_code=404,
             detail="No hay datos meteorológicos disponibles para este punto todavía",
         )
-    return WeatherPointForecastResponse(lat=lat, lon=lon, forecast=forecast)
+    return WeatherPointForecastResponse(lat=lat, lon=lon, model_name=model_name, forecast=forecast)
+
+
+@router.post("/route-forecast", response_model=RouteForecastResponse)
+async def get_route_forecast(req: RouteForecastRequest):
+    """
+    Calcula la cronología de navegación de una ruta planificada (distancias, tiempos de tránsito,
+    ETAs y ETDs a cada estación) e interpola las variables meteorológicas (viento, oleaje, etc.)
+    en el momento de arribo estimado a cada punto según la corrida activa de GFS/WW3.
+    """
+    res = weather_query.calculate_route_forecast(req.model_dump())
+    return res
 
 
 @router.post("/refresh", response_model=WeatherStatusResponse)
@@ -362,3 +525,38 @@ async def get_ema_history(
         )
         for r in rows
     ]
+
+
+# ── Huracanes y Ciclones Tropicales (Windy-style Tracker) ──────
+
+@router.get("/hurricanes/active")
+async def get_active_hurricanes():
+    """
+    Retorna la lista de ciclones y tormentas tropicales activas (NOAA NHC)
+    junto con ciclones históricos emblemáticos de México para demostración.
+    """
+    try:
+        storms = await cyclone_tracker.get_active_cyclones_list()
+        return {"storms": storms, "total": len(storms)}
+    except Exception as e:
+        logger.exception("Error al consultar ciclones activos: %s", e)
+        raise HTTPException(status_code=500, detail="Error al consultar ciclones activos")
+
+
+@router.get("/hurricanes/{storm_id}/track")
+async def get_hurricane_track(storm_id: str):
+    """
+    Retorna la información completa de trayectoria, cono de incertidumbre y los 3
+    modelos de probabilidad (NHC, ECMWF, UKM) para un ciclón específico.
+    """
+    try:
+        track_data = await cyclone_tracker.get_cyclone_track_details(storm_id)
+        if not track_data:
+            raise HTTPException(status_code=404, detail=f"Ciclón con ID '{storm_id}' no encontrado")
+        return track_data
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Error al consultar trayectoria del ciclón %s: %s", storm_id, e)
+        raise HTTPException(status_code=500, detail="Error al procesar trayectoria del ciclón")
+
